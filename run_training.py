@@ -71,7 +71,7 @@ def load_data(subjects=[], conn_name_list=[], fc_filter_list=["hpf"], quiet=Fals
 
     pretrained_transformer_file={}
     pretrained_transformer_file['fs86_ifod2act_volnorm']=None
-    pretrained_transformer_file['fs86_sdstream_volnorm']='%s/connae_checkpoint_self_fs86_sdstream_volnorm_batch42_nonorm_1paths_latent256_0layer_2000epoch_lr0.0001_correye+enceye.w10+mse.w10_adamw.w0.1_20220405_130152675337_epoch002000.pt' % (datafolder)
+    #pretrained_transformer_file['fs86_sdstream_volnorm']='%s/connae_checkpoint_self_fs86_sdstream_volnorm_batch42_nonorm_1paths_latent256_0layer_2000epoch_lr0.0001_correye+enceye.w10+mse.w10_adamw.w0.1_20220405_130152675337_epoch002000.pt' % (datafolder)
     pretrained_transformer_file['shen268_ifod2act_volnorm']=None
     pretrained_transformer_file['shen268_sdstream_volnorm']=None
     pretrained_transformer_file['coco439_ifod2act_volnorm']=None
@@ -265,6 +265,7 @@ def argument_parse(argv):
     #parser.add_argument('--autoencoder',action='store_true',dest='autoencoder',help='only train autoencoders')
     parser.add_argument('--roinames',action='append',dest='roinames',help='fs86,shen268,coco439...',nargs='*')
     parser.add_argument('--fcfilt',action='append',dest='fcfilt',help='list of hpf (default), bpf, nofilt',nargs='*')
+    parser.add_argument('--adamdecay',action='store',dest='adam_decay',type=float, default=0.01, help='Adam weight decay')
     parser.add_argument('--epochs',action='store',dest='epochs',type=int, default=5000, help='number of epochs')
     parser.add_argument('--losstype',action='append',dest='losstype',help='list of correye+enceye, dist+encdist, etc...',nargs='*')
     parser.add_argument('--batchsize',dest='batch_size',type=int,default=41,help='main batch size. default=41 (no batch)')
@@ -279,6 +280,8 @@ def argument_parse(argv):
     parser.add_argument('--skipself',action='store_true',dest='skipself', help='Skip A->A paths during training')
     parser.add_argument('--roundtrip',action='store_true',dest='roundtrip', help='roundtrip training paths A->B->A')
     parser.add_argument('--addroundtripepochs',action='store',dest='add_roundtrip_epochs', type=int, default=0, help='add roundtrip training paths A->B->A AFTER normal training')
+    parser.add_argument('--addmeanlatentepochs',action='store',dest='add_meanlatent_epochs', type=int, default=0, help='add meanlatent training paths AFTER normal training')
+    parser.add_argument('--trainblocks',action='store',dest='trainblocks', type=int, default=1, help='How many total times perform normal training + (roundtrip or meanlatent) set? (optimizer resets each block)')
     parser.add_argument('--pcadim',action='store',dest='pcadim', type=int, default=256, help='pca dimensionality reduction (default=256. 0=No PCA)')
     parser.add_argument('--tsvd',action='store_true',dest='use_tsvd', help='use truncated SVD instead of PCA')
     parser.add_argument('--sclognorm',action='store_true',dest='sc_lognorm', help='non-PCA runs use log transform for SC')
@@ -293,6 +296,11 @@ def argument_parse(argv):
     parser.add_argument('--inputxform',action='append',dest='input_transform_file', help='Precomputed transformer files (.npy)',nargs='*')
     parser.add_argument('--maxthreads',action='store',dest='max_threads', type=int, default=10, help='How many CPU threads to use')
     parser.add_argument('--subjectfile',action='store',dest='subject_split_file', help='.mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields')
+    parser.add_argument('--startingpoint',action='store',dest='starting_point_file', help='.pt file to START with')
+    parser.add_argument('--encodedinputfile',action='store',dest='encoded_input_file', help='.mat file containing latent space data')
+    parser.add_argument('--fixedencoding',action='store_true',dest='fixed_encoding', help='Just train encoders/decoders to match fixed --encodinginputfile')
+    parser.add_argument('--addfixedencodingepochsafter',action='store',dest='add_fixed_encoding_epochs_after', type=int, default=0, help='Add fixedencoding epochs AFTER normal epochs')
+    parser.add_argument('--addfixedencodingepochsbefore',action='store',dest='add_fixed_encoding_epochs_before', type=int, default=0, help='Add fixedencoding epochs BEFORE normal epochs')
     
     return parser.parse_args(argv)
 
@@ -306,6 +314,8 @@ if __name__ == "__main__":
     input_datagroups=args.datagroups
     input_epochs=args.epochs
     input_roundtrip=args.roundtrip
+    
+    input_adamdecay=args.adam_decay
     
     input_pcadim=args.pcadim
     input_use_tsvd=args.use_tsvd
@@ -322,6 +332,10 @@ if __name__ == "__main__":
     
     add_roundtrip_epochs=args.add_roundtrip_epochs
 
+    add_meanlatent_epochs=args.add_meanlatent_epochs
+    
+    input_trainblocks=args.trainblocks
+    
     checkpoint_epochs=args.checkpoint_epochs_every
     
     explicit_checkpoint_epoch_list=[]
@@ -408,6 +422,14 @@ if __name__ == "__main__":
     
     input_batchsize=args.batch_size
     input_latentsimbatchsize=args.latent_sim_batch_size
+    
+    input_encodingfile=args.encoded_input_file
+    do_fixed_encoding=args.fixed_encoding
+    add_fixed_encoding_epochs_after=args.add_fixed_encoding_epochs_after
+    add_fixed_encoding_epochs_before=args.add_fixed_encoding_epochs_before
+    
+    starting_point_file=args.starting_point_file
+    
     #################################3
 
     #input_nsubj=420
@@ -466,12 +488,16 @@ if __name__ == "__main__":
     input_subject_list=None
     input_subject_list_str="" #string to designate if we are using alternate train/val/test split with all retest subjects in held-out TEST
     if input_subject_list_file:
+        print("Loading subject splits from %s" % (input_subject_list_file))
         input_subject_list=loadmat(input_subject_list_file)
         #fields are read in as an array within a single-val array, so just fix that for easier coding
         for f in ["subjects", "subjidx_train", "subjidx_val", "subjidx_test"]:
             input_subject_list[f]=input_subject_list[f][0]
+            print("\t%d %s" % (len(input_subject_list[f]),f))
+        
         if "710train_80val_203test_retestInTest" in input_subject_list_file:
             input_subject_list_str="B"
+
     
     subjects, famidx = load_subject_list(input_nsubj)
     subjects_out, conndata_alltypes = load_data(subjects=subjects, conn_name_list=input_conn_name_list, fc_filter_list=fcfilt_types)
@@ -523,7 +549,8 @@ if __name__ == "__main__":
     training_params_listdict['latentsim_loss_weight']=input_latentsimweight_list
     #training_params_listdict['adam_decay']=[.01, .1, 1, 10]
     #training_params_listdict['adam_decay']=[.01,.1]
-    training_params_listdict['adam_decay']=[.01]
+    #training_params_listdict['adam_decay']=[.01]
+    training_params_listdict['adam_decay']=[input_adamdecay]
     #training_params_listdict['mse_weight']=[1,10]
     training_params_listdict['mse_weight']=[input_mse_weight]
     #training_params_listdict['learningrate']=[0.001] #try faster?
@@ -558,14 +585,19 @@ if __name__ == "__main__":
     training_params_listdict['latent_maxrad_weight']=[input_latentradweight]
     training_params_listdict['latent_normalize']=[input_latentunit]
     
-    training_params_listdict['batchwise_latentsim']=[False]
+    #training_params_listdict['latentsim_batchsize']=[0]
+    
+    training_params_listdict['fixed_encoding']=[do_fixed_encoding]
+    training_params_listdict['meantarget_latentsim']=[False]
+    
+    training_params_listdict['trainblocks']=[input_trainblocks]
     
     #training_params_listdict['batchwise_latentsim']=[False]
     #training_params_listdict['latentsim_loss_weight']=[500,1000,2500,5000,10000,50000]
     
     training_params_listdict['roundtrip']=[input_roundtrip]
     
-    training_params_list = dict_combination_list(training_params_listdict, reverse_field_order=True)
+    training_params_list = dict_combination_list(training_params_listdict, reverse_field_order=True)    
     #%matplotlib inline
 
     #training_params_list=training_params_list[1:] #HACK HACK HACK!!!!!!
@@ -669,11 +701,36 @@ if __name__ == "__main__":
                 data_string+=input_subject_list_str #add extra chars if using alternate training set
             
             set_random_seed(0)
+            
+            
             #generate trainpath info each time so the dataloader batches are reproducible
-            trainpath_list, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
-                                                trainpath_pairs=trainpath_pairs, 
-                                                trainpath_group_pairs=trainpath_group_pairs, data_string=data_string, 
-                                                batch_size=batchsize, skip_selfs=do_skipself, crosstrain_repeats=crosstrain_repeats,
+            encoded_inputs=None
+            if input_encodingfile:
+                Mtmp=loadmat(input_encodingfile)
+                if not 'subjects' in Mtmp:
+                    raise Exception("input encoding file must have 'subjects' field")
+                if len(Mtmp['subjects'][0]) != len(subjects):
+                    raise Exception("input encoding file must contain the same number of subjects (%d) as input data (%d)", len(Mtmp['subjects'][0]),len(subjects))
+                if not all([Mtmp['subjects'][0][i]==subjects[i] for i in range(len(subjects))]):
+                    raise Exception("input encoding subjects must match input data subjects")
+
+                encoded_inputs=Mtmp['encoded'].copy()
+                print("Loaded target latent-space values from %s (%s)" % (input_encodingfile,encoded_inputs.shape))
+                
+            if do_fixed_encoding:
+                if encoded_inputs is None:
+                    raise Exception("Must provide encoded inputs file")
+                
+                conndata_alltypes_fixedencoding=conndata_alltypes.copy()
+                for conntype in conndata_alltypes_fixedencoding.keys():
+                    conndata_alltypes_fixedencoding[conntype]['encoded']=encoded_inputs.copy()
+                
+                data_string_fixedencoding="self"+"_"+roilist_str
+                
+                trainpath_list, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes_fixedencoding, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                trainpath_pairs="self", 
+                                                trainpath_group_pairs=[], data_string=data_string_fixedencoding, 
+                                                batch_size=batchsize, skip_selfs=False, crosstrain_repeats=crosstrain_repeats,
                                                 reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=True,           
                                                 use_lognorm_for_sc=do_use_lognorm_for_sc, 
                                                 use_truncated_svd=use_truncated_svd, 
@@ -681,20 +738,90 @@ if __name__ == "__main__":
                                                 input_transformation_info=transformation_type_string,
                                                 precomputed_transformer_info_list=precomputed_transformer_info_list)
             
-            net=None
+            else:
+                trainpath_list, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                    trainpath_pairs=trainpath_pairs, 
+                                                    trainpath_group_pairs=trainpath_group_pairs, data_string=data_string, 
+                                                    batch_size=batchsize, skip_selfs=do_skipself, crosstrain_repeats=crosstrain_repeats,
+                                                    reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=True,           
+                                                    use_lognorm_for_sc=do_use_lognorm_for_sc, 
+                                                    use_truncated_svd=use_truncated_svd, 
+                                                    use_truncated_svd_for_sc=do_use_tsvd_for_sc,
+                                                    input_transformation_info=transformation_type_string,
+                                                    precomputed_transformer_info_list=precomputed_transformer_info_list)
+
+            #load checkpoint file for initial starting point, if given
+            if starting_point_file:
+                #allow override of dropout amount
+                checkpoint_override={}
+                checkpoint_override['dropout']=training_params['dropout']
+                net, checkpoint=Krakencoder.load_checkpoint(starting_point_file, checkpoint_override=checkpoint_override)
+            else:
+                net=None
             
-            net, trainrecord = train_network(trainpath_list,training_params, net=net, data_origscale_list=data_orig,
-                                             trainthreads=trainthreads,display_epochs=100,save_epochs=100,
-                                             checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
-                                             explicit_checkpoint_epoch_list=explicit_checkpoint_epoch_list,
-                                             precomputed_transformer_info_list=data_transformer_info_list,
-                                             save_input_transforms=True)
             
-            if not training_params['roundtrip'] and add_roundtrip_epochs > 0:
-                print("Adding %d roundtrip epochs" % (add_roundtrip_epochs))
+            datastring0=trainpath_list[0]['data_string']
+            
+            trainblocks=training_params['trainblocks']
+            
+            for blockloop in range(trainblocks):
+                if trainblocks > 1:
+                    trainpath_list[0]['data_string']=datastring0+"_b%d" % (blockloop+1)
                 training_params_tmp=training_params.copy()
-                training_params_tmp['roundtrip']=True
-                training_params_tmp['nbepochs']=add_roundtrip_epochs
+                
                 net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
                                                  trainthreads=trainthreads,display_epochs=100,save_epochs=100,
-                                                 checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False)
+                                                 checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
+                                                 explicit_checkpoint_epoch_list=explicit_checkpoint_epoch_list,
+                                                 precomputed_transformer_info_list=data_transformer_info_list,
+                                                 save_input_transforms=True)
+            
+                if not training_params['roundtrip'] and add_roundtrip_epochs > 0:
+                    print("Adding %d roundtrip epochs" % (add_roundtrip_epochs))
+                    training_params_tmp=training_params.copy()
+                    training_params_tmp['roundtrip']=True
+                    training_params_tmp['nbepochs']=add_roundtrip_epochs
+                    net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
+                                                     trainthreads=trainthreads,display_epochs=100,save_epochs=100,
+                                                     checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False)
+                                                     
+                if not training_params['meantarget_latentsim'] and add_meanlatent_epochs > 0:
+                    print("Adding %d meanlatent epochs" % (add_meanlatent_epochs))
+                    training_params_tmp=training_params.copy()
+                    training_params_tmp['meantarget_latentsim']=True
+                    training_params_tmp['latentsim_batchsize']=batchsize #maybe?
+                    training_params_tmp['nbepochs']=add_meanlatent_epochs
+                    net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
+                                                     trainthreads=trainthreads,display_epochs=100,save_epochs=100,
+                                                     checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False)
+                                                     
+                if not do_fixed_encoding and add_fixed_encoding_epochs_after > 0:
+                    raise Exception("add_fixed_encoding not yet supported")
+                    print("Adding %d fixedencoding epochs" % (add_fixed_encoding_epochs_after))
+                    
+                    conndata_alltypes_fixedencoding=conndata_alltypes.copy()
+                    #for conntype in conndata_alltypes_fixedencoding.keys():
+                        
+                        
+                    data_string_fixedencoding="self"+"_"+roilist_str
+                
+                    trainpath_list, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes_fixedencoding, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                    trainpath_pairs="self", 
+                                                    trainpath_group_pairs=[], data_string=data_string_fixedencoding, 
+                                                    batch_size=batchsize, skip_selfs=False, crosstrain_repeats=crosstrain_repeats,
+                                                    reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=True,           
+                                                    use_lognorm_for_sc=do_use_lognorm_for_sc, 
+                                                    use_truncated_svd=use_truncated_svd, 
+                                                    use_truncated_svd_for_sc=do_use_tsvd_for_sc,
+                                                    input_transformation_info=transformation_type_string,
+                                                    precomputed_transformer_info_list=precomputed_transformer_info_list)
+                    
+                    if trainblocks > 1:
+                        trainpath_list[0]['data_string']=datastring0+"_b%d" % (blockloop+1)
+                    
+                    training_params_tmp=training_params.copy()
+                    training_params_tmp['fixed_encoding']=True
+                    training_params_tmp['nbepochs']=add_fixed_encoding_epochs_after
+                    net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
+                                                     trainthreads=trainthreads,display_epochs=100,save_epochs=100,
+                                                     checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False)

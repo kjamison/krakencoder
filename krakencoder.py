@@ -101,6 +101,8 @@ class Krakencoder(nn.Module):
             self.decoder_list.append(nn.Sequential(*dec_layer_list))
             
     def forward(self, x, encoder_index, decoder_index, transcoder_index_list=None):
+        #if only encoder_index provided, return latent result
+        #if both encoder and decoder (or just decoder) are provided, return latent, output
         if encoder_index<0:
             x_enc = x
         else:
@@ -195,7 +197,8 @@ class Krakencoder(nn.Module):
         torch.save(checkpoint,filename)
     
     @staticmethod
-    def load_checkpoint(filename):
+    def load_checkpoint(filename, checkpoint_override=None):
+        #warnings.filterwarnings("ignore", category=UserWarning, message="CUDA initialization") #optional
         if torch.cuda.is_available():
             checkpoint=torch.load(filename)
         else:
@@ -206,6 +209,10 @@ class Krakencoder(nn.Module):
             checkpoint['linear_include_bias']=True
         if not 'no_bias_for_outer_layers' in checkpoint:
             checkpoint['no_bias_for_outer_layers']=False
+        
+        if checkpoint_override is not None:
+            for k in checkpoint_override:
+                checkpoint[k]=checkpoint_override[k]
         
         net=Krakencoder(checkpoint['input_size_list'],latentsize=checkpoint['latentsize'],hiddenlayers=checkpoint['hiddenlayers'],
             skip_relu=checkpoint['skip_relu'], dropout=checkpoint['dropout'], leakyrelu_negative_slope=checkpoint['leakyrelu_negative_slope'],
@@ -227,12 +234,3 @@ class Normalize(nn.Module):
 
     def forward(self, x):
         return nn.functional.normalize(x,p=self.p,dim=1)
-        
-        #norm = x.pow(self.p).sum(1, keepdim=True).pow(1. / self.p)
-        #out = x.div(norm)
-        #return out
-
-#net=CoAutoEncoder([300],latentsize=64,hiddenlayers=[],skip_relu=False, leakyrelu_negative_slope=.2, dropout=0.5)
-#print(net)
-#print(net.prettystring())
-

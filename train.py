@@ -213,6 +213,59 @@ def plotloss(x,plotstyle='-',lossviewskip=0,showmax=False,smoothN=0,colors=['r',
     else:
         plt.scatter(midx,x.flatten()[midx2])
 
+def update_training_figure(loss_train, loss_val, corrloss_train, corrloss_val, corrlossN_train, corrlossN_val, corrlossRank_train, corrlossRank_val, 
+    avgrank_train, avgrank_val, trainpath_names_short, train_string, losstype, epoch, trainfig=None, gridalpha=.25):
+
+    if trainfig is None:
+        trainfig=plt.figure(figsize=(15,10))
+
+    trainfig.clear()
+    plt.subplot(2,3,1)
+    plotloss(loss_train,':')
+    plotloss(loss_val,'-')
+    plt.grid(True,alpha=gridalpha)
+    #plt.legend(trainpath_names_short)
+    plt.legend([s+".tr" for s in trainpath_names_short]+[s+".val" for s in trainpath_names_short])
+    plt.title("%s loss" % (losstype))
+
+    plt.subplot(2,3,2)
+    plotloss(loss_train,':',lossviewskip=5,smoothN=5)
+    plotloss(loss_val,'-',lossviewskip=5,smoothN=5)
+    plt.grid(True,alpha=gridalpha)
+    plt.title("%s loss (epoch>%d)" % (losstype,5))
+
+    plt.subplot(2,3,4)
+    plotloss(corrloss_train,':',showmax=True,smoothN=5)
+    plotloss(corrloss_val,'-',showmax=True,smoothN=5)
+    plt.grid(True,alpha=gridalpha)
+    plt.title("corr top1acc")
+
+    plt.subplot(2,3,5)
+    plotloss(corrlossN_train,':',showmax=True,smoothN=5)
+    plotloss(corrlossN_val,'-',showmax=True,smoothN=5)
+    plt.grid(True,alpha=gridalpha)
+    plt.title("corr top%dacc" % (topN))
+
+    plt.subplot(2,3,6)
+    plotloss(corrlossRank_train,':',showmax=True)
+    plotloss(corrlossRank_val,'-',showmax=True)
+    plt.grid(True,alpha=gridalpha)
+    plt.title("corr avgrank %ile")
+
+    plt.subplot(2,3,3)
+    plotloss(avgrank_train,':',showmax=False,lossviewskip=0,smoothN=5)
+    plotloss(avgrank_val,'-',showmax=False,lossviewskip=0,smoothN=5)
+
+    if epoch > 50:
+        ymax=np.nanmax(np.vstack((avgrank_train,avgrank_val))[:,50:])
+        plt.ylim([.9, ymax])
+
+    plt.grid(True,alpha=gridalpha)
+    plt.title("corr avgrank")
+    plt.suptitle('%s: %s, %s' % (data_string,network_string,train_string))
+    
+    return trainfig
+
 #################################
 #################################
 #create data input/output transformers, datasets/dataloaders, and TRAINING PATHS
@@ -255,8 +308,14 @@ def generate_transformer(traindata, transformer_type, transformer_param_dict=Non
         #training and later evaluation
         #Xpc = np.dot(X-pca_input_mean,pca_components.T)
         #Xnew = np.dot(Xpc,pca_components)+pca_input_mean
+        #
+        #old version inverse_func was incorrect (pre 4/20/2023). Does not affect model training but DOES affect origspace outputs:
+        #BAD! transformer=FunctionTransformer(func=lambda x:normscale*(np.dot(x-pca_input_mean,pca_components.T)/data_normscale),
+        #                                inverse_func=lambda x:((np.dot(x,pca_components)+pca_input_mean)/normscale)*data_normscale)
+        
         transformer=FunctionTransformer(func=lambda x:normscale*(np.dot(x-pca_input_mean,pca_components.T)/data_normscale),
-                                        inverse_func=lambda x:((np.dot(x,pca_components)+pca_input_mean)/normscale)*data_normscale)
+                                        inverse_func=lambda x:np.dot((x/normscale)*data_normscale,pca_components)+pca_input_mean)
+        
         transformer_info["type"]="pca"
         transformer_info["params"]={"reduce_dimension":pca_dim,
                                     "input_normscale":data_normscale, 
@@ -548,6 +607,11 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
                         continue
                     trainpath_pairs+=[[i,j]]
 
+    if trainpath_pairs == "self":
+        trainpath_pairs=[]
+        for i1,c1 in enumerate(conn_names):
+            trainpath_pairs+=[[c1,c1]]
+    
     #if we haven't already set a trainpath_pairs list, generate all pairs
     if not trainpath_pairs:
         for i1,c1 in enumerate(conn_names):
@@ -691,6 +755,13 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         train_outputs=traindata_list[c2]
         val_outputs=valdata_list[c2]
 
+        train_encoded=None
+        val_encoded=None
+        
+        if 'encoded' in conndata_alltypes[c1]:
+            train_encoded=conndata_alltypes[c1]['encoded'][subjidx_train]
+            val_encoded=conndata_alltypes[c1]['encoded'][subjidx_val]
+        
         input_npairs=train_inputs.shape[1]
         output_npairs=train_outputs.shape[1]
 
@@ -710,22 +781,25 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         trainpath_tmp['decoder_index']=i2
 
         #train data to pytorch        
-        train_inputs = torch.from_numpy(train_inputs).float()
-        train_outputs = torch.from_numpy(train_outputs).float()
-        val_inputs = torch.from_numpy(val_inputs).float()
-        val_outputs = torch.from_numpy(val_outputs).float()
+        train_inputs = torchfloat(train_inputs)
+        train_outputs = torchfloat(train_outputs)
+        val_inputs = torchfloat(val_inputs)
+        val_outputs = torchfloat(val_outputs)
         
-        if torch.cuda.is_available():
-            train_inputs, train_outputs = train_inputs.cuda(), train_outputs.cuda()
-            val_inputs, val_outputs = val_inputs.cuda(), val_outputs.cuda()
-                
-        trainset = data_utils.TensorDataset(train_inputs, train_outputs)
+        if train_encoded is None:
+            trainset = data_utils.TensorDataset(train_inputs, train_outputs)
+        else:
+            train_encoded=torchfloat(train_encoded)
+            trainset = data_utils.TensorDataset(train_inputs, train_outputs, train_encoded)
+        
         trainloader = data_utils.DataLoader(trainset, batch_size=batch_size,
                                                   shuffle=True, drop_last=True)
         
         trainpath_tmp['trainloader']=trainloader
         trainpath_tmp['train_inputs']=train_inputs
         trainpath_tmp['train_outputs']=train_outputs
+        if train_encoded is not None:
+            trainpath_tmp['train_encoded']=train_encoded
 
         trainpath_tmp['train_marginmin_inputs']=traindata_marginmin_list[c1]
         trainpath_tmp['train_marginmax_inputs']=traindata_marginmax_list[c1]
@@ -738,13 +812,21 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
 
         #val_batchsize=batch_size
         val_batchsize=val_inputs.shape[0] #no reason to batch this and it just makes selecting batch size hard!
-        valset = data_utils.TensorDataset(val_inputs, val_outputs)
+        
+        if val_encoded is None:
+            valset = data_utils.TensorDataset(val_inputs, val_outputs)
+        else:
+            val_encoded=torchfloat(val_encoded)
+            valset = data_utils.TensorDataset(val_inputs, val_outputs, val_encoded)
+        
         valloader = data_utils.DataLoader(valset, batch_size= val_batchsize,
                                                   shuffle=False, drop_last=False)
 
         trainpath_tmp['valloader']=valloader
         trainpath_tmp['val_inputs']=val_inputs
         trainpath_tmp['val_outputs']=val_outputs
+        if val_encoded is not None:
+            trainpath_tmp['val_encoded']=val_encoded
         
         #since it is easier to learn the self encoder, 
         # loop through the non-self ones X times for each epoch
@@ -793,6 +875,51 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         data_origscale_list['traindata_origscale']=traindata_origscale_list
         data_origscale_list['valdata_origscale']=valdata_origscale_list
     return trainpath_list, data_origscale_list, data_transformer_info_list
+
+##############################
+##############################
+# compute loss for a given path
+def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None, conn_encoded_targets=None, criterion=[], encoded_criterion=[], output_margin=None, encoder_margin=None, 
+                latentnorm_loss_weight=0, latent_maxrad_weight=0, latent_maxrad=None):
+    
+    loss=0
+    for crit in criterion:
+        w=1
+        if "weight" in crit:
+            w=crit['weight']
+        if "pass_margin" in crit:
+            loss+=w*crit['function'](conn_predicted, conn_targets, margin=output_margin)
+        else:
+            #loss+=w*crit['function'](conn_predicted, conn_targets)
+            #for some reason += causes problems with MSELoss because it returns a flat tensor, not an array
+            #but loss=loss+ is OK with this
+            loss=loss+w*crit['function'](conn_predicted, conn_targets)
+
+    for enc_crit in encoded_criterion:
+        w=1
+        if "weight" in enc_crit:
+            w=enc_crit['weight']
+        if "pass_margin" in enc_crit:
+            if conn_encoded_targets is None:
+                loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded, margin=encoder_margin)
+            else:
+                loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded_targets, margin=encoder_margin)
+        else:
+            if conn_encoded_targets is None:
+                loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded)
+            else:
+                loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded_targets)
+        loss += loss_enc
+
+    if latentnorm_loss_weight > 0:
+        loss_latentnorm = torch.linalg.norm(conn_encoded)
+        loss += latentnorm_loss_weight*loss_latentnorm
+
+    if latent_maxrad_weight > 0:
+        loss_latentrad = torch.mean(torch.nn.ReLU()(torch.sum(conn_encoded**2,axis=1)-latent_maxrad))
+        loss += latent_maxrad_weight*loss_latentrad
+
+    return loss
 
 ###################################
 ###################################
@@ -907,6 +1034,22 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         latentsim_batchsize=training_params['latentsim_batchsize']
         do_batchwise_latentsim=latentsim_batchsize>0
     
+    do_meantarget_latentsim = False
+    if 'meantarget_latentsim' in training_params:
+        do_meantarget_latentsim = training_params['meantarget_latentsim']
+    
+    do_fixed_encoding = False
+    if 'fixed_encoding' in training_params:
+        do_fixed_encoding = training_params['fixed_encoding']
+    
+    #for 'fixed_encoding' mode, do not skip accurate paths and do not use latentsim
+    if do_fixed_encoding:
+        do_skip_accurate_paths=False
+        latentsim_loss_weight=0
+        latent_maxrad_weight=0
+        latentnorm_loss_weight=0
+        
+        
     #if latent_normalize is true, use dot product for distance
     #do_latent_dotproduct_distance=latent_normalize
     do_latent_dotproduct_distance=False
@@ -979,7 +1122,9 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         if latentsim_loss_weight != 1:
             loss_str+=".w%g" % (latentsim_loss_weight)
     
-
+    if do_fixed_encoding:
+        loss_str+="+fixlatent"
+    
     train_string="%depoch_%s%s%s%s%s%s" % (nbepochs,lrstr,loss_str,optimstr,optimname_str,zgstr,skipaccstr)
     #if do_trainpath_shuffle:
     #       train_string+="_tpshuffle"
@@ -1071,6 +1216,9 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
 
     if mse_weight > 0:
         criterion += [{"function":nn.MSELoss(), "weight": torchfloat(mse_weight)}]
+    
+    if do_fixed_encoding and mse_weight > 0:
+        encoded_criterion += [{"function":nn.MSELoss(), "weight": torchfloat(mse_weight)}]
 
     loss2_weight_torch=torchfloat(loss2_weight)
     latentnorm_loss_weight_torch=torchfloat(latentnorm_loss_weight)
@@ -1148,12 +1296,6 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         tmp_latent_batchsize=numsubjects_train
     
     latentsimloss_subjidx_dataloader=data_utils.DataLoader(np.arange(numsubjects_train), batch_size=tmp_latent_batchsize, shuffle=True, drop_last=True)
-    
-    ################
-
-    if trainfig is None:
-        trainfig=plt.figure(figsize=(15,10))
-    #######################
 
     recordfile="connae_trainrecord_%s_%s_%s_%s.mat" % (data_string,network_string,train_string,timestamp_suffix)
     imgfile="connae_%s_%s_%s_%s.png" % (data_string,network_string,train_string,timestamp_suffix)
@@ -1210,6 +1352,8 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     trainrecord['origscalecorr_epochs']=origscalecorr_epochs
     trainrecord['origscalecorr_inputtype']='inverse'
     trainrecord['saved_input_transformer_file']=input_transformer_file
+    trainrecord['fixed_encoding']=do_fixed_encoding
+    trainrecord['meantarget_latentsim']=do_meantarget_latentsim
     
     if data_origscale_list is not None:
         trainrecord['origscalecorr_inputtype']='original'
@@ -1275,7 +1419,6 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         print("Only evaluating network")
     
     skipped_epoch_counter=0
-    do_compute_performance_BEFORE_latentsim=False
     do_compute_performance_AFTER_latentsim=True #this way recorded performance matches checkpoint
 
     #######################
@@ -1310,6 +1453,13 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
             train_outputs=trainpath['train_outputs']
             val_inputs=trainpath['val_inputs']
             val_outputs=trainpath['val_outputs']
+            train_encoded=None
+            val_encoded=None
+            if 'train_encoded' in trainpath:
+                train_encoded=trainpath['train_encoded']
+            if 'val_encoded' in trainpath:
+                val_encoded=trainpath['val_encoded']
+            
             output_transformer=trainpath['output_transformer']
 
             #make cpu copy of train and val OUTPUTS for top1acc testing in loop
@@ -1364,62 +1514,61 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
             if do_eval_only:
                 trainloops=0
             
+
+            criterion_latent_mse=nn.MSELoss()
+            
             net.train()
 
             for iloop in range(trainloops):
                 train_running_loss = 0
 
                 for batch_idx, train_data in enumerate(trainloader):
-                    #pulls out <batchsize> at a time
-                    conn_inputs, conn_targets = train_data
                     
-                    optimizer.zero_grad(set_to_none=do_zerograd_none)
-                    #conn_encoded, conn_predicted = net(conn_inputs)
-                    conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
+                    if do_fixed_encoding:
+                        #pulls out <batchsize> at a time
+                        conn_inputs, conn_targets, conn_encoded_targets = train_data
+                        
+                        #first compute current encoding and backprop encoder loss
+                        optimizer.zero_grad(set_to_none=do_zerograd_none)
+                                            
+                        conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+                        
+                        #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
+                        
+                        loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion, encoder_margin=encoder_margin_torch, 
+                                        latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                        
+                        loss.backward()
+                        optimizer.step()
+                        
+                        #Then compute predicted output and backprop decoder loss
+                        optimizer.zero_grad(set_to_none=do_zerograd_none)
+                        _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
                     
-                    #loss.backward() ACCUMULATES gradients in net parameters
-                    #optimizer.step() propagates according to those gradients
-                    #optimizer.zero_grad() ZEROS gradients so backprop is only based on current step
+                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion, output_margin=output_margin_torch)
+                        loss.backward()
+                        optimizer.step()
+                    else:
+                        optimizer.zero_grad(set_to_none=do_zerograd_none)
+                        
+                        #pulls out <batchsize> at a time
+                        conn_inputs, conn_targets = train_data
+                        conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
                     
-                    ###################
-                    # loss terms (training)
-                    loss=0
-                    for crit in criterion:
-                        w=1
-                        if "weight" in crit:
-                            w=crit['weight']
-                        if "pass_margin" in crit:
-                            loss+=w*crit['function'](conn_predicted, conn_targets, margin=output_margin_torch)
-                        else:
-                            #loss+=w*crit['function'](conn_predicted, conn_targets)
-                            #for some reason += causes problems with MSELoss because it returns a flat tensor, not an array
-                            #but loss=loss+ is OK with this
-                            loss=loss+w*crit['function'](conn_predicted, conn_targets)
-                    
-                    for enc_crit in encoded_criterion:
-                        w=1
-                        if "weight" in enc_crit:
-                            w=enc_crit['weight']
-                        if "pass_margin" in enc_crit:
-                            loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded, margin=encoder_margin_torch)
-                        else:
-                            loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded)
-                        loss += loss_enc
-                    
-                    if latentnorm_loss_weight > 0:
-                        loss_latentnorm = torch.linalg.norm(conn_encoded)
-                        loss += latentnorm_loss_weight_torch*loss_latentnorm
-                    
-                    if latent_maxrad_weight > 0:
-                        loss_latentrad = torch.mean(torch.nn.ReLU()(torch.sum(conn_encoded**2,axis=1)-latent_maxrad_torch))
-                        loss += latent_maxrad_weight_torch*loss_latentrad
-                    
-                    ################## 
-                    loss.backward()
+                        #loss.backward() ACCUMULATES gradients in net parameters
+                        #optimizer.step() propagates according to those gradients
+                        #optimizer.zero_grad() ZEROS gradients so backprop is only based on current step
 
-                    optimizer.step()
+                        ######################
+                        # loss terms (training)
+                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion, encoded_criterion=encoded_criterion, 
+                            output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                            latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
 
-                    train_running_loss += loss.item() 
+                        loss.backward()
+                        optimizer.step()
+
+                        train_running_loss += loss.item() 
 
                 loss_train[itp,epoch] = train_running_loss/(batch_idx+1)    
 
@@ -1428,132 +1577,39 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
             val_running_loss = 0
 
             for batch_idx, val_data in enumerate(valloader):
+                    
+                if do_fixed_encoding:
+                    #pulls out <batchsize> at a time
+                    conn_inputs, conn_targets, conn_encoded_targets = val_data
+                    
+                    with torch.no_grad():
+                        conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+                        _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
+                        
+                    #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
+                    loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion, encoder_margin=encoder_margin_torch, 
+                                    latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                    
+                    loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion, output_margin=output_margin_torch)
+                else:
+                    #with new val_batchsize, this should be all the val data at once
+                    conn_inputs, conn_targets = val_data
                 
-                #with new val_batchsize, this should be all the val data at once
-                conn_inputs, conn_targets = val_data
-                
-                with torch.no_grad():
-                    #conn_encoded, conn_predicted = net(conn_inputs)
-                    conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
+                    with torch.no_grad():
+                        #conn_encoded, conn_predicted = net(conn_inputs)
+                        conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
 
-                ######################
-                # loss terms (validation)
-                loss=0
-                for crit in criterion:
-                    w=1
-                    if "weight" in crit:
-                        w=crit['weight']
-                    if "pass_margin" in crit:
-                        loss+=w*crit['function'](conn_predicted, conn_targets, margin=output_margin_torch)
-                    else:
-                        #loss+=w*crit['function'](conn_predicted, conn_targets)
-                        #for some reason += causes problems with MSELoss because it returns a flat tensor, not an array
-                        #but loss=loss+ is OK with this
-                        loss=loss+w*crit['function'](conn_predicted, conn_targets)
-                
-                for enc_crit in encoded_criterion:
-                    w=1
-                    if "weight" in enc_crit:
-                        w=enc_crit['weight']
-                    if "pass_margin" in enc_crit:
-                        loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded, margin=encoder_margin_torch)
-                    else:
-                        loss_enc=w*enc_crit['function'](conn_encoded, conn_encoded)
-                    loss += loss_enc
-                
-                if latentnorm_loss_weight > 0:
-                    loss_latentnorm = torch.linalg.norm(conn_encoded)
-                    loss += latentnorm_loss_weight_torch*loss_latentnorm
-                
-                if latent_maxrad_weight > 0:
-                    loss_latentrad = torch.mean(torch.nn.ReLU()(torch.sum(conn_encoded**2,axis=1)-latent_maxrad_torch))
-                    loss += latent_maxrad_weight_torch*loss_latentrad
+                    ######################
+                    # loss terms (validation)
+                    loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion, encoded_criterion=encoded_criterion, 
+                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                        latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
                 
                 #######################
                 val_running_loss += loss.item() 
             
             loss_val[itp,epoch] = val_running_loss/(batch_idx+1)
 
-            #computing performance BEFORE latentsim means performance wont match that of the saved checkpoint
-            trainrecord['compute_performance_before_latentsim']=do_compute_performance_BEFORE_latentsim
-            if do_compute_performance_BEFORE_latentsim:
-                #compute full train set identifiability
-                with torch.no_grad():
-                    #conn_encoded, conn_predicted = net(train_inputs)
-                    conn_encoded, conn_predicted = net(train_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
-
-                #fc_preds = conn_predicted.cpu().detach().numpy()
-                train_predicted=conn_predicted.cpu()
-            
-                allpath_train_enc[itp]=conn_encoded #store these encoded outputs to check across paths
-                train_cc=xycorr(train_outputs,conn_predicted)
-            
-                corrloss_train[itp,epoch]=corrtop1acc(cc=train_cc)
-                corrlossN_train[itp,epoch]=corrtopNacc(cc=train_cc,topn=topN)
-                corrlossRank_train[itp,epoch]=corravgrank(cc=train_cc)
-                avgcorr_train[itp,epoch],avgcorr_other_train[itp,epoch]=corr_ident_parts(cc=train_cc)
-            
-                #compute full val set identifiability
-                with torch.no_grad():
-                    #conn_encoded, conn_predicted = net(val_inputs)
-                    conn_encoded, conn_predicted = net(val_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
-                #fc_preds = conn_predicted.cpu().detach().numpy()
-
-                allpath_val_enc[itp]=conn_encoded #store these encoded outputs to check across paths
-                
-                val_cc=xycorr(val_outputs,conn_predicted)
-                corrloss_val[itp,epoch]=corrtop1acc(cc=val_cc)
-                corrlossN_val[itp,epoch]=corrtopNacc(cc=val_cc,topn=topN)
-                corrlossRank_val[itp,epoch]=corravgrank(cc=val_cc)
-                avgcorr_val[itp,epoch],avgcorr_other_val[itp,epoch]=corr_ident_parts(cc=val_cc)
-                
-                #this was negligible for non-PCA transform (norm only)
-                #added about 33% more time to each epoch for PCA
-                origscale_this_epoch=epoch==nbepochs-1 or origscalecorr_epochs>0 and (epoch % origscalecorr_epochs == 0)
-                if origscale_this_epoch and output_transformer is not None:
-                    if data_origscale_list is not None:
-                        valOrig_outputs=data_origscale_list['valdata_origscale'][trainpath['output_name']]
-                    else:
-                        valOrig_outputs=output_transformer.inverse_transform(val_outputs.cpu())
-                    valOrig_predicted=output_transformer.inverse_transform(conn_predicted.cpu())
-                
-                    #if requested, look at the difference between mean(traindata) and mean(restore(train predicted))
-                    #and shift the origscale restore(val predicted) by that amount 
-                    do_adjust_train_restore_mean=False
-                    if do_adjust_train_restore_mean:
-                        if data_origscale_list is not None:
-                            trainOrig_outputs=data_origscale_list['traindata_origscale'][trainpath['output_name']]
-                        else:
-                            trainOrig_outputs=output_transformer.inverse_transform(train_outputs.cpu())
-                        trainOrig_predicted=output_transformer.inverse_transform(train_predicted)
-                    
-                        trainOrig_output_mean=trainOrig_outputs.mean(axis=0,keepdims=True)
-                        trainOrig_predicted_mean=trainOrig_predicted.mean(axis=0,keepdims=True)
-                        trainOrig_meandiff=trainOrig_predicted_mean-trainOrig_output_mean
-                    
-                        valOrig_predicted-=trainOrig_meandiff
-                    
-                    #################
-                    if True:
-                        valOrig_outputs=torchfloat(valOrig_outputs)
-                        valOrig_predicted=torchfloat(valOrig_predicted)
-                    else:
-                        if not torch.is_tensor(valOrig_outputs):
-                            #for some reason we need to explicitly convert this sometimes
-                            valOrig_outputs=torch.from_numpy(valOrig_outputs).float()
-                
-                        if not torch.is_tensor(valOrig_predicted):
-                            #for some reason we need to explicitly convert this sometimes
-                            valOrig_predicted=torch.from_numpy(valOrig_predicted).float()
-                
-                    #for even less clear reason, these are sometimes double() instead of float
-                    valOrig_cc=xycorr(valOrig_outputs.float(),valOrig_predicted.float())
-                
-                    corrloss_OrigScale_val[itp,epoch]=corrtop1acc(cc=valOrig_cc)
-                    corrlossN_OrigScale_val[itp,epoch]=corrtopNacc(cc=valOrig_cc,topn=topN)
-                    corrlossRank_OrigScale_val[itp,epoch]=corravgrank(cc=valOrig_cc)
-                    avgcorr_OrigScale_val[itp,epoch],avgcorr_OrigScale_other_val[itp,epoch]=corr_ident_parts(cc=valOrig_cc)
-                
         ####################################
         ####################################
         # compute between-path latent space similiarity loss and backpropagate
@@ -1562,9 +1618,9 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
             criterion_latentsim=nn.MSELoss()
             
             do_inputwise_latentsim = True
-
-            trainrecord['inputwise_latentsim_loss']=do_inputwise_latentsim
             
+            trainrecord['inputwise_latentsim_loss']=do_inputwise_latentsim
+            trainrecord['meantarget_loss']=do_meantarget_latentsim
             #note: for contrastive, do we want batchwise? (need batchsize larger to make sure we have each encoder to train enough times)
             #like:
             #allinput_train_encoded stacked into (numencoders*numtrainsubj) x latentsize = 1470 x 128, and a [1470 x 1] subject label
@@ -1605,6 +1661,8 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                 for batch_idx, batchsubjidx in enumerate(latentsimloss_subjidx_dataloader):
                     
                     batchinput_train_encoded=[]
+                    batchinput_train_encoded_mean=0
+                    batchinput_train_encoded_count=0
                     net.eval()
                 
                     #compute the training data encoding for each input
@@ -1615,8 +1673,18 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                         
                         with torch.no_grad():
                             conn_encoded = net(train_inputs,encoder_index_torch,neg1_index)
-                        batchinput_train_encoded+=[conn_encoded]
-                    
+                        
+                        if do_meantarget_latentsim:
+                            batchinput_train_encoded_mean+=conn_encoded
+                            batchinput_train_encoded_count+=1
+                        else:
+                            batchinput_train_encoded+=[conn_encoded]
+                    if do_meantarget_latentsim:
+                        batchinput_train_encoded_mean=batchinput_train_encoded_mean/batchinput_train_encoded_count
+                        if latent_normalize:
+                            #renormalize mean to hypersphere shell
+                            batchinput_train_encoded_mean=nn.functional.normalize(batchinput_train_encoded_mean,p=2,dim=1)
+                        
                     net.train()
                     optimizer.zero_grad(set_to_none=do_zerograd_none)
                     
@@ -1631,7 +1699,10 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                         #conn_encoded = numtrainsubj x latentsize
                         #allinput_train_encoded = [num encoders] list of conn_encodeds
                         
-                        loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc != jenc])
+                        if do_meantarget_latentsim:
+                            loss+=criterion_latentsim(conn_encoded,batchinput_train_encoded_mean)
+                        else:
+                            loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc != jenc])
                         #maybe also add some version of this that isn't sensitive to overall scale?
                 
                     loss=loss*latentsim_loss_weight_torch
@@ -1717,6 +1788,13 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                 train_outputs=trainpath['train_outputs']
                 val_inputs=trainpath['val_inputs']
                 val_outputs=trainpath['val_outputs']
+                train_encoded=None
+                val_encoded=None
+                if 'train_encoded' in trainpath:
+                    train_encoded=trainpath['train_encoded']
+                if 'val_encoded' in trainpath:
+                    val_encoded=trainpath['val_encoded']
+                    
                 output_transformer=trainpath['output_transformer']
 
                 #make cpu copy of train and val OUTPUTS for top1acc testing in loop
@@ -1741,8 +1819,12 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         
                 #compute full train set identifiability
                 with torch.no_grad():
-                    #conn_encoded, conn_predicted = net(train_inputs)
-                    conn_encoded, conn_predicted = net(train_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
+                    if do_fixed_encoding:
+                        conn_encoded = net(train_inputs, encoder_index_torch, neg1_index)
+                        _,conn_predicted = net(train_encoded, neg1_index, decoder_index_torch)
+                    else:
+                        #conn_encoded, conn_predicted = net(train_inputs)
+                        conn_encoded, conn_predicted = net(train_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
 
                 #fc_preds = conn_predicted.cpu().detach().numpy()
                 train_predicted=conn_predicted.cpu()
@@ -1757,8 +1839,11 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         
                 #compute full val set identifiability
                 with torch.no_grad():
-                    #conn_encoded, conn_predicted = net(val_inputs)
-                    conn_encoded, conn_predicted = net(val_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
+                    if do_fixed_encoding:
+                        conn_encoded = net(val_inputs, encoder_index_torch, neg1_index)
+                        _, conn_predicted = net(val_encoded, neg1_index, decoder_index_torch)
+                    else:
+                        conn_encoded, conn_predicted = net(val_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
                 #fc_preds = conn_predicted.cpu().detach().numpy()
 
                 allpath_val_enc[itp]=conn_encoded #store these encoded outputs to check across paths
@@ -1957,52 +2042,8 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                 avgrank_train=1+(1-corrlossRank_train)*len(subjidx_train)
                 avgrank_val=1+(1-corrlossRank_val)*len(subjidx_val)
 
-                gridalpha=.25
-
-                trainfig.clear()
-                plt.subplot(2,3,1)
-                plotloss(loss_train,':')
-                plotloss(loss_val,'-')
-                plt.grid(True,alpha=gridalpha)
-                #plt.legend(trainpath_names_short)
-                plt.legend([s+".tr" for s in trainpath_names_short]+[s+".val" for s in trainpath_names_short])
-                plt.title("%s loss" % (losstype))
-
-                plt.subplot(2,3,2)
-                plotloss(loss_train,':',lossviewskip=5,smoothN=5)
-                plotloss(loss_val,'-',lossviewskip=5,smoothN=5)
-                plt.grid(True,alpha=gridalpha)
-                plt.title("%s loss (epoch>%d)" % (losstype,5))
-
-                plt.subplot(2,3,4)
-                plotloss(corrloss_train,':',showmax=True,smoothN=5)
-                plotloss(corrloss_val,'-',showmax=True,smoothN=5)
-                plt.grid(True,alpha=gridalpha)
-                plt.title("corr top1acc")
-
-                plt.subplot(2,3,5)
-                plotloss(corrlossN_train,':',showmax=True,smoothN=5)
-                plotloss(corrlossN_val,'-',showmax=True,smoothN=5)
-                plt.grid(True,alpha=gridalpha)
-                plt.title("corr top%dacc" % (topN))
-
-                plt.subplot(2,3,6)
-                plotloss(corrlossRank_train,':',showmax=True)
-                plotloss(corrlossRank_val,'-',showmax=True)
-                plt.grid(True,alpha=gridalpha)
-                plt.title("corr avgrank %ile")
-
-                plt.subplot(2,3,3)
-                plotloss(avgrank_train,':',showmax=False,lossviewskip=0,smoothN=5)
-                plotloss(avgrank_val,'-',showmax=False,lossviewskip=0,smoothN=5)
-
-                if epoch > 50:
-                    ymax=np.nanmax(np.vstack((avgrank_train,avgrank_val))[:,50:])
-                    plt.ylim([.9, ymax])
-
-                plt.grid(True,alpha=gridalpha)
-                plt.title("corr avgrank")
-                plt.suptitle('%s: %s, %s' % (data_string,network_string,train_string))
+                trainfig=update_training_figure(loss_train, loss_val, corrloss_train, corrloss_val, corrlossN_train, corrlossN_val, corrlossRank_train, corrlossRank_val, 
+                    avgrank_train, avgrank_val, trainpath_names_short, train_string, losstype, epoch, trainfig=trainfig, gridalpha=.25)
 
                 #only in jupyter
                 #display.display(trainfig)
