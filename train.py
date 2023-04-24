@@ -214,7 +214,7 @@ def plotloss(x,plotstyle='-',lossviewskip=0,showmax=False,smoothN=0,colors=['r',
         plt.scatter(midx,x.flatten()[midx2])
 
 def update_training_figure(loss_train, loss_val, corrloss_train, corrloss_val, corrlossN_train, corrlossN_val, corrlossRank_train, corrlossRank_val, 
-    avgrank_train, avgrank_val, trainpath_names_short, train_string, losstype, epoch, trainfig=None, gridalpha=.25):
+    avgrank_train, avgrank_val, trainpath_names_short, data_string, network_string,train_string, losstype, epoch, trainfig=None, gridalpha=.25, topN=2):
 
     if trainfig is None:
         trainfig=plt.figure(figsize=(15,10))
@@ -1364,6 +1364,9 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     if adam_decay is not None:
         trainrecord['adam_decay']=adam_decay
     
+    #save these for inclusion in checkpoint
+    trainrecord_params=trainrecord.copy()
+    
     #from trainpath generation:
     networkinfo={}
     
@@ -1388,6 +1391,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     networkinfo['dropout']=dropout
     networkinfo['latent_activation']=latent_activation
     networkinfo['latent_normalize']=latent_normalize
+
     
     for k in networkinfo.keys():
         trainrecord[k]=networkinfo[k]
@@ -2042,8 +2046,9 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                 avgrank_train=1+(1-corrlossRank_train)*len(subjidx_train)
                 avgrank_val=1+(1-corrlossRank_val)*len(subjidx_val)
 
-                trainfig=update_training_figure(loss_train, loss_val, corrloss_train, corrloss_val, corrlossN_train, corrlossN_val, corrlossRank_train, corrlossRank_val, 
-                    avgrank_train, avgrank_val, trainpath_names_short, train_string, losstype, epoch, trainfig=trainfig, gridalpha=.25)
+                trainfig=update_training_figure(loss_train, loss_val, corrloss_train, corrloss_val, corrlossN_train, corrlossN_val, corrlossRank_train,
+                    corrlossRank_val, avgrank_train, avgrank_val, trainpath_names_short, data_string, network_string, train_string, losstype, epoch, 
+                    trainfig=trainfig, gridalpha=.25, topN=topN)
 
                 #only in jupyter
                 #display.display(trainfig)
@@ -2119,6 +2124,8 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
             #copy network description fields into checkpoint
             for k in networkinfo.keys():
                 checkpoint[k]=networkinfo[k]
+                
+            checkpoint['training_params']=trainrecord_params
             
             if save_optimizer_params and (epoch == nbepochs-1 or exit_on_this_loop):
                 #include optimizer in final checkpoint (so we could resume training)

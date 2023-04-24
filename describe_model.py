@@ -1,8 +1,7 @@
 from krakencoder import *
 from train import *
-
 from scipy.io import loadmat, savemat
-
+from collections.abc import Iterable
 import os
 import sys
 import argparse
@@ -30,14 +29,22 @@ def run_describe_model(argv):
     conn_names=checkpoint['input_name_list']
     trainpath_pairs = [[conn_names[i],conn_names[j]] for i,j in zip(checkpoint['trainpath_encoder_index_list'], checkpoint['trainpath_decoder_index_list'])]
     
-    fields_to_skip=['trainpath_encoder_index_list','trainpath_decoder_index_list']
+    fields_to_skip=['trainpath_encoder_index_list','trainpath_decoder_index_list','optimizer','training_params']
     
     print("Model information:")
     for k in checkpoint:
         if k in fields_to_skip:
             continue
         print("%s:" % (k),checkpoint[k])
-            
+    
+    if 'training_params' in checkpoint:
+        for k in checkpoint['training_params']:
+            if k in fields_to_skip:
+                continue
+            if isinstance(checkpoint['training_params'][k],Iterable):
+                continue
+            print("training_params[%s]:" % (k),checkpoint['training_params'][k])
+    
     print("")
     print("Input types (%d):" % (len(conn_names)))
     for i,iname in enumerate(conn_names):
