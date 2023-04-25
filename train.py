@@ -670,6 +670,8 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         precomputed_transformer_params=None
         precomputed_transformer_string=""
         if precomputed_transformer_info_list:
+            if not conn_name in precomputed_transformer_info_list:
+                raise Exception("'%s' not found in precomputed transformer file" % (conn_name))
             precomputed_transformer_params=precomputed_transformer_info_list[conn_name]
             precomputed_transformer_string=" (from file)"
         
@@ -1338,6 +1340,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     trainrecord['latentsim_batchsize']=latentsim_batchsize
     trainrecord['losstype']=losstype
     trainrecord['loss2_weight']=loss2_weight
+    trainrecord['mse_weight']=mse_weight
     trainrecord['latentsim_loss_weight']=latentsim_loss_weight
     trainrecord['latentnorm_loss_weight']=latentnorm_loss_weight
     trainrecord['latent_maxrad']=latent_maxrad

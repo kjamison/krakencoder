@@ -34,7 +34,7 @@ def argument_parse_newdata(argv):
     return parser.parse_args(argv)
 
 def load_new_data(inputfile, inputfield=None, quiet=False):
-    inputfield_default_search=['encoded','FC','C','volnorm'] #,'sift2volnorm','sift2','orig']
+    inputfield_default_search=['encoded','FC','SC','C','volnorm'] #,'sift2volnorm','sift2','orig']
 
     Cdata=loadmat(inputfile)
     if 'ismissing' in Cdata:

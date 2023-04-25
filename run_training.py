@@ -484,6 +484,7 @@ if __name__ == "__main__":
             ioxtmp=np.load(ioxfile,allow_pickle=True).item()
             for k in ioxtmp:
                 precomputed_transformer_info_list[k]=ioxtmp[k]
+                precomputed_transformer_info_list[k]['filename']=ioxfile.split(os.sep)[-1]
     
     input_subject_list=None
     input_subject_list_str="" #string to designate if we are using alternate train/val/test split with all retest subjects in held-out TEST
@@ -749,7 +750,11 @@ if __name__ == "__main__":
                                                     use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                     input_transformation_info=transformation_type_string,
                                                     precomputed_transformer_info_list=precomputed_transformer_info_list)
-
+            
+            
+            #dont save input transforms if we are using precomputed ones
+            save_input_transforms=precomputed_transformer_info_list is None or not all([k in precomputed_transformer_info_list for k in data_transformer_info_list])
+            
             #load checkpoint file for initial starting point, if given
             if starting_point_file:
                 #allow override of dropout amount
@@ -758,7 +763,6 @@ if __name__ == "__main__":
                 net, checkpoint=Krakencoder.load_checkpoint(starting_point_file, checkpoint_override=checkpoint_override)
             else:
                 net=None
-            
             
             datastring0=trainpath_list[0]['data_string']
             
@@ -774,7 +778,7 @@ if __name__ == "__main__":
                                                  checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
                                                  explicit_checkpoint_epoch_list=explicit_checkpoint_epoch_list,
                                                  precomputed_transformer_info_list=data_transformer_info_list,
-                                                 save_input_transforms=True)
+                                                 save_input_transforms=save_input_transforms)
             
                 if not training_params['roundtrip'] and add_roundtrip_epochs > 0:
                     print("Adding %d roundtrip epochs" % (add_roundtrip_epochs))
