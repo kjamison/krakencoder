@@ -262,7 +262,6 @@ def argument_parse(argv):
     parser.add_argument('--datagroups',action='append',dest='datagroups',help='list of SCFC, FC, SC, FC2SC, etc...',nargs='*')
     parser.add_argument('--dataflavors',action='append',dest='dataflavors',help='SCifod2act,SCsdstream,FCcov,FCcovgsr,FCpcorr',nargs='*')
     parser.add_argument('--trainpaths',action='append',dest='trainpaths',help='eg SCifod2act->FCpcorr',nargs='*')
-    #parser.add_argument('--autoencoder',action='store_true',dest='autoencoder',help='only train autoencoders')
     parser.add_argument('--roinames',action='append',dest='roinames',help='fs86,shen268,coco439...',nargs='*')
     parser.add_argument('--fcfilt',action='append',dest='fcfilt',help='list of hpf (default), bpf, nofilt',nargs='*')
     parser.add_argument('--adamdecay',action='store',dest='adam_decay',type=float, default=0.01, help='Adam weight decay')
@@ -287,6 +286,7 @@ def argument_parse(argv):
     parser.add_argument('--sclognorm',action='store_true',dest='sc_lognorm', help='non-PCA runs use log transform for SC')
     parser.add_argument('--sctsvd',action='store_true',dest='sc_tsvd', help='use Truncated SVD for SC')
     parser.add_argument('--mseweight',action='store',dest='mseweight', type=float, default=1, help='Weight to apply to true->predicted MSE')
+    parser.add_argument('--latentinnerweight',action='store',dest='latent_inner_loss_weight', type=float, default=10, help='Weight to apply to latent-space inner loop loss (enceye,encdist, etc...)')
     parser.add_argument('--latentsimweight',action='append',dest='latent_sim_weight',type=float,help='list of latentsimloss weights to try . default=5000',nargs='*')
     parser.add_argument('--latentsimbatchsize',dest='latent_sim_batch_size',type=int,default=0,help='Batch size for latentsimloss. default=0 (no batch)')
     parser.add_argument('--singleoptimizer',action='store_true',dest='single_optimizer', help='Use single optimizer across all paths and latentsim')
@@ -416,6 +416,8 @@ if __name__ == "__main__":
     
     input_mse_weight=args.mseweight
     
+    input_latent_inner_loss_weight=args.latent_inner_loss_weight
+
     input_subject_list_file=args.subject_split_file
     
     input_use_separate_optimizer=not args.single_optimizer
@@ -524,7 +526,7 @@ if __name__ == "__main__":
     training_params_listdict['losstype']=input_lossnames
     #training_params_listdict['losstype']=['neidist+encdist']
     #training_params_listdict['losstype']=['correye+enceye']
-    training_params_listdict['loss2_weight']=[10]
+    training_params_listdict['latent_inner_loss_weight']=[input_latent_inner_loss_weight]
     #training_params_listdict['hiddenlayers']=[[256,256]]
     #training_params_listdict['hiddenlayers']=[[128]]
     #training_params_listdict['hiddenlayers']=[[128]*3,[128]*7]

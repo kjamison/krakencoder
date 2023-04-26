@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 import random
 import re
+from collections import OrderedDict
 
 import numpy as np
 from scipy.io import loadmat, savemat
@@ -170,6 +171,71 @@ def trim_string(s,left=0,right=0):
     if right>0:
         snew=snew[:-right]
     return snew
+
+def loss_string_to_dict(loss_string, override_weight_dict={}, lossgroup_default_weight={}):
+    
+    loss_items_dict=OrderedDict()
+    #merge info from loss_string split and default_weight_dict
+    for lt_item in loss_string.split("+"):
+        lt=lt_item.split(".w")
+        if len(lt) > 1:
+            w=float(lt[1])
+        else:
+            w=None
+        lt=lt[0]
+        lt_suffix=None
+        
+        if lt.endswith('B'):
+            lt_suffix='B'
+            lt=lt.replace(lt_suffix,'')
+        
+        loss_items_dict[lt]={"name":lt,"weight":w}
+        
+        if lt_suffix is not None:
+            loss_items_dict[lt]['suffix']=lt_suffix
+    
+    for lt,w in override_weight_dict.items():
+        if lt in loss_items_dict:
+            loss_items_dict[lt]["weight"]=w
+        else:
+            loss_items_dict[lt]={"name":lt,"weight":w}
+
+    new_loss_items_dict=OrderedDict()
+    for lt,lt_item in loss_items_dict.items():
+        w=lt_item["weight"]
+
+        if lt in ['mse','msesum','corrtrace','correye','corrmatch','dist','neidist']:
+            lt_group='output'
+        elif lt in ['enceye','encdist','encneidist','encdot','encneidot']:
+            lt_group='encoded'
+        elif lt in ['latentnormloss','latentsimloss','latentmaxradloss','latentsimloss']:
+            lt_group='encoded_meta'
+        else:
+            raise Exception("Unknown losstype: %s" % (lt))
+        
+        if w is None and lt_group in lossgroup_default_weight:
+            w=lossgroup_default_weight[lt_group]
+        
+        lt_suffix=""
+        if "suffix" in lt_item:
+            lt_suffix=lt_item['suffix']
+        
+        if w is None or w==0:
+            lt_string=lt+lt_suffix
+        elif w == 1:
+            lt_string=lt+lt_suffix
+        else:
+            lt_string="%s%s.w%g" % (lt,lt_suffix,w)
+
+        new_loss_items_dict[lt]={"name":lt, "weight":w, "string":lt_string, "lossgroup":lt_group}
+        if "suffix" in lt_item:
+            new_loss_items_dict[lt]['suffix']=lt_item['suffix']
+    
+    return new_loss_items_dict
+
+def loss_dict_to_string(loss_info_dict):
+    loss_str="+".join([v['string'] for k,v in loss_info_dict.items() if v['weight'] is not None and v['weight']!=0])
+    return loss_str
 
 def plotloss(x,plotstyle='-',lossviewskip=0,showmax=False,smoothN=0,colors=['r','b','g','m','k','c','lime','orange']):
     x=np.atleast_2d(x).T
@@ -968,9 +1034,9 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     if 'early_stopping' in training_params:
         do_early_stopping_for_skipacc=training_params['early_stopping']
         
-    loss2_weight=1
-    if 'loss2_weight' in training_params:
-        loss2_weight=training_params['loss2_weight']
+    latent_inner_loss_weight=1
+    if 'latent_inner_loss_weight' in training_params:
+        latent_inner_loss_weight=training_params['latent_inner_loss_weight']
         
     latentsim_loss_weight=0
     if 'latentsim_loss_weight' in training_params:
@@ -1092,50 +1158,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         if not do_early_stopping_for_skipacc:
             skipaccstr+="GO"
     
-    loss_str=""
-    if losstype != 'mse':
-        for lt in losstype.split("+"):
-            loss_str+='+'+lt
-            #for enceye,encdist,encneidist...
-            if lt.startswith("enc") and loss2_weight != 1:
-                loss_str+=".w%g" % (loss2_weight)
-        if loss_str.startswith("+"):
-            loss_str=loss_str[1:]
-        
-        loss_str="_%s" % (loss_str)
-        
-        if mse_weight > 0:
-            loss_str+="+mse.w%g" % (mse_weight)
-    
-    if latentnorm_loss_weight != 0:
-        loss_str+="+latentnormloss"
-        if latentnorm_loss_weight != 1:
-            loss_str+=".w%g" % (latentnorm_loss_weight)
-    
-    if latent_maxrad_weight != 0:
-        loss_str+="+latentmaxrad"
-        if latent_maxrad_weight != 1:
-            loss_str+=".w%g" % (latent_maxrad_weight)
-    
-    if latentsim_loss_weight != 0:
-        loss_str+="+latentsimloss"
-        if do_batchwise_latentsim:
-            loss_str+="B"
-        if latentsim_loss_weight != 1:
-            loss_str+=".w%g" % (latentsim_loss_weight)
-    
-    if do_fixed_encoding:
-        loss_str+="+fixlatent"
-    
-    train_string="%depoch_%s%s%s%s%s%s" % (nbepochs,lrstr,loss_str,optimstr,optimname_str,zgstr,skipaccstr)
-    #if do_trainpath_shuffle:
-    #       train_string+="_tpshuffle"
-    if do_roundtrip:
-        if do_use_existing_net:
-            train_string+="_addroundtrip"
-        else:
-            train_string+="_roundtrip"
-    
+
     timestamp=datetime.now()
     timestamp_suffix=timestamp.strftime("%Y%m%d_%H%M%S")
 
@@ -1151,6 +1174,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     if not torch.cuda.is_available():
         torch.set_num_threads(maxthreads)
     
+    initstr=""
     if init_type == "xavier" and do_initialize_net:
         #note: pytorch >1.0 uses kaiming by default now
         #so probably dont need this option
@@ -1158,7 +1182,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
             if isinstance(m,nn.Linear):
                 torch.nn.init.xavier_uniform(m.weight)
         net.apply(init_weights)
-        train_string+="_init.xav"
+        initstr="_init.xav"
     
     def makeoptim(optname="adam"):
         if optname == "adam":
@@ -1184,50 +1208,80 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
 
     skipacc_top1acc_function=corrtop1acc
 
-    for lt in losstype.split("+"):
+    loss_override_dict=OrderedDict()
+    if mse_weight > 0:
+        loss_override_dict['mse']=mse_weight
+    loss_override_dict['latentsimloss']=latentsim_loss_weight
+    loss_override_dict['latentnormloss']=latentnorm_loss_weight
+    loss_override_dict['latentmaxradloss']=latent_maxrad_weight
+
+    lossgroup_default_weight={'output':1,'encoded':latent_inner_loss_weight,'encoded_meta':None}
+
+    losstype_dict=loss_string_to_dict(losstype,override_weight_dict=loss_override_dict, lossgroup_default_weight=lossgroup_default_weight)
+
+    if 'latentsimloss' in losstype_dict and 'suffix' in losstype_dict['latentsimloss'] and losstype_dict['latentsimloss']['suffix']=='B':
+        do_batchwise_latentsim=True
+
+    for lt, lt_item in losstype_dict.items():
+        lt_w=lt_item['weight']
+        lt_group=lt_item['lossgroup']
+        
         if lt == 'mse':
-            criterion += [{"function":nn.MSELoss()}]
+            criterion += [{"function":nn.MSELoss(), "weight": torchfloat(lt_w)}]
         elif lt == 'msesum':
-            criterion += [{"function":nn.MSELoss(reduction='sum')}]
+            criterion += [{"function":nn.MSELoss(reduction='sum'), "weight": torchfloat(lt_w)}]
         elif lt == 'corrtrace':
-            criterion += [{"function":corrtrace}]
+            criterion += [{"function":corrtrace, "weight": torchfloat(lt_w)}]
         elif lt == 'correye':
-            criterion += [{"function":correye}]
+            criterion += [{"function":correye, "weight": torchfloat(lt_w)}]
         elif lt == 'corrmatch':
-            criterion += [{"function":corrmatch}]
+            criterion += [{"function":corrmatch, "weight": torchfloat(lt_w)}]
         elif lt == 'dist':
-            criterion += [{"function":distance_loss, "pass_margins":True}]
+            criterion += [{"function":distance_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
             skipacc_top1acc_function=disttop1acc
         elif lt == 'neidist':
-            criterion += [{"function":distance_neighbor_loss, "pass_margins":True}]
+            criterion += [{"function":distance_neighbor_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
             skipacc_top1acc_function=disttop1acc
 
         elif lt == 'enceye':
-            encoded_criterion += [{"function":correye, "weight": torchfloat(loss2_weight)}]
+            encoded_criterion += [{"function":correye, "weight": torchfloat(lt_w)}]
         elif lt == 'encdist':
-            encoded_criterion += [{"function":distance_loss, "pass_margins":True, "weight": torchfloat(loss2_weight)}]
+            encoded_criterion += [{"function":distance_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
         elif lt == 'encneidist':
-            encoded_criterion += [{"function":distance_neighbor_loss, "pass_margins":True, "weight": torchfloat(loss2_weight)}]
+            encoded_criterion += [{"function":distance_neighbor_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
         elif lt == 'encdot':
-            encoded_criterion += [{"function":dotproduct_loss, "pass_margins":True, "weight": torchfloat(loss2_weight)}]
+            encoded_criterion += [{"function":dotproduct_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
         elif lt == 'encneidot':
-            encoded_criterion += [{"function":dotproduct_neighbor_loss, "pass_margins":True, "weight": torchfloat(loss2_weight)}]
+            encoded_criterion += [{"function":dotproduct_neighbor_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
+
+        elif lt_group=='encoded_meta':
+            pass
 
         else:
-            raise Exception("Unknown losstype: %s" % (lt))
-
-    if mse_weight > 0:
-        criterion += [{"function":nn.MSELoss(), "weight": torchfloat(mse_weight)}]
+            raise Exception("Unknown losstype: %s" % (lt_item))
     
     if do_fixed_encoding and mse_weight > 0:
         encoded_criterion += [{"function":nn.MSELoss(), "weight": torchfloat(mse_weight)}]
 
-    loss2_weight_torch=torchfloat(loss2_weight)
-    latentnorm_loss_weight_torch=torchfloat(latentnorm_loss_weight)
-    latent_maxrad_weight_torch=torchfloat(latent_maxrad_weight)
+    latentnorm_loss_weight_torch=torchfloat(losstype_dict['latentnormloss']['weight'])
+    latent_maxrad_weight_torch=torchfloat(losstype_dict['latentmaxradloss']['weight'])
     latent_maxrad_torch=torchfloat(latent_maxrad)
-    latentsim_loss_weight_torch=torchfloat(latentsim_loss_weight)
+    latentsim_loss_weight_torch=torchfloat(losstype_dict['latentsimloss']['weight'])
 
+    
+    loss_str="_"+loss_dict_to_string(losstype_dict)
+    if do_fixed_encoding:
+        loss_str+="+fixlatent"
+
+    train_string="%depoch_%s%s%s%s%s%s%s" % (nbepochs,lrstr,loss_str,optimstr,optimname_str,zgstr,skipaccstr,initstr)
+    #if do_trainpath_shuffle:
+    #       train_string+="_tpshuffle"
+    if do_roundtrip:
+        if do_use_existing_net:
+            train_string+="_addroundtrip"
+        else:
+            train_string+="_roundtrip"
+    
     optimizer_list=[]
 
     if do_separate_optimizer:
@@ -1339,7 +1393,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     trainrecord['batchsize']=batchsize
     trainrecord['latentsim_batchsize']=latentsim_batchsize
     trainrecord['losstype']=losstype
-    trainrecord['loss2_weight']=loss2_weight
+    trainrecord['latent_inner_loss_weight']=latent_inner_loss_weight
     trainrecord['mse_weight']=mse_weight
     trainrecord['latentsim_loss_weight']=latentsim_loss_weight
     trainrecord['latentnorm_loss_weight']=latentnorm_loss_weight
