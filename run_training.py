@@ -86,53 +86,53 @@ def load_data(subjects=[], conn_name_list=[], fc_filter_list=["hpf"], quiet=Fals
     pretrained_transformer_file['FCcov_coco439_hpfgsr']=None
     pretrained_transformer_file['FCpcorr_coco439_hpf']=None
     
-    connfile_info.append({'name':'fs86_ifod2act_volnorm','file':'%s/sc_ifod2act_fs86_997subj.mat' % (datafolder),'types':['volnorm'],'group':datagroup})
-    connfile_info.append({'name':'fs86_sdstream_volnorm','file':'%s/sc_sdstream_fs86_997subj.mat' % (datafolder),'types':['volnorm'],'group':datagroup})
-    connfile_info.append({'name':'shen268_ifod2act_volnorm','file':'%s/sc_ifod2act_shen268_997subj.mat' % (datafolder),'types':['volnorm'],'group':datagroup})
-    connfile_info.append({'name':'shen268_sdstream_volnorm','file':'%s/sc_sdstream_shen268_997subj.mat' % (datafolder),'types':['volnorm'],'group':datagroup})
-    connfile_info.append({'name':'coco439_ifod2act_volnorm','file':'%s/sc_ifod2act_cocommpsuit439_997subj.mat' % (datafolder),'types':['volnorm'],'group':datagroup})
-    connfile_info.append({'name':'coco439_sdstream_volnorm','file':'%s/sc_sdstream_cocommpsuit439_997subj.mat' % (datafolder),'types':['volnorm'],'group':datagroup})
+    connfile_info.append({'name':'fs86_ifod2act_volnorm','file':'%s/sc_fs86_ifod2act_volnorm_993subj.mat' % (datafolder),'types':['SC'],'group':datagroup})
+    connfile_info.append({'name':'fs86_sdstream_volnorm','file':'%s/sc_fs86_sdstream_volnorm_993subj.mat' % (datafolder),'types':['SC'],'group':datagroup})
+    connfile_info.append({'name':'shen268_ifod2act_volnorm','file':'%s/sc_shen268_ifod2act_volnorm_993subj.mat' % (datafolder),'types':['SC'],'group':datagroup})
+    connfile_info.append({'name':'shen268_sdstream_volnorm','file':'%s/sc_shen268_sdstream_volnorm_993subj.mat' % (datafolder),'types':['SC'],'group':datagroup})
+    connfile_info.append({'name':'coco439_ifod2act_volnorm','file':'%s/sc_cocommpsuit439_ifod2act_volnorm_993subj.mat' % (datafolder),'types':['SC'],'group':datagroup})
+    connfile_info.append({'name':'coco439_sdstream_volnorm','file':'%s/sc_cocommpsuit439_sdstream_volnorm_993subj.mat' % (datafolder),'types':['SC'],'group':datagroup})
 
     datagroup='FC'
     #consider: do np.arctanh for FC inputs?
     if "hpf" in fc_filter_list or len(conn_name_list)==0:
-        connfile_info.append({'name':'FCcov_fs86_hpf','file':'%s/fc_fs86_FCcov_hpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_fs86_hpfgsr','file':'%s/fc_fs86_FCcov_hpf_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_fs86_hpf','file':'%s/fc_fs86_FCpcorr_hpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_fs86_hpf','file':'%s/fc_fs86_FCcov_hpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_fs86_hpfgsr','file':'%s/fc_fs86_FCcov_hpf_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_fs86_hpf','file':'%s/fc_fs86_FCpcorr_hpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
 
-        connfile_info.append({'name':'FCcov_shen268_hpf','file':'%s/fc_shen268_FCcov_hpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_shen268_hpfgsr','file':'%s/fc_shen268_FCcov_hpf_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_shen268_hpf','file':'%s/fc_shen268_FCpcorr_hpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_shen268_hpf','file':'%s/fc_shen268_FCcov_hpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_shen268_hpfgsr','file':'%s/fc_shen268_FCcov_hpf_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_shen268_hpf','file':'%s/fc_shen268_FCpcorr_hpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
 
-        connfile_info.append({'name':'FCcov_coco439_hpf','file':'%s/fc_cocommpsuit439_FCcov_hpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_coco439_hpfgsr','file':'%s/fc_cocommpsuit439_FCcov_hpf_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_coco439_hpf','file':'%s/fc_cocommpsuit439_FCpcorr_hpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_coco439_hpf','file':'%s/fc_cocommpsuit439_FCcov_hpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_coco439_hpfgsr','file':'%s/fc_cocommpsuit439_FCcov_hpf_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_coco439_hpf','file':'%s/fc_cocommpsuit439_FCpcorr_hpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
 
     if "bpf" in fc_filter_list or len(conn_name_list)==0:
-        connfile_info.append({'name':'FCcov_fs86_bpf','file':'%s/fc_fs86_FCcov_bpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_fs86_bpfgsr','file':'%s/fc_fs86_FCcov_bpf_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_fs86_bpf','file':'%s/fc_fs86_FCpcorr_bpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_fs86_bpf','file':'%s/fc_fs86_FCcov_bpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_fs86_bpfgsr','file':'%s/fc_fs86_FCcov_bpf_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_fs86_bpf','file':'%s/fc_fs86_FCpcorr_bpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
         
-        connfile_info.append({'name':'FCcov_shen268_bpf','file':'%s/fc_shen268_FCcov_bpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_shen268_bpfgsr','file':'%s/fc_shen268_FCcov_bpf_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_shen268_bpf','file':'%s/fc_shen268_FCpcorr_bpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_shen268_bpf','file':'%s/fc_shen268_FCcov_bpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_shen268_bpfgsr','file':'%s/fc_shen268_FCcov_bpf_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_shen268_bpf','file':'%s/fc_shen268_FCpcorr_bpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
         
-        connfile_info.append({'name':'FCcov_coco439_bpf','file':'%s/fc_cocommpsuit439_FCcov_bpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_coco439_bpfgsr','file':'%s/fc_cocommpsuit439_FCcov_bpf_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_coco439_bpf','file':'%s/fc_cocommpsuit439_FCpcorr_bpf_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_coco439_bpf','file':'%s/fc_cocommpsuit439_FCcov_bpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_coco439_bpfgsr','file':'%s/fc_cocommpsuit439_FCcov_bpf_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_coco439_bpf','file':'%s/fc_cocommpsuit439_FCpcorr_bpf_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
         
     if "nofilt" in fc_filter_list or len(conn_name_list)==0:
-        connfile_info.append({'name':'FCcov_fs86_nofilt','file':'%s/fc_fs86_FCcov_nofilt_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_fs86_nofiltgsr','file':'%s/fc_fs86_FCcov_nofilt_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_fs86_nofilt','file':'%s/fc_fs86_FCpcorr_nofilt_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_fs86_nofilt','file':'%s/fc_fs86_FCcov_nofilt_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_fs86_nofiltgsr','file':'%s/fc_fs86_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_fs86_nofilt','file':'%s/fc_fs86_FCpcorr_nofilt_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
 
-        connfile_info.append({'name':'FCcov_shen268_nofilt','file':'%s/fc_shen268_FCcov_nofilt_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_shen268_nofiltgsr','file':'%s/fc_shen268_FCcov_nofilt_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_shen268_nofilt','file':'%s/fc_shen268_FCpcorr_nofilt_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_shen268_nofilt','file':'%s/fc_shen268_FCcov_nofilt_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_shen268_nofiltgsr','file':'%s/fc_shen268_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_shen268_nofilt','file':'%s/fc_shen268_FCpcorr_nofilt_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
         
-        connfile_info.append({'name':'FCcov_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCcov_nofilt_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCcov_coco439_nofiltgsr','file':'%s/fc_cocommpsuit439_FCcov_nofilt_gsr_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
-        connfile_info.append({'name':'FCpcorr_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCpcorr_nofilt_997subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCcov_nofilt_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCcov_coco439_nofiltgsr','file':'%s/fc_cocommpsuit439_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
+        connfile_info.append({'name':'FCpcorr_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCpcorr_nofilt_993subj.mat' % (datafolder),'types':['FC'],'group':datagroup})
 
 
     #print("connfile_info:",[k["name"] for k in connfile_info])
@@ -220,10 +220,16 @@ def load_data(subjects=[], conn_name_list=[], fc_filter_list=["hpf"], quiet=Fals
             subjmissing=Cdata['ismissing'][0]>0
             subjects997=Cdata['subject'][0][~subjmissing].astype(float)
             
-            nroi=Cdata[conntype][0][0].shape[0]
+            connfield_list=[conntype, "SC","FC"]
+            connfield=conntype
+            for cf in connfield_list:
+                if cf in Cdata:
+                    connfield=cf
+                    break
+            nroi=Cdata[connfield][0][0].shape[0]
             trimask=np.triu_indices(nroi,1)
             npairs=trimask[0].shape[0]
-            Ctriu=[x[trimask] for x in Cdata[conntype][0][~subjmissing]]
+            Ctriu=[x[trimask] for x in Cdata[connfield][0][~subjmissing]]
             #restrict to 420 unrelated subjects
             Ctriu=[x for i,x in enumerate(Ctriu) if subjects997[i] in subjects]
             #conn_name='%s_%s' % (ci['name'],conntype)

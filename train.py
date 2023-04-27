@@ -361,6 +361,11 @@ def generate_transformer(traindata, transformer_type, transformer_param_dict=Non
             pca_components=precomputed_transformer_params['pca_components']
             pca_input_mean=precomputed_transformer_params['pca_input_mean']
             pca_dim=precomputed_transformer_params["reduce_dimension"]
+            if 'pca_explained_variance_ratio' in precomputed_transformer_params:
+                pca_explained_variance_ratio=precomputed_transformer_params['pca_explained_variance_ratio']
+            else:
+                pca_explained_variance_ratio=np.nan
+
         else:
             pca_xform=PCA(n_components=transformer_param_dict['reduce_dimension'],random_state=0).fit(traindata)
             data_normscale=np.linalg.norm(pca_xform.transform(traindata))
@@ -369,6 +374,7 @@ def generate_transformer(traindata, transformer_type, transformer_param_dict=Non
             pca_components=pca_xform.components_
             pca_input_mean=pca_xform.mean_
             pca_dim=transformer_param_dict['reduce_dimension']
+            pca_explained_variance_ratio=np.sum(pca_xform.explained_variance_ratio_)
 
         #just make it explicitly a lambda function instead of using the PCA.transform() so we can be certain it's reproducible during
         #training and later evaluation
@@ -385,7 +391,8 @@ def generate_transformer(traindata, transformer_type, transformer_param_dict=Non
         transformer_info["type"]="pca"
         transformer_info["params"]={"reduce_dimension":pca_dim,
                                     "input_normscale":data_normscale, 
-                                    "output_normscale":normscale}
+                                    "output_normscale":normscale,
+                                    "pca_explained_variance_ratio": pca_explained_variance_ratio}
                                     
         if return_components:
             transformer_info["params"]["pca_components"]=pca_components
@@ -783,12 +790,21 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
                     precomputed_transformer_params=precomputed_transformer_params)
     
         if not quiet:
-            print(" using %s%s" % (data_transformer_dict['type'],precomputed_transformer_string))
+            print(" using %s%s" % (data_transformer_dict['type'],precomputed_transformer_string), end="")
         
         traindata_list[conn_name]=data_transformer_list[conn_name].transform(traindata)
         valdata_list[conn_name]=data_transformer_list[conn_name].transform(valdata)
         data_transformer_info_list[conn_name]=data_transformer_dict
         
+        if not quiet:
+            var_restore=np.mean(np.var(data_transformer_list[conn_name].inverse_transform(traindata_list[conn_name]),axis=0))
+            var_orig=np.mean(np.var(traindata,axis=0))
+            var_explained_ratio=var_restore/var_orig
+            print(" (training variance maintained: %.2f%%)" % (var_explained_ratio*100),end="")
+
+        if not quiet:
+            print("")
+
         #compute min,mean,max of intersubject euclidean distances for this dataset
         #traindist=torch.cdist(traindata_list[conn_name],traindata_list[conn_name],p=2.0)
         traindist=scipy_cdist(traindata_list[conn_name],traindata_list[conn_name])
