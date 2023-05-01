@@ -6,7 +6,8 @@ os.environ['NUMEXPR_NUM_THREADS']=str(numthreads)
 
 from krakencoder import *
 from train import *
-from run_training import load_data, load_subject_list
+from utils import *
+from run_training import load_hcp_data, load_hcp_subject_list
 
 from sklearn.cross_decomposition import PLSRegression #test this
 
@@ -109,8 +110,8 @@ def run_evaluate_model(argv):
     nsubj=len(record['subjects'][0])
     #print("nsubj",nsubj)
     
-    subjects, famidx = load_subject_list(nsubj)
-    subjects_out, conndata_alltypes = load_data(subjects=subjects, conn_name_list=conn_names, quiet=False)
+    subjects, famidx = load_hcp_subject_list(nsubj)
+    subjects_out, conndata_alltypes = load_hcp_data(subjects=subjects, conn_name_list=conn_names, quiet=False)
     if len(subjects) != len(subjects_out) or not all(subjects==subjects_out):
         raise Exception("Subjects did not match expected")
 

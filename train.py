@@ -1,5 +1,6 @@
 from krakencoder import *
 from loss import *
+from utils import *
 
 import torch.utils.data as data_utils
 import torch.optim as optim
@@ -8,7 +9,6 @@ import os
 import platform
 import time
 from datetime import datetime
-import random
 import re
 from collections import OrderedDict
 
@@ -16,8 +16,6 @@ import numpy as np
 from scipy.io import loadmat, savemat
 
 from scipy.spatial.distance import cdist as scipy_cdist
-
-#!conda install -c conda-forge scikit-learn -y
 
 from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.preprocessing import FunctionTransformer
@@ -30,55 +28,6 @@ from cycler import cycler
 
 #####################################
 #some useful functions
-
-def set_random_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-def numpyvar(x):
-    if not torch.is_tensor(x):
-        return x
-    return x.numpy()
-
-def torchvar(x, astype=None):
-    if torch.is_tensor(x):
-        return x
-    
-    #cast variable to torch (use cuda if available)
-    try:
-        _ = iter(x)
-    except TypeError:
-        islist=False
-        input_type=type(x)
-    else:
-        islist=True
-        input_type=type(x[0])
-    
-    if astype is None:
-        astype=input_type
-    
-    if torch.cuda.is_available():
-        if astype is int:
-            torchfun=torch.cuda.IntTensor
-        else:
-            torchfun=torch.cuda.FloatTensor
-    else:
-        if astype is int:
-            torchfun=torch.IntTensor
-        else:
-            torchfun=torch.FloatTensor
-    
-    if islist:
-        return torchfun(x)
-    else:
-        return torchfun([x])
-
-def torchfloat(x):
-    return torchvar(x,astype=float)
-
-def torchint(x):
-    return torchvar(x,astype=int)
 
 def random_train_test_split(numsubj=None, subjlist=None, train_frac=.5, seed=None):
     if seed is not None:
@@ -118,59 +67,6 @@ def random_train_test_split_groups(groups, numsubj=None, subjlist=None, train_fr
     subjidx_train=subjidx_train[np.argsort(np.random.random_sample(len(subjidx_train)))]
     subjidx_test=subjidx_test[np.argsort(np.random.random_sample(len(subjidx_test)))]
     return subjlist[subjidx_train],subjlist[subjidx_test],groups[subjidx_train],groups[subjidx_test]
-
-#take a dictionary where each field value is a list
-#and generate a new list of dictionaries with every combination of fields
-def dict_combination_list(listdict, reverse_field_order=False):
-    keylist=list(listdict.keys())
-    if reverse_field_order:
-        keylist=keylist[::-1]
-    permlist=[]
-    for k in keylist:
-        vlist=listdict[k]
-        if len(permlist)==0:
-            permlist=[{k:v} for v in vlist]
-            continue
-        permlist_new=[]
-        for v in vlist:
-            for p in permlist:
-                p[k]=v
-                permlist_new+=[p.copy()]
-        permlist=permlist_new
-    return permlist
-
-def flatlist(l):
-    if l is None:
-        return []
-    return [x for y in l for x in y]
-
-def common_prefix(strlist):
-    strlen=[len(s) for s in strlist]
-    result=""
-    for i in range(1,min(strlen)):
-        if all([s[:i]==strlist[0][:i] for s in strlist]):
-            result=strlist[0][:i]
-        else:
-            break
-    return result
-
-def common_suffix(strlist):
-    strlen=[len(s) for s in strlist]
-    result=""
-    for i in range(1,min(strlen)):
-        if all([s[-i:]==strlist[0][-i:] for s in strlist]):
-            result=strlist[0][-i:]
-        else:
-            break
-    return result
-
-def trim_string(s,left=0,right=0):
-    snew=s
-    if left>0:
-        snew=snew[left:]
-    if right>0:
-        snew=snew[:-right]
-    return snew
 
 def loss_string_to_dict(loss_string, override_weight_dict={}, lossgroup_default_weight={}):
     
@@ -1011,7 +907,8 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
 def train_network(trainpath_list, training_params, net=None, data_origscale_list=None, trainfig=None, 
                   trainthreads=16, display_epochs=20, display_seconds=None, 
                   save_epochs=100, checkpoint_epochs=None, update_single_checkpoint=True, save_optimizer_params=True,
-                  explicit_checkpoint_epoch_list=[], precomputed_transformer_info_list={}, save_input_transforms=True):
+                  explicit_checkpoint_epoch_list=[], precomputed_transformer_info_list={}, save_input_transforms=True,
+                  output_file_prefix="connae"):
 
     trainpath_names=['%s->%s' % (tp['input_name'],tp['output_name']) for tp in trainpath_list]
     trainpath_names_short=['%s->%s' % (tp['input_name_short'],tp['output_name_short']) for tp in trainpath_list]
@@ -1122,16 +1019,19 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     if 'meantarget_latentsim' in training_params:
         do_meantarget_latentsim = training_params['meantarget_latentsim']
     
-    do_fixed_encoding = False
-    if 'fixed_encoding' in training_params:
-        do_fixed_encoding = training_params['fixed_encoding']
+    do_target_encoding = False
+    if 'target_encoding' in training_params:
+        do_target_encoding = training_params['target_encoding']
+
+    do_fixed_target_encoding = False
+    if 'fixed_target_encoding' in training_params:
+        do_fixed_target_encoding = training_params['fixed_target_encoding']
+    do_target_encoding = do_target_encoding or do_fixed_target_encoding
     
-    #for 'fixed_encoding' mode, do not skip accurate paths and do not use latentsim
-    if do_fixed_encoding:
+    if do_target_encoding:
+        #for 'target encoding' mode, do not skip accurate paths and do not use latentsim
         do_skip_accurate_paths=False
         latentsim_loss_weight=0
-        latent_maxrad_weight=0
-        latentnorm_loss_weight=0
         
         
     #if latent_normalize is true, use dot product for distance
@@ -1276,7 +1176,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         else:
             raise Exception("Unknown losstype: %s" % (lt_item))
     
-    if do_fixed_encoding and mse_weight > 0:
+    if do_target_encoding and mse_weight > 0:
         encoded_criterion += [{"function":nn.MSELoss(), "weight": torchfloat(mse_weight)}]
 
     latentnorm_loss_weight_torch=torchfloat(losstype_dict['latentnormloss']['weight'])
@@ -1286,8 +1186,10 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
 
     
     loss_str="_"+loss_dict_to_string(losstype_dict)
-    if do_fixed_encoding:
+    if do_fixed_target_encoding:
         loss_str+="+fixlatent"
+    elif do_target_encoding:
+        loss_str+="+targlatent"
 
     train_string="%depoch_%s%s%s%s%s%s%s" % (nbepochs,lrstr,loss_str,optimstr,optimname_str,zgstr,skipaccstr,initstr)
     #if do_trainpath_shuffle:
@@ -1369,15 +1271,15 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     
     latentsimloss_subjidx_dataloader=data_utils.DataLoader(np.arange(numsubjects_train), batch_size=tmp_latent_batchsize, shuffle=True, drop_last=True)
 
-    recordfile="connae_trainrecord_%s_%s_%s_%s.mat" % (data_string,network_string,train_string,timestamp_suffix)
-    imgfile="connae_%s_%s_%s_%s.png" % (data_string,network_string,train_string,timestamp_suffix)
-    checkpoint_filebase="connae_chkpt_%s_%s_%s_%s" % (data_string,network_string,train_string,timestamp_suffix)
+    recordfile="%s_trainrecord_%s_%s_%s_%s.mat" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
+    imgfile="%s_%s_%s_%s_%s.png" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
+    checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
     
     #if saving transformer info (eg: precomputed PCA weights), need to remove the transformer OBJECT with embedded functions etc
     # from the list. Just save params
     input_transformer_file=""
     if precomputed_transformer_info_list and save_input_transforms:
-         input_transformer_file="connae_ioxfm_%s_%s_%s_%s.npy" % (data_string,network_string,train_string,timestamp_suffix)
+         input_transformer_file="%s_ioxfm_%s_%s_%s_%s.npy" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
          transformer_params_to_save={}
          for k_iox in precomputed_transformer_info_list.keys():
              transformer_params_to_save[k_iox]=precomputed_transformer_info_list[k_iox]["params"]
@@ -1425,7 +1327,8 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     trainrecord['origscalecorr_epochs']=origscalecorr_epochs
     trainrecord['origscalecorr_inputtype']='inverse'
     trainrecord['saved_input_transformer_file']=input_transformer_file
-    trainrecord['fixed_encoding']=do_fixed_encoding
+    trainrecord['target_encoding']=do_target_encoding
+    trainrecord['fixed_target_encoding']=do_fixed_target_encoding
     trainrecord['meantarget_latentsim']=do_meantarget_latentsim
     
     if data_origscale_list is not None:
@@ -1601,30 +1504,55 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
 
                 for batch_idx, train_data in enumerate(trainloader):
                     
-                    if do_fixed_encoding:
+                    if do_target_encoding:
                         #pulls out <batchsize> at a time
                         conn_inputs, conn_targets, conn_encoded_targets = train_data
                         
-                        #first compute current encoding and backprop encoder loss
-                        optimizer.zero_grad(set_to_none=do_zerograd_none)
-                                            
-                        conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+
+                        if do_fixed_target_encoding:
+                            #1. input->latent and loss(predictedlatent,fixedlatent)
+                            #2. fixedlatent->output and loss(output,predictedoutput)
+
+                            #first compute current encoding and backprop encoder loss
+                            optimizer.zero_grad(set_to_none=do_zerograd_none)
+                                                
+                            conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+                            
+                            #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
+                            
+                            loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion, encoder_margin=encoder_margin_torch, 
+                                                     latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                            
+                            loss.backward()
+                            optimizer.step()
+
+                            train_running_loss += loss.item() 
+                            
+                            #Then compute predicted output and backprop decoder loss
+                            optimizer.zero_grad(set_to_none=do_zerograd_none)
+                            _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
                         
-                        #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
-                        
-                        loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion, encoder_margin=encoder_margin_torch, 
-                                        latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                        
-                        loss.backward()
-                        optimizer.step()
-                        
-                        #Then compute predicted output and backprop decoder loss
-                        optimizer.zero_grad(set_to_none=do_zerograd_none)
-                        _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
-                    
-                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion, output_margin=output_margin_torch)
-                        loss.backward()
-                        optimizer.step()
+                            loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion, output_margin=output_margin_torch)
+                            loss.backward()
+                            optimizer.step()
+
+                            train_running_loss += loss.item() 
+                        else:
+                            #input->latent->output, then loss(predictedlatent,fixedlatent) and loss(output,predictedoutput)
+
+                            optimizer.zero_grad(set_to_none=do_zerograd_none)
+
+                            conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch)
+
+                            loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
+                                                     criterion=criterion, encoded_criterion=encoded_criterion, 
+                                                     output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                                                     latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                            loss.backward()
+                            optimizer.step()
+
+                            train_running_loss += loss.item() 
+
                     else:
                         optimizer.zero_grad(set_to_none=do_zerograd_none)
                         
@@ -1639,8 +1567,8 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                         ######################
                         # loss terms (training)
                         loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion, encoded_criterion=encoded_criterion, 
-                            output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                            latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                                                 output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                                                 latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
 
                         loss.backward()
                         optimizer.step()
@@ -1655,19 +1583,35 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
 
             for batch_idx, val_data in enumerate(valloader):
                     
-                if do_fixed_encoding:
+                if do_target_encoding:
                     #pulls out <batchsize> at a time
                     conn_inputs, conn_targets, conn_encoded_targets = val_data
                     
-                    with torch.no_grad():
-                        conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
-                        _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
+                    if do_fixed_target_encoding:
+                        with torch.no_grad():
+                            conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+                            _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
+                            
+                        #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
+                        loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion, encoder_margin=encoder_margin_torch, 
+                                        latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
                         
-                    #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
-                    loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion, encoder_margin=encoder_margin_torch, 
-                                    latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                        val_running_loss += loss.item() 
+
+                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion, output_margin=output_margin_torch)
+
+                        val_running_loss += loss.item() 
+                    else:
+                        with torch.no_grad():
+                            conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
+
+                        # loss terms (validation)
+                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
+                                                 criterion=criterion, encoded_criterion=encoded_criterion, 
+                                                 output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                                                 latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                        val_running_loss += loss.item() 
                     
-                    loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion, output_margin=output_margin_torch)
                 else:
                     #with new val_batchsize, this should be all the val data at once
                     conn_inputs, conn_targets = val_data
@@ -1681,9 +1625,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                     loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion, encoded_criterion=encoded_criterion, 
                         output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
                         latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                
-                #######################
-                val_running_loss += loss.item() 
+                    val_running_loss += loss.item() 
             
             loss_val[itp,epoch] = val_running_loss/(batch_idx+1)
 
@@ -1896,11 +1838,12 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         
                 #compute full train set identifiability
                 with torch.no_grad():
-                    if do_fixed_encoding:
+                    if do_fixed_target_encoding:
                         conn_encoded = net(train_inputs, encoder_index_torch, neg1_index)
                         _,conn_predicted = net(train_encoded, neg1_index, decoder_index_torch)
                     else:
-                        #conn_encoded, conn_predicted = net(train_inputs)
+                        #for regular mode or 'target' mode, just get latent and predicted the normal way
+                        #only do input->fixedlatent->output for fixed_target mode
                         conn_encoded, conn_predicted = net(train_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
 
                 #fc_preds = conn_predicted.cpu().detach().numpy()
@@ -1916,7 +1859,7 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
         
                 #compute full val set identifiability
                 with torch.no_grad():
-                    if do_fixed_encoding:
+                    if do_fixed_target_encoding:
                         conn_encoded = net(val_inputs, encoder_index_torch, neg1_index)
                         _, conn_predicted = net(val_encoded, neg1_index, decoder_index_torch)
                     else:

@@ -1,6 +1,7 @@
 from krakencoder import *
 from train import *
-from run_training import load_data, load_subject_list
+from run_training import load_input_data, load_hcp_data, load_hcp_subject_list, canonical_data_flavor
+from utils import *
 
 from scipy.io import loadmat, savemat
 import re
@@ -11,6 +12,14 @@ import argparse
 import warnings
 
 def argument_parse_newdata(argv):
+   #for list-based inputs, need to specify the defaults this way, otherwise the argparse append just adds to them
+    arg_defaults={}
+    arg_defaults['burst_include']=[]
+    arg_defaults['input_names']=[]
+    arg_defaults['output_names']=[]
+    arg_defaults['input_data_file']=[]
+    arg_defaults['input_transform_file']=["auto"]
+
     parser=argparse.ArgumentParser(description='Evaluate krakencoder checkpoint',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('--checkpoint',action='store',dest='checkpoint', help='Checkpoint file (.pt)')
@@ -31,117 +40,9 @@ def argument_parse_newdata(argv):
     testing_group.add_argument('--savetransformedinputs',action='store_true',dest='save_transformed_inputs', help='Transform inputs and save them as "encoded" values (for testing PCA/transformed space data)')
     testing_group.add_argument('--untransformedoutputs',action='store_true',dest='save_untransformed_outputs', help='Keep outputs in PCA/transformed space (for testing)')
 
-    return parser.parse_args(argv)
-
-def load_new_data(inputfile, inputfield=None, quiet=False):
-    inputfield_default_search=['encoded','FC','SC','C','volnorm'] #,'sift2volnorm','sift2','orig']
-
-    Cdata=loadmat(inputfile)
-    if 'ismissing' in Cdata:
-        subjmissing=Cdata['ismissing'][0]>0
-    else:
-        subjmissing=[]
-    if 'subject' in Cdata:
-        subjects=Cdata['subject'][0]
-    else:
-        subjects=[]
-    
-    conntype=None
-    if inputfield:
-        conntype=inputfield
-    else:
-        for itest in inputfield_default_search:
-            if itest in Cdata:
-                conntype=itest
-                break
-    
-    if conntype is None:
-        print("None of the following fields were found in the input file %s:" % (inputfile),inputfield_default_search)
-        raise Exception("Input type not found")
-    
-    if len(Cdata[conntype][0][0].shape)==0:
-        #single matrix was in file
-        Cmats=[Cdata[conntype]]
-    else:
-        Cmats=Cdata[conntype][0]
-    
-    if conntype == "encoded":
-        nroi=1
-        npairs=Cmats[0].shape[1]
-        Cdata=Cmats[0].copy()
-    else:
-        nroi=Cmats[0].shape[0]
-        trimask=np.triu_indices(nroi,1)
-        npairs=trimask[0].shape[0]
-        if len(subjmissing)==0:
-            subjmissing=np.zeros(len(Cmats))>0
-        
-        if len(subjects)>0:
-            subjects=subjects[~subjmissing]
-    
-        Ctriu=[x[trimask] for i,x in enumerate(Cmats) if not subjmissing[i]]
-        Cdata=np.vstack(Ctriu)
-        #restrict to 420 unrelated subjects
-        #Ctriu=[x for i,x in enumerate(Ctriu) if subjects997[i] in subjects]
-    
-    conndata={'data':Cdata,'numpairs':npairs,'numroi':nroi,'fieldname':conntype,'subjects':subjects}
-    
-    return conndata
-
-def canonical_data_flavor(conntype):
-    if conntype.lower() == "encoded":
-        return "encoded"
-    
-    # parse user-specified input data type
-    input_atlasname=""
-    input_flavor=""
-    input_fcfilt=""
-    input_fcgsr=""
-    input_scproc="volnorm"
-    
-    input_conntype_lower=conntype.lower()
-    if "fs86" in input_conntype_lower:
-        input_atlasname="fs86"
-    elif "shen268" in input_conntype_lower:
-        input_atlasname="shen268"
-    elif "coco439" in input_conntype_lower or "cocommpsuit439" in input_conntype_lower:
-        input_atlasname="coco439"
-    else:
-        raise Exception("Unknown atlas name for input type: %s" % (conntype))
-    
-    if "fccov" in input_conntype_lower and "gsr" in input_conntype_lower:
-        input_flavor="FCcov"
-        input_fcgsr="gsr"
-    elif "fccov" in input_conntype_lower:
-        input_flavor="FCcov"
-    elif "pcorr" in input_conntype_lower:
-        input_flavor="FCpcorr"
-    elif "sdstream" in input_conntype_lower:
-        input_flavor="sdstream"
-    elif "ifod2act" in input_conntype_lower:
-        input_flavor="ifod2act"
-    else:
-        raise Exception("Unknown data flavor for input type: %s" % (conntype))
-    
-    #FC: FCcov_<atlas>_<fcfilt>[gsr?]_FC, FCpcorr_<atlas>_<fcfilt>_FC
-    #SC: <atlas>_sdstream_volnorm, <atlas>_ifod2act_volnorm
-    
-    if input_flavor.startswith("FC"):
-        if "hpf" in input_conntype_lower:
-            input_fcfilt="hpf"
-        elif "bpf" in input_conntype_lower:
-            input_fcfilt="bpf"
-        elif "nofilt" in input_conntype_lower:
-            input_fcfilt="nofilt"
-        else:
-            raise Exception("Unknown FC filter for input type: %s" % (conntype))
-    
-    if input_flavor.startswith("FC"):
-        conntype_canonical="%s_%s_%s%s_FC" % (input_flavor,input_atlasname,input_fcfilt,input_fcgsr)
-    else:
-        conntype_canonical="%s_%s_%s" % (input_atlasname,input_flavor,input_scproc)
-    
-    return conntype_canonical
+    args=parser.parse_args(argv)
+    args=clean_args(args,arg_defaults)
+    return args
 
 def search_flavors(searchstring_list,full_list):
     if isinstance(searchstring_list,str):
@@ -183,11 +84,15 @@ def run_model_on_new_data(argv):
     recordfile=args.trainrecord
     burstmode=args.burst
     burstnorm=args.burstnorm
-    input_burstmode_names=flatlist(args.burst_include)
+    input_burstmode_names=args.burst_include
     do_save_transformed_inputs=args.save_transformed_inputs
     outputs_in_model_space=args.save_untransformed_outputs
     outfile = args.output
-    
+    input_transform_file_list=args.input_transform_file
+    input_conntype_list=args.input_names
+    output_conntype_list=args.output_names
+    input_file_list=args.input_data_file
+
     #note: don't actually use trainrecord during model evaluation
     #checkpoint includes all info about data flavors and model design
     #but doesn't contain any info about loss functions, training schedule, etc...
@@ -197,44 +102,21 @@ def run_model_on_new_data(argv):
         recordfile=ptfile.replace("_checkpoint_","_trainrecord_")
         recordfile=recordfile.replace("_chkpt_","_trainrecord_")
         recordfile=re.sub("_(epoch|ep)[0-9]+\.pt$",".mat",recordfile)
-        
-    precomputed_transformer_info_list=None
-    input_transform_file=None
-    input_transform_file_list=[]
-    
-    if len(args.input_transform_file)<1 or args.input_transform_file[0] == "auto":
+
+    if len(input_transform_file_list)>0 and input_transform_file_list[0] == "auto":
         input_transform_file=ptfile.replace("_checkpoint_","_iox_")
         input_transform_file=input_transform_file.replace("_chkpt_","_ioxfm_")
         input_transform_file=re.sub("_(epoch|ep)[0-9]+\.pt$",".npy",input_transform_file)
         input_transform_file_list=[input_transform_file]
-    else:
-        input_transform_file_list=[]
-        if args.input_transform_file and len(args.input_transform_file) > 0:
-            tmpxfm=flatlist(args.input_transform_file)
-            if len(tmpxfm)>0:
-                input_transform_file_list=tmpxfm
     
-    input_conntype_list=[]
-    tmp_inputtypes=flatlist(args.input_names)
-    if len(tmp_inputtypes)>0:
-        input_conntype_list=tmp_inputtypes
-    
-    output_conntype_list=[]
-    tmp_outputtypes=flatlist(args.output_names)
-    if len(tmp_outputtypes)>0:
-        output_conntype_list=tmp_outputtypes
-    
-    input_file_list=[]
-    tmp_inputfiles=flatlist(args.input_data_file)
-    if len(tmp_inputfiles)>0:
-        if(all(["=" in x for x in tmp_inputfiles])):
+    if len(input_file_list)>0:
+        if(all(["=" in x for x in input_file_list])):
+            tmp_inputfiles=input_file_list
             input_conntype_list=[]
             input_file_list=[]
             for x in tmp_inputfiles:
                 input_conntype_list+=[x.split("=")[0]]
                 input_file_list+=[x.split("=")[-1]]
-        else:
-            input_file_list=tmp_inputfiles
     
     if len(input_conntype_list)==0:
         #try to figure out conntypes from filenames
@@ -265,7 +147,7 @@ def run_model_on_new_data(argv):
     if not input_transform_file_list and checkpoint['input_transformation_info'].upper()!='NONE':
         print("Must provide input transform (ioxfm) file")
         sys.exit(1)
-        
+    
     precomputed_transformer_info_list={}
     for ioxfile in input_transform_file_list:
         print("Loading precomputed input transformations: %s" % (ioxfile))
@@ -353,14 +235,13 @@ def run_model_on_new_data(argv):
     
     if len(input_file_list) > 0:
         conndata_alltypes={}
-        #conndata_alltypes[input_conntype_list[0]]=load_new_data(inputfile=input_file, inputfield=None, quiet=False)
         for i,x in enumerate(input_conntype_list):
-            conndata_alltypes[x]=load_new_data(inputfile=input_file_list[i], inputfield=None, quiet=False)
+            conndata_alltypes[x]=load_input_data(inputfile=input_file_list[i], inputfield=None)
             print(x,conndata_alltypes[x]['data'].shape)
     else:
         input_file="all"
-        subjects, famidx = load_subject_list(numsubj=993)
-        subjects_out, conndata_alltypes = load_data(subjects=subjects, conn_name_list=input_conntype_list, quiet=False)
+        subjects, famidx = load_hcp_subject_list(numsubj=993)
+        subjects_out, conndata_alltypes = load_hcp_data(subjects=subjects, conn_name_list=input_conntype_list, quiet=False)
         for conntype in conndata_alltypes.keys():
             conndata_alltypes[conntype]['subjects']=subjects_out
     
@@ -462,7 +343,7 @@ def run_model_on_new_data(argv):
                 #for testing, keep outputs in the compressed/PCA model space
                 conn_predicted_origscale=conn_predicted.cpu().detach().numpy()
             else:
-                conn_predicted_origscale=transformer_list[outtype].inverse_transform(conn_predicted.cpu())
+                conn_predicted_origscale=transformer_list[outtype].inverse_transform(conn_predicted.cpu().detach().numpy())
             predicted_alltypes[intype][outtype]=conn_predicted_origscale
             print("Output %s->%s: %dx%d" % (intype,outtype,conn_predicted_origscale.shape[0],conn_predicted_origscale.shape[1]))
 

@@ -1,6 +1,4 @@
 from krakencoder import *
-from train import *
-from scipy.io import loadmat, savemat
 from collections.abc import Iterable
 import os
 import sys
