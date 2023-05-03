@@ -29,6 +29,7 @@ def argument_parse_runtraining(argv):
     arg_defaults['latent_sim_weight']=[5000]
     arg_defaults['explicit_checkpoint_epochs']=[]
     arg_defaults['hiddenlayersizes']=[]
+    
     parser=argparse.ArgumentParser(description='Train krakencoder', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     input_arg_group=parser.add_argument_group('Input data options')
@@ -727,64 +728,24 @@ def run_training_command(argv):
                 precomputed_transformer_info_list[k]['filename']=ioxfile.split(os.sep)[-1]
 
 
-    
-    import matplotlib.pyplot as plt
-    from IPython import display
-    from cycler import cycler
-
     training_params_listdict={}
     training_params_listdict['latentsize']=[latentsize]
-    #training_params_listdict['losstype']='mse'
-    #training_params_listdict['losstype']=['corrtrace']
-    #training_params_listdict['losstype']=['correye']
-    #training_params_listdict['losstype']=['corrmatch']
     training_params_listdict['losstype']=input_lossnames
-    #training_params_listdict['losstype']=['neidist+encdist']
-    #training_params_listdict['losstype']=['correye+enceye']
     training_params_listdict['latent_inner_loss_weight']=[input_latent_inner_loss_weight]
-    #training_params_listdict['hiddenlayers']=[[256,256]]
-    #training_params_listdict['hiddenlayers']=[[128]]
-    #training_params_listdict['hiddenlayers']=[[128]*3,[128]*7]
-    #training_params_listdict['hiddenlayers']=[ [] ]
     training_params_listdict['hiddenlayers']=[ input_hiddenlayers ]
-    #training_params_listdict['dropout']=[0,.1,.25,.5]
-    #training_params_listdict['dropout']=[0,.5]
-    #training_params_listdict['dropout']=[0,.1,.25]
-    #training_params_listdict['dropout']=[0]
     training_params_listdict['dropout']=input_dropout_list
-    #training_params_listdict['batchsize']=[42,21,14]
-    
     training_params_listdict['skip_accurate_paths']=[do_skipaccpath]
     training_params_listdict['early_stopping']=[do_earlystop]
-        
-    if len(subjects)>420:
-        training_params_listdict['batchsize']=[input_batchsize] #avoid leaving out too many for the familyidx case
-    else:
-        #training_params_listdict['batchsize']=[42,21,14]
-        training_params_listdict['batchsize']=[42]
-    
-    #training_params_listdict['latentsim_loss_weight']=[10]
+    training_params_listdict['batchsize']=[input_batchsize] #avoid leaving out too many for the familyidx case
     training_params_listdict['latentsim_loss_weight']=input_latentsimweight_list
-    #training_params_listdict['adam_decay']=[.01, .1, 1, 10]
-    #training_params_listdict['adam_decay']=[.01,.1]
-    #training_params_listdict['adam_decay']=[.01]
     training_params_listdict['adam_decay']=[input_adamdecay]
-    #training_params_listdict['mse_weight']=[1,10]
     training_params_listdict['mse_weight']=[input_mse_weight]
-    #training_params_listdict['learningrate']=[0.001] #try faster?
-    #training_params_listdict['learningrate']=[0.0001] #1e-4 default unless otherwise specified
-    #training_params_listdict['learningrate']=[0.00001] #1e-4 default unless otherwise specified
     training_params_listdict['learningrate']=[1e-4] #1e-4 default unless otherwise specified
-    #training_params_listdict['nbepochs']=[100]
-    #training_params_listdict['nbepochs']=[1000]
-    #training_params_listdict['nbepochs']=[2000]
     training_params_listdict['nbepochs']=[input_epochs]
-    #training_params_listdict['nbepochs']=[10000]
     training_params_listdict['skip_relu']=[False]
     training_params_listdict['separate_optimizer']=[input_use_separate_optimizer]
     training_params_listdict['optimizer_name']=["adamw"]
     training_params_listdict['zerograd_none']=[True]
-
     training_params_listdict['relu_tanh_alternate']=[False]
     training_params_listdict['leakyrelu_negative_slope']=[input_leakyrelu]
     training_params_listdict['origscalecorr_epochs']=[25]
@@ -795,46 +756,27 @@ def run_training_command(argv):
         training_params_listdict['reduce_dimension']=[input_pcadim]
     
     training_params_listdict['use_truncated_svd']=[input_use_tsvd]
-    
     training_params_listdict['trainpath_shuffle']=[True]
-    
-    #training_params_listdict['latent_maxrad_weight']=[10]
-    #training_params_listdict['latent_normalize']=[True]
     training_params_listdict['latent_maxrad_weight']=[input_latentradweight]
     training_params_listdict['latent_normalize']=[input_latentunit]
-    
-    #training_params_listdict['latentsim_batchsize']=[0]
-    
     training_params_listdict['target_encoding']=[do_target_encoding]
     training_params_listdict['fixed_target_encoding']=[do_fixed_target_encoding]
-
     training_params_listdict['meantarget_latentsim']=[False]
-    
     training_params_listdict['trainblocks']=[input_trainblocks]
-    
-    #training_params_listdict['batchwise_latentsim']=[False]
-    #training_params_listdict['latentsim_loss_weight']=[500,1000,2500,5000,10000,50000]
-    
     training_params_listdict['roundtrip']=[input_roundtrip]
-    
     training_params_listdict['trainval_split_frac']=[trainval_split_frac]
     training_params_listdict['val_split_frac']=[val_split_frac]
 
+    #generate a new list of dictionaries with every combination of fields
     training_params_list = dict_combination_list(training_params_listdict, reverse_field_order=True)    
-    #%matplotlib inline
-
-    #training_params_list=training_params_list[1:] #HACK HACK HACK!!!!!!
-    #training_params_list=training_params_list[4:] #HACK HACK HACK!!!!!!
-
-    #training_params_list=[training_params_list[0]] #HACK HACK HACK!!!!!!
-
-
+ 
+    crosstrain_repeats=1 #crosstrain_repeats (non-self paths)
+    reduce_dimension_default=256
+    
     ######################
 
     conn_names=list(conndata_alltypes.keys())
-    crosstrain_repeats=1 #crosstrain_repeats
-    reduce_dimension_default=256
-           
+
     for training_params in training_params_list:
 
         ###################
