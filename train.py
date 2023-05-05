@@ -396,6 +396,20 @@ def generate_transformer(traindata, transformer_type, transformer_param_dict=Non
                                         inverse_func=lambda x:x*data_rownorm_mean+data_mean)
         transformer_info["type"]="cfeat+norm"
         transformer_info["params"]={"input_mean":data_mean,"input_rownorm_mean":data_rownorm_mean}
+        
+    elif transformer_type == "cfeat+varnorm":
+        if precomputed_transformer_params:
+            data_mean=precomputed_transformer_params['input_mean']
+            data_var=precomputed_transformer_params['input_variance']
+        else:
+            #demean each FEATURE (column) based on training
+            data_mean=np.mean(traindata,axis=0,keepdims=True)
+            data_var=np.sum(np.var(traindata-data_mean,axis=0))
+
+        transformer=FunctionTransformer(func=lambda x:(x-data_mean)/data_var,
+                                        inverse_func=lambda x:x*data_var+data_mean)
+        transformer_info["type"]="cfeat+varnorm"
+        transformer_info["params"]={"input_mean":data_mean,"input_variance":data_var}
     
     elif transformer_type == "zscore+rownorm":
         if precomputed_transformer_params:
@@ -494,7 +508,10 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     
     default_transformation_type="zscore+rownorm"
     
-    if input_transformation_info is not None and input_transformation_info is not False:
+    if len(precomputed_transformer_info_list) > 0:
+        #when calling generate_training_paths with precomputed transformers, pull "type" from first one
+        default_transformation_type=[v['type'] for k,v in precomputed_transformer_info_list.items()][0]
+    elif input_transformation_info is not None and input_transformation_info is not False:
         if re.search("^pc[0-9]+$",input_transformation_info):
             reduce_dimension=int(input_transformation_info.replace("pc",""))
             use_truncated_svd=False
@@ -520,6 +537,10 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
             reduce_dimension=0
             use_lognorm_for_sc=False
             default_transformation_type="cfeat+norm"
+        elif input_transformation_info.upper() == "CFEATVARNORM" or input_transformation_info.upper() == "CFEAT+VARNORM":
+            reduce_dimension=0
+            use_lognorm_for_sc=False
+            default_transformation_type="cfeat+varnorm"
         elif input_transformation_info.upper() == "ZROWNORM" or input_transformation_info.upper() == "ZSCORE+ROWNORM":
             reduce_dimension=0
             use_lognorm_for_sc=False
@@ -560,7 +581,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     data_string+="_"+xformstr
     
     data_string=data_string.replace('__','_')
-
+    
     conn_names_short=[trim_string(s,left=len(common_prefix(conn_names)),right=len(common_suffix(conn_names))) for s in conn_names]
 
     if trainpath_group_pairs:
@@ -693,9 +714,9 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         data_transformer_info_list[conn_name]=data_transformer_dict
         
         if not quiet:
-            var_restore=np.mean(np.var(data_transformer_list[conn_name].inverse_transform(traindata_list[conn_name]),axis=0))
-            var_orig=np.mean(np.var(traindata,axis=0))
-            var_explained_ratio=var_restore/var_orig
+            var_orig=np.sum(np.var(traindata,axis=0))
+            var_resid=np.sum(np.var(traindata-data_transformer_list[conn_name].inverse_transform(traindata_list[conn_name]),axis=0))
+            var_explained_ratio=1-var_resid/var_orig
             print(" (training variance maintained: %.2f%%)" % (var_explained_ratio*100),end="")
 
         if not quiet:
@@ -704,10 +725,11 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         #compute min,mean,max of intersubject euclidean distances for this dataset
         #traindist=torch.cdist(traindata_list[conn_name],traindata_list[conn_name],p=2.0)
         traindist=scipy_cdist(traindata_list[conn_name],traindata_list[conn_name])
-        traindist_triidx=np.triu_indices(traindist.shape[0],k=1)
-        traindata_marginmin_list[conn_name]=traindist[traindist_triidx].min()
-        traindata_marginmax_list[conn_name]=traindist[traindist_triidx].max()
-        traindata_marginmean_list[conn_name]=traindist[traindist_triidx].mean()
+        traindist[np.eye(traindist.shape[0])>0]=np.nan
+        #min/max are the MEAN of the nearest and farthest distances from each subject
+        traindata_marginmin_list[conn_name]=np.nanmin(traindist,axis=1).mean()
+        traindata_marginmax_list[conn_name]=np.nanmax(traindist,axis=1).mean()
+        traindata_marginmean_list[conn_name]=np.nanmean(traindist)
         
     #now loop through the input/output pairs list
     trainpath_list=[]
@@ -1029,8 +1051,11 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
     do_target_encoding = do_target_encoding or do_fixed_target_encoding
     
     if do_target_encoding:
-        #for 'target encoding' mode, do not skip accurate paths and do not use latentsim
+        #for 'target encoding' mode, do not skip accurate paths
         do_skip_accurate_paths=False
+
+    if do_fixed_target_encoding:
+        # for FIXED target encoding, do not use latentsim
         latentsim_loss_weight=0
         
         
@@ -2041,10 +2066,16 @@ def train_network(trainpath_list, training_params, net=None, data_origscale_list
                     print("trainrecord: %s" % (recordfile))
                     print('epoch: {}, {:.2f} seconds ({:.2f} sec/epoch)'.format(epoch,curtime,curtime/(epoch+1)))
                     print('  path, train loss, val loss, train top1acc, val top1acc, train topNacc, val topNacc, train rank, val rank')
+                    #some messy steps to print out prettier columns:
+                    tmp_pathstr_pathidxlen=max([len("path%d" % (itp)) for itp in range(len(trainpath_list))])
+                    tmp_pathstr_pathlen=max([len("%d->%d" % (trainpath_list[itp]['encoder_index'],trainpath_list[itp]['decoder_index'])) for itp in range(len(trainpath_list))])
+                    tmp_pathstr_fmt="{:>%ds}:{:>%ds}" % (tmp_pathstr_pathidxlen,tmp_pathstr_pathlen)
+                    tmp_pathstr=[tmp_pathstr_fmt.format("path%d" % (itp),"%d->%d" % (trainpath_list[itp]['encoder_index'],trainpath_list[itp]['decoder_index']))
+                                                        for itp in range(len(trainpath_list))]
                     for itp in range(len(trainpath_list)):
-
-                        print('  path{}:{}->{}, {:12.6f}, {:12.6f}, {:.0f}/{:d}={:.6f}, {:.0f}/{:d}={:.6f}, {:.6f}, {:.6f}, {:.3f}, {:.3f}'.format(
-                            itp, trainpath_list[itp]['encoder_index'],trainpath_list[itp]['decoder_index'],
+                        fmtstr='  {:s}, {:12.6f}, {:12.6f}, {:.0f}/{:d}={:.6f}, {:.0f}/{:d}={:.6f}, {:.6f}, {:.6f}, {:.3f}, {:.3f}'
+                        print(fmtstr.format(
+                            tmp_pathstr[itp],
                             loss_train[itp,epoch], loss_val[itp,epoch], 
                             corrloss_train[itp,epoch]*train_outputs_np.shape[0], train_outputs_np.shape[0], corrloss_train[itp,epoch], 
                             corrloss_val[itp,epoch]*val_outputs_np.shape[0],val_outputs_np.shape[0], corrloss_val[itp,epoch],

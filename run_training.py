@@ -29,7 +29,7 @@ def argument_parse_runtraining(argv):
     arg_defaults['latent_sim_weight']=[5000]
     arg_defaults['explicit_checkpoint_epochs']=[]
     arg_defaults['hiddenlayersizes']=[]
-    
+
     parser=argparse.ArgumentParser(description='Train krakencoder', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     input_arg_group=parser.add_argument_group('Input data options')
@@ -37,7 +37,7 @@ def argument_parse_runtraining(argv):
     input_arg_group.add_argument('--dataflavors',action='append',dest='dataflavors',help='HCPTRAIN: SCifod2act,SCsdstream,FCcov,FCcovgsr,FCpcorr (default=%s)' % (arg_defaults["dataflavors"]),nargs='*')
     input_arg_group.add_argument('--roinames',action='append',dest='roinames',help='HCPTRAIN: fs86,shen268,coco439... (default=%s)' % (arg_defaults["roinames"]),nargs='*')
     input_arg_group.add_argument('--fcfilt',action='append',dest='fcfilt',help='list of hpf, bpf, nofilt (default=%s)' % (arg_defaults["fcfilt"]),nargs='*')
-    input_arg_group.add_argument('--inputdata',action='append',dest='input_data_file', help='name=file, name=file, ... Override HCPTRAIN: .mat file(s) containing input data to transform (instead of default HCP set).', nargs='*')
+    input_arg_group.add_argument('--inputdata',action='append',dest='input_data_file', help='name=file, name=file, (or name@group=file)... Override HCPTRAIN: .mat file(s) containing input data to transform (instead of default HCP set).', nargs='*')
     input_arg_group.add_argument('--trainvalsplitfrac',action='store',dest='trainval_split_frac',type=float, default=0.8, help='Fraction of subjects for training+val')
     input_arg_group.add_argument('--valsplitfrac',action='store',dest='val_split_frac',type=float, default=0.1, help='Fraction *OF TRAIN+VAL* subjects for validation')
     input_arg_group.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='OVERRIDE trainsplit,valsplit: .mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields')
@@ -72,7 +72,7 @@ def argument_parse_runtraining(argv):
     train_arg_group.add_argument('--epochs',action='store',dest='epochs',type=int, default=5000, help='number of epochs')
     train_arg_group.add_argument('--batchsize',dest='batch_size',type=int,default=41,help='main batch size. default=41 (no batch)')
     train_arg_group.add_argument('--dropout',action='append',dest='dropout',type=float,help='list of dropouts to try',nargs='*')
-    train_arg_group.add_argument('--noskipacc',action='store_true',dest='noskipacc', help='do NOT skip accurate paths during training')
+    train_arg_group.add_argument('--skipacc',action='store_true',dest='skipacc', help='skip accurate paths during training')
     train_arg_group.add_argument('--noearlystop',action='store_true',dest='noearlystop', help='do NOT stop early if skipacc (keep working latentsim)')
     train_arg_group.add_argument('--skipself',action='store_true',dest='skipself', help='Skip A->A paths during training')
     train_arg_group.add_argument('--roundtrip',action='store_true',dest='roundtrip', help='roundtrip training paths A->B->A')
@@ -80,8 +80,9 @@ def argument_parse_runtraining(argv):
     train_arg_group.add_argument('--addmeanlatentepochs',action='store',dest='add_meanlatent_epochs', type=int, default=0, help='add meanlatent training paths AFTER normal training')
     train_arg_group.add_argument('--trainblocks',action='store',dest='trainblocks', type=int, default=1, help='How many total times perform normal training + (roundtrip or meanlatent) set? (optimizer resets each block)')
     train_arg_group.add_argument('--latentsimbatchsize',dest='latent_sim_batch_size',type=int,default=0,help='Batch size for latentsimloss. default=0 (no batch)')
-    train_arg_group.add_argument('--singleoptimizer',action='store_true',dest='single_optimizer', help='Use single optimizer across all paths and latentsim')
+    train_arg_group.add_argument('--separateoptimizer',action='store_true',dest='separate_optimizer', help='Use separate optimizers across each path and latentsim')
     train_arg_group.add_argument('--adamdecay',action='store',dest='adam_decay',type=float, default=0.01, help='Adam weight decay')
+    train_arg_group.add_argument('--learningrate',action='store',dest='learning_rate',type=float, default=1e-4, help='Learning rate')
 
     fixed_arg_group=parser.add_argument_group('Target-encoding options (Train new data to match pre-trained latent representation)')
     fixed_arg_group.add_argument('--encodedinputfile',action='store',dest='encoded_input_file', help='.mat file containing latent space data')
@@ -502,6 +503,7 @@ def run_training_command(argv):
     trainthreads=args.max_threads
     input_epochs=args.epochs
     input_roundtrip=args.roundtrip
+    input_learningrate=args.learning_rate
     input_adamdecay=args.adam_decay
     input_pcadim=args.pcadim
     input_use_tsvd=args.use_tsvd
@@ -514,7 +516,7 @@ def run_training_command(argv):
     input_trainblocks=args.trainblocks
     checkpoint_epochs=args.checkpoint_epochs_every
     explicit_checkpoint_epoch_list=args.explicit_checkpoint_epochs
-    do_skipaccpath=not args.noskipacc #invert argument
+    do_skipaccpath=args.skipacc
     do_earlystop=not args.noearlystop #invert argument
     do_skipself=args.skipself
     latentsize=args.latentsize
@@ -527,7 +529,7 @@ def run_training_command(argv):
     input_leakyrelu=args.leakyrelu_negative_slope
     input_mse_weight=args.mseweight
     input_latent_inner_loss_weight=args.latent_inner_loss_weight
-    input_use_separate_optimizer=not args.single_optimizer
+    input_use_separate_optimizer=args.separate_optimizer
     input_batchsize=args.batch_size
     input_latentsimbatchsize=args.latent_sim_batch_size
     input_encodingfile=args.encoded_input_file
@@ -634,6 +636,7 @@ def run_training_command(argv):
             if input_groupname is not None:
                 groupname=input_groupname
 
+            #check groupname to see if it is include in any of the "pathgroups"
             if groupname is not None and args.pathgroups is not None and len(args.pathgroups)>0 and not any([x.lower() == 'all' for x in args.pathgroups]):
                 xc_in_pathgroups=any(groupname in x for x in args.pathgroups)
                 if not xc_in_pathgroups:
@@ -740,7 +743,7 @@ def run_training_command(argv):
     training_params_listdict['latentsim_loss_weight']=input_latentsimweight_list
     training_params_listdict['adam_decay']=[input_adamdecay]
     training_params_listdict['mse_weight']=[input_mse_weight]
-    training_params_listdict['learningrate']=[1e-4] #1e-4 default unless otherwise specified
+    training_params_listdict['learningrate']=[input_learningrate]
     training_params_listdict['nbepochs']=[input_epochs]
     training_params_listdict['skip_relu']=[False]
     training_params_listdict['separate_optimizer']=[input_use_separate_optimizer]
@@ -767,7 +770,7 @@ def run_training_command(argv):
     training_params_listdict['trainval_split_frac']=[trainval_split_frac]
     training_params_listdict['val_split_frac']=[val_split_frac]
 
-    #generate a new list of dictionaries with every combination of fields
+    #generate a new list of dictionaries with every combination of fields (order we built the dict matters)
     training_params_list = dict_combination_list(training_params_listdict, reverse_field_order=True)    
  
     crosstrain_repeats=1 #crosstrain_repeats (non-self paths)

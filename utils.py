@@ -15,7 +15,12 @@ def numpyvar(x):
 
 def torchvar(x, astype=None):
     if torch.is_tensor(x):
-        return x
+        if astype is int:
+            return x.int()
+        elif astype is float:
+            return x.float()
+        else:
+            return x
     
     #cast variable to torch (use cuda if available)
     try:

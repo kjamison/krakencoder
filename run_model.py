@@ -149,11 +149,15 @@ def run_model_on_new_data(argv):
         sys.exit(1)
     
     precomputed_transformer_info_list={}
-    for ioxfile in input_transform_file_list:
-        print("Loading precomputed input transformations: %s" % (ioxfile))
-        ioxtmp=np.load(ioxfile,allow_pickle=True).item()
-        for k in ioxtmp:
-            precomputed_transformer_info_list[k]=ioxtmp[k]
+    if checkpoint['input_transformation_info']=='none':
+        for conntype in conn_names:
+            precomputed_transformer_info_list[conntype]={'type':'none'}
+    else:
+        for ioxfile in input_transform_file_list:
+            print("Loading precomputed input transformations: %s" % (ioxfile))
+            ioxtmp=np.load(ioxfile,allow_pickle=True).item()
+            for k in ioxtmp:
+                precomputed_transformer_info_list[k]=ioxtmp[k]
         
     transformer_list={}
     for conntype in precomputed_transformer_info_list:
@@ -364,7 +368,7 @@ def run_model_on_new_data(argv):
             outdict['outputtypes']=outtype
         
         outdict['predicted_alltypes']={k_in:{k_out:v_out for k_out,v_out in v_in.items() if k_out in outdict['outputtypes']} for k_in,v_in in predicted_alltypes.items() if k_in in outdict['inputtypes']}
-        
+
         if burstmode:
             outdict['burstmode_inputtypes']=burstmode_names
         
