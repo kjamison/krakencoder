@@ -1,3 +1,28 @@
+"""
+Command-line script for training krakencoder. 
+
+This script takes arguments to specify everything from datasets, flavors, architecture, training params, etc.
+It loads data, creates the network, and initiates training.
+
+Main functions it calls, after parsing args:
+
+- data.py/load_hcp_data()
+    or data.py/load_input_data()
+- train.py/generate_training_paths()
+- train.py/train_network()
+
+Example:
+
+python run_training.py --subjectfile subject_splits_993subj_710train_80val_203test_retestInTest.mat \
+    --roinames fs86 shen268 coco439 --datagroups SCFC --latentsize 128 --pcadim 256  --latentunit --dropout 0.5 \
+    --losstype correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000 \
+    --epochs 2000 --checkpointepochsevery 500 --displayepochs 25 \
+    --inputxform connae_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
+        connae_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
+        connae_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+   
+"""
+
 if __name__ == "__main__":
     #for running in command line on AWS, need to restrict threads so it doesn't freeze during PCA sometimes
     import os
@@ -12,6 +37,9 @@ if __name__ == "__main__":
 from krakencoder import *
 from train import *
 from utils import *
+from data import *
+from log import Logger
+
 import re
 import os
 import sys
@@ -29,6 +57,7 @@ def argument_parse_runtraining(argv):
     arg_defaults['latent_sim_weight']=[5000]
     arg_defaults['explicit_checkpoint_epochs']=[]
     arg_defaults['hiddenlayersizes']=[]
+    arg_defaults['dropout_schedule']=None
 
     parser=argparse.ArgumentParser(description='Train krakencoder', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -59,6 +88,8 @@ def argument_parse_runtraining(argv):
     model_arg_group.add_argument('--startingpoint',action='store',dest='starting_point_file', help='.pt file to START with')
     model_arg_group.add_argument('--pathgroups','--datagroups',action='append',dest='pathgroups',help='Training path groups: list of SCFC (all), FC, SC, FC2SC, etc...',nargs='*')
     model_arg_group.add_argument('--trainpaths',action='append',dest='trainpaths',help='Specific paths to train. eg \"SCifod2act_fs86->FCpcorr_fs86_hpf\"',nargs='*')
+    model_arg_group.add_argument('--domainadapt',action='store_true',dest='domain_adaptation', help='Add outer domain adapation transforms (for out-of-sample data)')
+    model_arg_group.add_argument('--domainadaptpoly',action='store',dest='domain_adaptation_polynomial',type=int, default=1, help='Polynomial order for domain adapation transforms (default = 1)')
     
     loss_arg_group=parser.add_argument_group('Loss function parameters')
     loss_arg_group.add_argument('--losstype',action='append',dest='losstype',help='list of correye+enceye, dist+encdist, etc...',nargs='*')
@@ -69,9 +100,11 @@ def argument_parse_runtraining(argv):
     loss_arg_group.add_argument('--latentsimweight',action='append',dest='latent_sim_weight',type=float,help='list of latentsimloss weights to try . default=5000',nargs='*')
 
     train_arg_group=parser.add_argument_group('Training parameters')
-    train_arg_group.add_argument('--epochs',action='store',dest='epochs',type=int, default=5000, help='number of epochs')
+    train_arg_group.add_argument('--epochs',action='store',dest='epochs',type=int, default=5000, help='number of epochs (0=evaluate existing network only)')
     train_arg_group.add_argument('--batchsize',dest='batch_size',type=int,default=41,help='main batch size. default=41 (no batch)')
     train_arg_group.add_argument('--dropout',action='append',dest='dropout',type=float,help='list of dropouts to try',nargs='*')
+    train_arg_group.add_argument('--dropout_schedule',action='store',dest='dropout_schedule',type=float,help='pair of init, final dropout fractions',nargs='*')
+    train_arg_group.add_argument('--dropout_final_layer',action='store',dest='dropout_final_layer',type=float,help='use different dropout for final decoder layer')
     train_arg_group.add_argument('--skipacc',action='store_true',dest='skipacc', help='skip accurate paths during training')
     train_arg_group.add_argument('--noearlystop',action='store_true',dest='noearlystop', help='do NOT stop early if skipacc (keep working latentsim)')
     train_arg_group.add_argument('--skipself',action='store_true',dest='skipself', help='Skip A->A paths during training')
@@ -88,414 +121,40 @@ def argument_parse_runtraining(argv):
     fixed_arg_group.add_argument('--encodedinputfile',action='store',dest='encoded_input_file', help='.mat file containing latent space data')
     fixed_arg_group.add_argument('--targetencoding',action='store_true',dest='target_encoding', help='Train encoders/decoders while trying to match latent->target')
     fixed_arg_group.add_argument('--fixedtargetencoding',action='store_true',dest='fixed_target_encoding', help='Just train encoders/decoders to match FIXED (input->fixed, fixed->output) --encodinginputfile')
+    fixed_arg_group.add_argument('--onlyselfpathtargetencoding',action='store_true',dest='only_self_target_encoding', help='Only train each input to itself (no cross-flavors)')
     fixed_arg_group.add_argument('--targetencodingname',action='store',dest='target_encoding_name', help='Encoding type for target-encoding ("self" for per-flavor latent space input, "burst", or specific flavor)')
     fixed_arg_group.add_argument('--addfixedencodingepochsafter',action='store',dest='add_fixed_encoding_epochs_after', type=int, default=0, help='Add fixedencoding epochs AFTER normal epochs')
     fixed_arg_group.add_argument('--addfixedencodingepochsbefore',action='store',dest='add_fixed_encoding_epochs_before', type=int, default=0, help='Add fixedencoding epochs BEFORE normal epochs')
 
     misc_arg_group=parser.add_argument_group('Other options')
-    misc_arg_group.add_argument('--checkpointepochsevery',action='store',dest='checkpoint_epochs_every', type=int, default=1000, help='How often to save checkpoints')
+    misc_arg_group.add_argument('--checkpointepochsevery','--checkpointsevery',action='store',dest='checkpoint_epochs_every', type=int, default=1000, help='How often to save checkpoints')
     misc_arg_group.add_argument('--explicitcheckpointepochs',action='append',dest='explicit_checkpoint_epochs', type=int, help='Explicit list of epochs at which to save checkpoints',nargs='*')
     misc_arg_group.add_argument('--displayepochs',action='store',dest='display_epochs', type=int, default=100, help='How often to print training progress')
+    misc_arg_group.add_argument('--optimizercheckpoint',action='store_true',dest='optimizer_in_checkpoint',help='Include optimizer params in checkpoint (allows resumed training)')
     misc_arg_group.add_argument('--maxthreads',action='store',dest='max_threads', type=int, default=10, help='How many CPU threads to use')
-    misc_arg_group.add_argument('--outputprefix',action='store',dest='output_file_prefix', default="connae", help='Prefix for output files')
+    misc_arg_group.add_argument('--outputprefix',action='store',dest='output_file_prefix', default="krak", help='Prefix for output files')
+    misc_arg_group.add_argument('--logfile',action='store',dest='logfile', default='auto',help='Optional file to print outputs to (along with stdout). "auto"=<prefix>_log_*.txt')
 
+    misc_arg_group.add_argument('--intergroup',action='store_true',dest='intergroup', help='Do separate inter-group mapping (experimental)')
+    misc_arg_group.add_argument('--intergroup_extra_layer_count',action='store',dest='intergroup_extra_layer_count',type=int,default=0,help='How many extra layers for inter-group? (experimental)')
+    misc_arg_group.add_argument('--intergroup_skip_relu',action='store_true',dest='intergroup_skip_relu',help='No ReLU in inter-group mapping (experimental)')
+    misc_arg_group.add_argument('--intergroup_dropout',action='store',dest='intergroup_dropout',type=float,default=None,help='Dropout for inter-group mapping (experimental)')
+    
+    misc_arg_group.add_argument('--dropout_final_layer_dict',action='store',dest='dropout_final_layer_dict',type=str,nargs='*',help='use different dropout for final decoder layer... flavor list hack')
+    
+    misc_arg_group.add_argument('--discard_origscale',action='store_true',dest='discard_origscale',help='Throw out origscale data (for memory). OrigScale performance computed on reconstructed invPCA(PCA(input))')
+    
     args=parser.parse_args(argv)
     args=clean_args(args,arg_defaults)
     return args
-
-def load_hcp_subject_list(numsubj=993):
-    if os.path.isdir('/Users/kwj5'):
-        datafolder='/Users/kwj5/Box/HCP_SC_FC_new997'
-        studyfolder='/Users/kwj5/Research/HCP'
-    elif os.path.isdir('/home/kwj2001/colossus_shared/HCP'):
-        studyfolder='/home/kwj2001/colossus_shared/HCP'
-        datafolder='/home/kwj2001/colossus_shared/HCP'
-    elif os.path.isdir('/home/ubuntu'):
-        studyfolder='/home/ubuntu'
-        datafolder='/home/ubuntu'
-
-    familyidx=np.loadtxt('%s/subjects_famidx_rfMRI_dMRI_complete_997.txt' % (studyfolder))
-    subj997=np.loadtxt('%s/subjects_rfMRI_dMRI_complete_997.txt' % (studyfolder))
-    
-    if numsubj==420:
-        subjects=np.loadtxt('%s/subjects_unrelated420_scfc.txt' % (studyfolder))
-        familyidx=np.array([familyidx[i] for i,s in enumerate(subj997) if s in subjects])
-    elif numsubj==993:
-        subjects=np.loadtxt('%s/subjects_rfMRI_dMRI_complete_993_minus4.txt' % (studyfolder))
-        familyidx=np.array([familyidx[i] for i,s in enumerate(subj997) if s in subjects])
-    elif numsubj==997:
-        subjects=subj997
-    else:
-        raise Exception("Unknown numsubj %s" % (numsubj))
-    
-    subjects=clean_subject_list(subjects)
-    
-    return subjects, familyidx
-
-def get_hcp_data_flavors(roi_list=["fs86","shen268","coco439"], 
-                         sc_type_list=["ifod2act_volnorm","sdstream_volnorm"], 
-                         fc_type_list=["FCcov","FCcovgsr","FCpcorr"], 
-                         fc_filter_list=["hpf","bpf","nofilt"],
-                         sc=True,
-                         fc=True):
-    if not roi_list:
-        roi_list=[]
-    if not sc_type_list:
-        sc_type_list=[]
-    if not fc_type_list:
-        fc_type_list=[]
-    if not fc_filter_list:
-        fc_filter_list=[]
-    
-    if isinstance(roi_list,str):
-        roi_list=[roi_list]
-    if isinstance(sc_type_list,str):
-        sc_type_list=[sc_type_list]
-    if isinstance(fc_type_list,str):
-        fc_type_list=[fc_type_list]
-    if isinstance(fc_filter_list,str):
-        fc_filter_list=[fc_filter_list]
-    
-    if not sc:
-        sc_type_list=[]
-    
-    if not fc:
-        fc_filter_list=[]
-    
-    conntype_list=[]
-    for r in roi_list:
-        for sc in sc_type_list:
-            conntype_list+=["%s_%s" % (r,sc)]
-        for f in fc_filter_list:
-            for fc in fc_type_list:
-                fctmp=fc.replace("_gsr","").replace("gsr","")
-                c="%s_%s_%s" % (fctmp,r,f)
-                if "gsr" in fc:
-                    c+="gsr"
-                conntype_list+=[c]
-    return conntype_list
-
-def load_hcp_data(subjects=[], conn_name_list=[], quiet=False):
-    #conn_name_list = explicit and complete list of datatypes to load (ignore all other flavor info)
-
-    if os.path.isdir('/Users/kwj5'):
-        datafolder='/Users/kwj5/Box/HCP_SC_FC_new997'
-        studyfolder='/Users/kwj5/Research/HCP'
-    elif os.path.isdir('/home/kwj2001/colossus_shared/HCP'):
-        studyfolder='/home/kwj2001/colossus_shared/HCP'
-        datafolder='/home/kwj2001/colossus_shared/HCP'
-    elif os.path.isdir('/home/ubuntu'):
-        studyfolder='/home/ubuntu'
-        datafolder='/home/ubuntu'
-
-    if len(subjects)==0 or subjects is None:
-        subjects,_=load_hcp_subject_list(numsubj=993)
-
-    #scfile_fields=['orig','volnorm']
-    #scfile_fields=['volnorm']
-
-    #consider: log transform on SC inputs?
-    # also maybe try using orig instead of just volnorm? orig is easier to log transform (all pos vals)
-    # log10(volnorm) has a lot of negatives (counts<1)
-    # is there any reasonable way to justify log10(connectome)./log10(volumes) to scale?
-    #  then it would be positive but scaled by the (logscaled) volumes
-    # main reason this matters is that we have 0s for SC which log can't handle, and we cant just set those to
-    #  log10(0)->0 because then log10(.1)-> -1 would look < 0 
-
-    pretrained_transformer_file={}
-    pretrained_transformer_file['fs86_ifod2act_volnorm']=None
-    pretrained_transformer_file['shen268_ifod2act_volnorm']=None
-    pretrained_transformer_file['shen268_sdstream_volnorm']=None
-    pretrained_transformer_file['coco439_ifod2act_volnorm']=None
-    pretrained_transformer_file['coco439_sdstream_volnorm']=None
-    pretrained_transformer_file['FCcov_fs86_hpf']=None
-    pretrained_transformer_file['FCcov_fs86_hpfgsr']=None
-    pretrained_transformer_file['FCpcorr_fs86_hpf']=None
-    pretrained_transformer_file['FCcov_shen268_hpf']=None
-    pretrained_transformer_file['FCcov_shen268_hpfgsr']=None
-    pretrained_transformer_file['FCpcorr_shen268_hpf']=None
-    pretrained_transformer_file['FCcov_coco439_hpf']=None
-    pretrained_transformer_file['FCcov_coco439_hpfgsr']=None
-    pretrained_transformer_file['FCpcorr_coco439_hpf']=None
-
-    #build list of possijble HCP data files to load
-
-    if len(conn_name_list)==0:
-        fc_filter_list=["hpf","bpf","nofilt"]
-    
-    connfile_info=[]
-    datagroup='SC'
-    
-    connfile_info.append({'name':'fs86_ifod2act_volnorm','file':'%s/sc_fs86_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'fs86_sdstream_volnorm','file':'%s/sc_fs86_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'shen268_ifod2act_volnorm','file':'%s/sc_shen268_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'shen268_sdstream_volnorm','file':'%s/sc_shen268_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'coco439_ifod2act_volnorm','file':'%s/sc_cocommpsuit439_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'coco439_sdstream_volnorm','file':'%s/sc_cocommpsuit439_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-
-    datagroup='FC'
-    #consider: do np.arctanh for FC inputs?
-
-    #hpf
-    connfile_info.append({'name':'FCcov_fs86_hpf','file':'%s/fc_fs86_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_fs86_hpfgsr','file':'%s/fc_fs86_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_fs86_hpf','file':'%s/fc_fs86_FCpcorr_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-
-    connfile_info.append({'name':'FCcov_shen268_hpf','file':'%s/fc_shen268_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_shen268_hpfgsr','file':'%s/fc_shen268_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_shen268_hpf','file':'%s/fc_shen268_FCpcorr_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-
-    connfile_info.append({'name':'FCcov_coco439_hpf','file':'%s/fc_cocommpsuit439_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_coco439_hpfgsr','file':'%s/fc_cocommpsuit439_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_coco439_hpf','file':'%s/fc_cocommpsuit439_FCpcorr_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-
-    #bpf
-    connfile_info.append({'name':'FCcov_fs86_bpf','file':'%s/fc_fs86_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_fs86_bpfgsr','file':'%s/fc_fs86_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_fs86_bpf','file':'%s/fc_fs86_FCpcorr_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    
-    connfile_info.append({'name':'FCcov_shen268_bpf','file':'%s/fc_shen268_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_shen268_bpfgsr','file':'%s/fc_shen268_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_shen268_bpf','file':'%s/fc_shen268_FCpcorr_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    
-    connfile_info.append({'name':'FCcov_coco439_bpf','file':'%s/fc_cocommpsuit439_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_coco439_bpfgsr','file':'%s/fc_cocommpsuit439_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_coco439_bpf','file':'%s/fc_cocommpsuit439_FCpcorr_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-        
-    #nofilt (no compcor, hp2000)
-    connfile_info.append({'name':'FCcov_fs86_nofilt','file':'%s/fc_fs86_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_fs86_nofiltgsr','file':'%s/fc_fs86_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_fs86_nofilt','file':'%s/fc_fs86_FCpcorr_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-
-    connfile_info.append({'name':'FCcov_shen268_nofilt','file':'%s/fc_shen268_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_shen268_nofiltgsr','file':'%s/fc_shen268_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_shen268_nofilt','file':'%s/fc_shen268_FCpcorr_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    
-    connfile_info.append({'name':'FCcov_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_coco439_nofiltgsr','file':'%s/fc_cocommpsuit439_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCpcorr_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCpcorr_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-
-
-    #print("connfile_info:",[k["name"] for k in connfile_info])
-    conndata_alltypes={}
-
-    if len(conn_name_list)==0:
-        conn_name_list=connfile_info.keys()
-
-    conn_names_available=[x['name'] for x in connfile_info]
-    for i,cname in enumerate(conn_name_list):
-        if cname.endswith("_volnorm"):
-            conntype="volnorm"
-            cname=cname.replace("_volnorm","")
-        elif cname.endswith("_sift2"):
-            conntype="sift2"
-            cname=cname.replace("_sift2","")
-        elif cname.endswith("_sift2volnorm"):
-            conntype="sift2volnorm"
-            cname=cname.replace("_sift2volnorm","")
-        elif cname.endswith("_orig"):
-            conntype="orig"
-            cname=cname.replace("_orig","")
-        elif cname.endswith("_FC"):
-            conntype="FC"
-            cname=cname.replace("_FC","")
-        elif cname.startswith("FC"):
-            conntype="FC" #FC but didn't add the "_FC" to end
-        elif "ifod2act" in cname or "sdstream" in cname:
-            conntype="orig"
-        else:
-            print("Unknown data flavor for %s" % (cname))
-            sys.exit(1)
-        
-        connsearch='%s_%s' % (cname,conntype)
-        connsearch=connsearch.replace("_FC","")
-        ci=[x for x in connfile_info if x['name']==connsearch]
-        if len(ci)==0:
-            print("%s not found in file_info. Available names: %s" % (connsearch, conn_names_available))
-        ci=ci[0]
-        
-        if not quiet:
-            print("Loading %d/%d: %s" % (i+1,len(conn_name_list),ci['file']))
-        Cdata=loadmat(ci['file'],simplify_cells=True)
-        subjmissing=Cdata['ismissing']>0
-        subjects997=Cdata['subject'][~subjmissing]
-        subjects997=clean_subject_list(subjects997)
-        
-        connfield_list=[connfile_info[i]['fieldname'], "SC","FC"]
-        connfield=conntype
-        for cf in connfield_list:
-            if cf in Cdata:
-                connfield=cf
-                break
-        nroi=Cdata[connfield][0].shape[0]
-        trimask=np.triu_indices(nroi,1) #note: this is equivalent to tril(X,-1) in matlab
-        npairs=trimask[0].shape[0]
-
-        Ctriu=[x[trimask] for x in Cdata[connfield][~subjmissing]]
-        #restrict to 420 unrelated subjects
-        Ctriu=[x for i,x in enumerate(Ctriu) if subjects997[i] in subjects]
-        conn_name='%s_%s' % (cname,conntype)
-        
-        transformer_file=None
-        if conn_name in pretrained_transformer_file:
-            transformer_file=pretrained_transformer_file[conn_name]
-
-        conndata_alltypes[conn_name]={'data':np.vstack(Ctriu),'numpairs':npairs,'group':ci['group'],'transformer_file':transformer_file,'subjects':subjects}
-            
-            
-    nsubj=conndata_alltypes[list(conndata_alltypes.keys())[0]]['data'].shape[0]
-
-    if not quiet:
-        print("Norm scale for input data:")
-        for conntype in conndata_alltypes:
-            normscale=np.linalg.norm(conndata_alltypes[conntype]['data'])
-            normscale/=np.sqrt(conndata_alltypes[conntype]['data'].size)
-            print("%s: %.6f" % (conntype,normscale))
-    
-        for conntype in conndata_alltypes:
-            print(conntype,conndata_alltypes[conntype]['data'].shape)
-    
-    return subjects, conndata_alltypes
-
-
-def load_input_data(inputfile, group=None, inputfield=None):
-    inputfield_default_search=['encoded','FC','SC','C','volnorm'] #,'sift2volnorm','sift2','orig']
-
-    Cdata=loadmat(inputfile,simplify_cells=True)
-
-    if 'ismissing' in Cdata:
-        subjmissing=Cdata['ismissing']>0
-    else:
-        subjmissing=[]
-    if 'subject' in Cdata:
-        subjects=Cdata['subject']
-    else:
-        subjects=[]
-
-    subjects=clean_subject_list(subjects)
-
-    connfield=inputfield
-    if not connfield:
-        for itest in inputfield_default_search:
-            if itest in Cdata:
-                connfield=itest
-                break
-    
-    if connfield is None:
-        print("None of the following fields were found in the input file %s:" % (inputfile),inputfield_default_search)
-        raise Exception("Input type not found")
-    
-    if len(Cdata[connfield][0].shape)==0:
-        #single matrix was in file
-        Cmats=[Cdata[connfield]]
-    else:
-        Cmats=Cdata[connfield]
-    
-    if connfield == "encoded":
-        nroi=1
-        npairs=Cmats[0].shape[1]
-        Cdata=Cmats[0].copy()
-    else:
-        nroi=Cmats[0].shape[0]
-        trimask=np.triu_indices(nroi,1) #note: this is equivalent to tril(X,-1) in matlab
-        npairs=trimask[0].shape[0]
-        if len(subjmissing)==0:
-            subjmissing=np.zeros(len(Cmats))>0
-        
-        if len(subjects)>0:
-            subjects=subjects[~subjmissing]
-    
-        Ctriu=[x[trimask] for i,x in enumerate(Cmats) if not subjmissing[i]]
-        Cdata=np.vstack(Ctriu)
-    
-    #conndata_alltypes[conn_name]={'data':np.vstack(Ctriu),'numpairs':npairs,'group':ci['group'],'transformer_file':transformer_file}
-    conndata={'data':Cdata,'numpairs':npairs,'numroi':nroi,'fieldname':connfield,'group':group,'subjects':subjects}
-    
-    return conndata
-
-def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=False):
-    groupname=None
-    
-    if only_if_brackets:
-        #special mode that leaves inputs intact unless they are in the form "[name]", in which case
-        #it will return the canonical version of "name"
-        if not re.match(".*\[.+\].*",conntype.lower()):
-            if return_groupname:
-                return conntype, groupname
-            else:
-                return conntype
-        conntype=re.sub("^.*\[(.+)\].*$",'\\1',conntype)
-    
-    if conntype.lower() == "encoded":
-        if return_groupname:
-            return "encoded", groupname
-        else:
-            return "encoded"
-    
-    
-    # parse user-specified input data type
-    input_atlasname=""
-    input_flavor=""
-    input_fcfilt=""
-    input_fcgsr=""
-    input_scproc="volnorm"
-    
-    input_conntype_lower=conntype.lower()
-    if "fs86" in input_conntype_lower:
-        input_atlasname="fs86"
-    elif "shen268" in input_conntype_lower:
-        input_atlasname="shen268"
-    elif "coco439" in input_conntype_lower or "cocommpsuit439" in input_conntype_lower:
-        input_atlasname="coco439"
-    else:
-        raise Exception("Unknown atlas name for input type: %s" % (conntype))
-    
-    if "fccov" in input_conntype_lower and "gsr" in input_conntype_lower:
-        input_flavor="FCcov"
-        input_fcgsr="gsr"
-    elif "fccov" in input_conntype_lower:
-        input_flavor="FCcov"
-    elif "pcorr" in input_conntype_lower:
-        input_flavor="FCpcorr"
-    elif "sdstream" in input_conntype_lower:
-        input_flavor="sdstream"
-    elif "ifod2act" in input_conntype_lower:
-        input_flavor="ifod2act"
-    else:
-        raise Exception("Unknown data flavor for input type: %s" % (conntype))
-    
-    #FC: FCcov_<atlas>_<fcfilt>[gsr?]_FC, FCpcorr_<atlas>_<fcfilt>_FC
-    #SC: <atlas>_sdstream_volnorm, <atlas>_ifod2act_volnorm
-    
-    if input_flavor.startswith("FC"):
-        if "hpf" in input_conntype_lower:
-            input_fcfilt="hpf"
-        elif "bpf" in input_conntype_lower:
-            input_fcfilt="bpf"
-        elif "nofilt" in input_conntype_lower:
-            input_fcfilt="nofilt"
-        else:
-            raise Exception("Unknown FC filter for input type: %s" % (conntype))
-    
-    if input_flavor.startswith("FC"):
-        groupname="FC"
-        conntype_canonical="%s_%s_%s%s_FC" % (input_flavor,input_atlasname,input_fcfilt,input_fcgsr) #orig style with FC<flavor>_<atlas>_<filt><gsr>_FC
-        #conntype_canonical="%s_%s_%s%s" % (input_flavor,input_atlasname,input_fcfilt,input_fcgsr) #new style with FC<flavor>_<atlas>_<filt><gsr>
-    else:
-        groupname="SC"
-        conntype_canonical="%s_%s_%s" % (input_atlasname,input_flavor,input_scproc) #orig style
-        #conntype_canonical="SC%s_%s_%s" % (input_flavor,input_atlasname,input_scproc) #new style with SC<algo>_<atlas>_volnorm
-
-    if return_groupname:
-        return conntype_canonical, groupname
-    else:
-        return conntype_canonical
-
 #######################################################
 #######################################################
 #### 
 
 def run_training_command(argv):
+    #add this so we can redirect to "| tee" if necessary
+    sys.stdout.reconfigure(line_buffering=True)
+
     args=argument_parse_runtraining(argv)
 
     ##################
@@ -535,6 +194,7 @@ def run_training_command(argv):
     input_encodingfile=args.encoded_input_file
     do_fixed_target_encoding=args.fixed_target_encoding
     do_target_encoding=args.target_encoding
+    do_only_self_target_encoding=args.only_self_target_encoding
     fixed_encoding_input_name=args.target_encoding_name
     add_fixed_encoding_epochs_after=args.add_fixed_encoding_epochs_after
     add_fixed_encoding_epochs_before=args.add_fixed_encoding_epochs_before
@@ -543,10 +203,47 @@ def run_training_command(argv):
     val_split_frac=args.val_split_frac
     output_file_prefix=args.output_file_prefix
     display_epochs=args.display_epochs
+    optimizer_in_checkpoint=args.optimizer_in_checkpoint
+    logfile=args.logfile
+    do_domain_adaptation=args.domain_adaptation
+    domain_adaptation_polynomial=args.domain_adaptation_polynomial
 
-    if input_latentunit:
-        input_latentradweight=0
+    if do_domain_adaptation and starting_point_file is None:
+        raise Exception("Must specify starting point file to use domain adaptation")
     
+    dropout_schedule_list=args.dropout_schedule
+    input_dropout_init=None
+    if dropout_schedule_list is not None:
+        input_dropout_init=dropout_schedule_list[0]
+    
+    if input_dropout_init is not None:
+        input_dropout_list=[input_dropout_init]
+    
+    dropout_final_layer=args.dropout_final_layer
+    dropout_final_layer_dict_arg=args.dropout_final_layer_dict
+    try:
+        dropout_final_layer_dict={canonical_data_flavor(x.split('=')[0]):float(x.split('=')[1]) for x in dropout_final_layer_dict_arg}
+    except:
+        dropout_final_layer_dict=None
+    
+    keep_origscale_data=not args.discard_origscale
+    
+    ############### intergroup
+    intergroup=args.intergroup
+    intergroup_extra_layer_count=args.intergroup_extra_layer_count
+    intergroup_skip_relu=args.intergroup_skip_relu
+    intergroup_dropout=args.intergroup_dropout
+    ############## end intergroup
+    
+    print("") #print blank to space out console output but not logfile
+    
+    log=None
+    if logfile is not None:
+        #this will override print() to go to stdout and logfile
+        log=Logger(logfile=logfile,append=False)
+
+    print("Command: ", " ".join(sys.argv))
+    print("")
     
     #################################
 
@@ -637,7 +334,12 @@ def run_training_command(argv):
                 groupname=input_groupname
 
             #check groupname to see if it is include in any of the "pathgroups"
-            if groupname is not None and args.pathgroups is not None and len(args.pathgroups)>0 and not any([x.lower() == 'all' for x in args.pathgroups]):
+            if (args.pathgroups is None or len(args.pathgroups)==0 
+                or any([x.lower() == 'all' for x in args.pathgroups]) 
+                or any([x.lower() == 'self' for x in args.pathgroups])):
+                #ignore groupnames for "all" or "self"
+                pass
+            elif groupname is not None:
                 xc_in_pathgroups=any(groupname in x for x in args.pathgroups)
                 if not xc_in_pathgroups:
                     print("Skipping input %s: Group %s for not found in pathgroup input %s: %s" % (xc,groupname,args.pathgroups, f))
@@ -647,7 +349,8 @@ def run_training_command(argv):
             conndata_alltypes[xc]=load_input_data(input_file,group=groupname)
 
             print("%s@%s=%s" % (xc,groupname,input_file))
-
+        input_conntype_list=conndata_alltypes.keys()
+        roilist_str="+".join(input_conntype_list)
     else:
         #HCPTRAIN
         input_nsubj=args.subjectcount
@@ -660,6 +363,7 @@ def run_training_command(argv):
         roilist_str="+".join(input_roilist)
         
         fcfilt_types=args.fcfilt
+        #input_dataflavors=[canonical_data_flavor(xc,return_groupname=False) for xc in args.dataflavors]
         input_dataflavors=args.dataflavors
         #input_dataflavors = "FCpcorr" or "SCifod2act" (no roi or fcfilt info)
         
@@ -668,7 +372,14 @@ def run_training_command(argv):
         fctypes_full=["FCcov","FCcovgsr","FCpcorr"]
         #fcfilt_types=[x for x in filttypes_full if any([x in y for y in input_dataflavors])]
         sctypes=[x+"_volnorm" for x in sctypes_full if any([x in y for y in input_dataflavors])]
-        fctypes=[x for x in fctypes_full if any([x in y for y in input_dataflavors])]
+        #fctypes=[x for x in fctypes_full if any([x in y for y in input_dataflavors])]
+        fctypes=[]
+        if any(["FCcov" in y and not "gsr" in y for y in input_dataflavors]):
+            fctypes+=["FCcov"]
+        if any(["FCcov" in y and "gsr" in y for y in input_dataflavors]):
+            fctypes+=["FCcovgsr"]
+        if any(["FCpcorr" in y for y in input_dataflavors]):
+            fctypes+=["FCpcorr"]
 
         #dont load FC inputs if only training SC paths, etc
         sc_in_pathgroups=True
@@ -679,7 +390,6 @@ def run_training_command(argv):
         
         input_conn_name_list=get_hcp_data_flavors(roi_list=input_roilist, fc_type_list=fctypes ,sc_type_list=sctypes, fc_filter_list=fcfilt_types, 
                                                   sc=sc_in_pathgroups, fc=fc_in_pathgroups)
-
 
         subjects_out, conndata_alltypes = load_hcp_data(subjects=subjects, conn_name_list=input_conn_name_list)
     
@@ -719,8 +429,33 @@ def run_training_command(argv):
     if not subj_str:
         subj_str="%dsubj" % (len(subjects))
     
+
+    conn_names=list(conndata_alltypes.keys())
+
     ##################################
-    precomputed_transformer_info_list=None
+    #load checkpoint file for initial starting point, if given
+    checkpoint_pretrained=None
+    if starting_point_file:
+        print("Loading pretrained network as starting point: %s" % (starting_point_file))
+        _, checkpoint_pretrained=Krakencoder.load_checkpoint(starting_point_file)
+
+        #if using startingpoint, replace any inputs/defaults related to network architecture
+        # and input transformations with information from checkpoint
+        #conn_names=[c for c in checkpoint_pretrained['input_name_list'] if c in conn_names]
+        conn_names=checkpoint_pretrained['input_name_list']
+        input_hiddenlayers=checkpoint_pretrained['hiddenlayers']
+        latentsize=checkpoint_pretrained['latentsize']
+        input_leakyrelu=checkpoint_pretrained['leakyrelu_negative_slope']
+        input_use_tsvd=checkpoint_pretrained['use_truncated_svd']
+        input_pcadim=checkpoint_pretrained['reduce_dimension']
+        transformation_type_string=checkpoint_pretrained['input_transformation_info']
+        do_use_lognorm_for_sc=checkpoint_pretrained['use_lognorm_for_sc']
+        do_use_tsvd_for_sc=checkpoint_pretrained['use_truncated_svd_for_sc']
+        input_latentunit=checkpoint_pretrained['latent_normalize']
+
+
+    ##################################
+    precomputed_transformer_info_list={}
     if input_transform_file_list is not None and len(input_transform_file_list)>0:
         precomputed_transformer_info_list={}
         for ioxfile in input_transform_file_list:
@@ -731,15 +466,20 @@ def run_training_command(argv):
                 precomputed_transformer_info_list[k]['filename']=ioxfile.split(os.sep)[-1]
 
 
+    if input_latentunit:
+        input_latentradweight=0
+
     training_params_listdict={}
     training_params_listdict['latentsize']=[latentsize]
     training_params_listdict['losstype']=input_lossnames
     training_params_listdict['latent_inner_loss_weight']=[input_latent_inner_loss_weight]
     training_params_listdict['hiddenlayers']=[ input_hiddenlayers ]
     training_params_listdict['dropout']=input_dropout_list
+    training_params_listdict['dropout_schedule_list']=[dropout_schedule_list]
+    training_params_listdict['dropout_final_layer']=[dropout_final_layer]
     training_params_listdict['skip_accurate_paths']=[do_skipaccpath]
-    training_params_listdict['early_stopping']=[do_earlystop]
-    training_params_listdict['batchsize']=[input_batchsize] #avoid leaving out too many for the familyidx case
+    training_params_listdict['accurate_paths_early_stopping']=[do_earlystop]
+    training_params_listdict['batchsize']=[input_batchsize]
     training_params_listdict['latentsim_loss_weight']=input_latentsimweight_list
     training_params_listdict['adam_decay']=[input_adamdecay]
     training_params_listdict['mse_weight']=[input_mse_weight]
@@ -751,7 +491,7 @@ def run_training_command(argv):
     training_params_listdict['zerograd_none']=[True]
     training_params_listdict['relu_tanh_alternate']=[False]
     training_params_listdict['leakyrelu_negative_slope']=[input_leakyrelu]
-    training_params_listdict['origscalecorr_epochs']=[25]
+    training_params_listdict['origscalecorr_epochs']=[display_epochs]
     
     if input_pcadim == 0:
         training_params_listdict['reduce_dimension']=[None]
@@ -770,15 +510,35 @@ def run_training_command(argv):
     training_params_listdict['trainval_split_frac']=[trainval_split_frac]
     training_params_listdict['val_split_frac']=[val_split_frac]
 
+    ############## intergroup
+    training_params_listdict['intergroup']=[intergroup]
+    training_params_listdict['intergroup_extra_layer_count']=[intergroup_extra_layer_count]
+    training_params_listdict['intergroup_relu']=[not intergroup_skip_relu]
+    training_params_listdict['intergroup_dropout']=[intergroup_dropout]
+    ############## end intergroup
+    
+    ############# dropout_final_layer_scale_dict
+    if dropout_final_layer_dict is not None:
+        dropout_final_layer_list=[dropout_final_layer_dict[k] if k in dropout_final_layer_dict else dropout_final_layer for k in conn_names]
+        if not all([x is None for x in dropout_final_layer_list]):
+            print("Using input-specific dropout_final_layer:")
+            for i,c in enumerate(conn_names):
+                print("%d: %s = %g" % (i,c,dropout_final_layer_list[i]))
+            training_params_listdict['dropout_final_layer_list']=[dropout_final_layer_list]
+    ##############
+    if checkpoint_pretrained is not None:
+        training_params_listdict['starting_point_file']=[starting_point_file]
+        training_params_listdict['starting_point_epoch']=[checkpoint_pretrained['epoch']]
+    
     #generate a new list of dictionaries with every combination of fields (order we built the dict matters)
     training_params_list = dict_combination_list(training_params_listdict, reverse_field_order=True)    
  
     crosstrain_repeats=1 #crosstrain_repeats (non-self paths)
     reduce_dimension_default=256
     
+    extra_trainrecord_dict={}
+    extra_trainrecord_dict['command']=" ".join(sys.argv)
     ######################
-
-    conn_names=list(conndata_alltypes.keys())
 
     for training_params in training_params_list:
 
@@ -845,6 +605,9 @@ def run_training_command(argv):
                     for y in input_conn_name_list:
                         xg=conndata_alltypes[x]['group']
                         yg=conndata_alltypes[y]['group']
+                        if grouptype == 'self':
+                            if x!=y:
+                                continue #skip all but self
                         if xg is None or yg is None:
                             #if no group provided, assume all paths valid
                             pass
@@ -869,8 +632,7 @@ def run_training_command(argv):
             data_string=re.sub("^_+","",data_string)
 
             set_random_seed(0)
-            
-            
+
             #generate trainpath info each time so the dataloader batches are reproducible
             encoded_inputs=None
             if input_encodingfile:
@@ -928,8 +690,13 @@ def run_training_command(argv):
                                         len(subjects),latentsize,encoded_inputs[conntype].shape[0],encoded_inputs[conntype].shape[1])
 
                 print("Loaded target latent-space values from %s (%s)" % (input_encodingfile,encoded_inputs_shape))
-                
+            
+            #create_data_loader=training_params['nbepochs']>1
+            create_data_loader=True
             if do_target_encoding or do_fixed_target_encoding:
+                ##################
+                # this mode means an existing latent-space was provided and we want to train all encoders to project to that, and all decoders to decode from that
+
                 if encoded_inputs is None:
                     raise Exception("Must provide encoded inputs file")
                 
@@ -942,30 +709,41 @@ def run_training_command(argv):
                     else:
                         raise Exception("Input data type %s not found in latent-space data" % (conntype))
 
-                data_string_targetencoding="self"+"_"+roilist_str
                 
-                trainpath_list, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes_targetencoding, conn_names, subjects, subjidx_train, subjidx_val, 
-                                                trainpath_pairs="self", 
-                                                trainpath_group_pairs=[], data_string=data_string_targetencoding, 
+                if do_fixed_target_encoding or do_only_self_target_encoding:
+                    data_string_targetencoding="self"+"_"+roilist_str+"_"+subj_str
+                    init_trainpath_pairs="self"
+                    init_trainpath_group_pairs=[]
+                else:
+                    data_string_targetencoding=grouptype+"_"+roilist_str+"_"+subj_str
+                    init_trainpath_pairs=trainpath_pairs
+                    init_trainpath_group_pairs=trainpath_group_pairs
+
+                    
+                trainpath_list, data_optimscale, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes_targetencoding, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                trainpath_pairs=init_trainpath_pairs, 
+                                                trainpath_group_pairs=init_trainpath_group_pairs, data_string=data_string_targetencoding, 
                                                 batch_size=batchsize, skip_selfs=False, crosstrain_repeats=crosstrain_repeats,
-                                                reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=True,           
+                                                reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=keep_origscale_data,           
                                                 use_lognorm_for_sc=do_use_lognorm_for_sc, 
                                                 use_truncated_svd=use_truncated_svd, 
                                                 use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                 input_transformation_info=transformation_type_string,
-                                                precomputed_transformer_info_list=precomputed_transformer_info_list)
+                                                precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader)
             
             else:
-                trainpath_list, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
+                ##################
+                # this is the normal training mode             
+                trainpath_list, data_optimscale, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
                                                     trainpath_pairs=trainpath_pairs, 
                                                     trainpath_group_pairs=trainpath_group_pairs, data_string=data_string, 
                                                     batch_size=batchsize, skip_selfs=do_skipself, crosstrain_repeats=crosstrain_repeats,
-                                                    reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=True,           
+                                                    reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=keep_origscale_data,           
                                                     use_lognorm_for_sc=do_use_lognorm_for_sc, 
                                                     use_truncated_svd=use_truncated_svd, 
                                                     use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                     input_transformation_info=transformation_type_string,
-                                                    precomputed_transformer_info_list=precomputed_transformer_info_list)
+                                                    precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader)
             
             
             #dont save input transforms if we are using precomputed ones
@@ -976,7 +754,70 @@ def run_training_command(argv):
                 #allow override of dropout amount
                 checkpoint_override={}
                 checkpoint_override['dropout']=training_params['dropout']
-                net, checkpoint=Krakencoder.load_checkpoint(starting_point_file, checkpoint_override=checkpoint_override)
+                
+                if do_domain_adaptation:
+                    print("Adding outer domain-adaptation layers. Resetting OUTER data transformations to 'none'")
+                    data_string="adapt"+grouptype+"_"+subj_str
+                    inner_net, checkpoint=Krakencoder.load_checkpoint(starting_point_file, checkpoint_override=checkpoint_override)
+                    data_transformer_list=[]
+                    data_inputsize_list=[]
+                    
+                    none_transformer, none_transformer_info = generate_transformer(transformer_type="none")
+                    
+                    new_outer_transformer_info_list={}
+                    
+                    for i_conn, conn_name in enumerate(conn_names):
+                        new_outer_transformer_info_list[conn_name]=none_transformer_info
+                        
+                        if conn_name in data_transformer_info_list:
+                            transformer, transformer_info = generate_transformer(transformer_type=data_transformer_info_list[conn_name]["params"]["type"], precomputed_transformer_params=data_transformer_info_list[conn_name]["params"])
+                            
+                            do_meanshift=True
+                            
+                            if do_meanshift:
+                                print("doing meanshift!")
+                                transformer_data_mean=None
+                                if "pca_input_mean" in transformer_info["params"]:
+                                    transformer_data_mean=transformer_info["params"]["pca_input_mean"]
+                                elif "input_mean" in transformer_info["params"]:
+                                    transformer_data_mean=transformer_info["params"]["data_mean"]
+                                if transformer_data_mean is not None:
+                                    if torch.is_tensor(transformer_data_mean):
+                                        transformer_data_mean=transformer_data_mean.detach().cpu().numpy()
+                                    transformer_data_mean=np.atleast_2d(transformer_data_mean)
+                                    actual_data_mean=np.mean(conndata_alltypes[conn_name]['data'],axis=0,keepdims=True)
+                                    new_outer_transformer_info_list[conn_name]={'type':'cfeat', 'input_mean':actual_data_mean-transformer_data_mean}
+                        else:
+                            transformer=none_transformer
+                            transformer_info=none_transformer_info
+                        
+                        if conn_name in conndata_alltypes:
+                            inputsize=conndata_alltypes[conn_name]['data'].shape[1]
+                            #inputsize=1
+                        else:
+                            inputsize=1
+                        
+                        data_transformer_list+=[transformer]
+                        data_inputsize_list+=[inputsize]
+                        
+                    net = KrakenAdapter(inner_model=inner_net, inputsize_list=data_inputsize_list, data_transformer_list=data_transformer_list,
+                                        linear_polynomial_order=domain_adaptation_polynomial)
+                    
+                    net.freeze_inner_model(True)
+                    
+                    #previous: input_transformation_info="NONE"
+                    #new: precomputed_transformer_info_list=new_outer_transformer_info_list, 
+                    trainpath_list, data_optimscale, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                        trainpath_pairs=trainpath_pairs, 
+                                                        trainpath_group_pairs=trainpath_group_pairs, data_string=data_string, 
+                                                        batch_size=batchsize, skip_selfs=do_skipself, crosstrain_repeats=crosstrain_repeats,
+                                                        reduce_dimension=None,use_pretrained_encoder=False, keep_origscale_data=keep_origscale_data,           
+                                                        precomputed_transformer_info_list=new_outer_transformer_info_list, 
+                                                        create_data_loader=create_data_loader)
+                            
+                else:
+                    net, checkpoint=Krakencoder.load_checkpoint(starting_point_file, checkpoint_override=checkpoint_override)
+
             else:
                 net=None
             
@@ -989,23 +830,28 @@ def run_training_command(argv):
                     trainpath_list[0]['data_string']=datastring0+"_b%d" % (blockloop+1)
                 training_params_tmp=training_params.copy()
                 
-                net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
-                                                 trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=100,
+                net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, 
+                                                 data_optimscale_list=data_optimscale, data_origscale_list=data_orig,
+                                                 trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=display_epochs,
                                                  checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
                                                  explicit_checkpoint_epoch_list=explicit_checkpoint_epoch_list,
                                                  precomputed_transformer_info_list=data_transformer_info_list,
+                                                 save_optimizer_params=optimizer_in_checkpoint,
                                                  save_input_transforms=save_input_transforms, 
-                                                 output_file_prefix=output_file_prefix)
+                                                 output_file_prefix=output_file_prefix,logger=log,extra_trainrecord_dict=extra_trainrecord_dict)
             
                 if not training_params['roundtrip'] and add_roundtrip_epochs > 0:
                     print("Adding %d roundtrip epochs" % (add_roundtrip_epochs))
                     training_params_tmp=training_params.copy()
                     training_params_tmp['roundtrip']=True
                     training_params_tmp['nbepochs']=add_roundtrip_epochs
-                    net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
-                                                     trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=100,
+                    net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net,
+                                                     data_optimscale_list=data_optimscale, data_origscale_list=data_orig,
+                                                     trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=display_epochs,
                                                      checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
-                                                     output_file_prefix=output_file_prefix)
+                                                     save_optimizer_params=optimizer_in_checkpoint,
+                                                     output_file_prefix=output_file_prefix,
+                                                     extra_trainrecord_dict=extra_trainrecord_dict)
                                                      
                 if not training_params['meantarget_latentsim'] and add_meanlatent_epochs > 0:
                     print("Adding %d meanlatent epochs" % (add_meanlatent_epochs))
@@ -1013,10 +859,13 @@ def run_training_command(argv):
                     training_params_tmp['meantarget_latentsim']=True
                     training_params_tmp['latentsim_batchsize']=batchsize #maybe?
                     training_params_tmp['nbepochs']=add_meanlatent_epochs
-                    net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
-                                                     trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=100,
+                    net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, 
+                                                     data_optimscale_list=data_optimscale, data_origscale_list=data_orig,
+                                                     trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=display_epochs,
                                                      checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
-                                                     output_file_prefix=output_file_prefix)
+                                                     save_optimizer_params=optimizer_in_checkpoint,
+                                                     output_file_prefix=output_file_prefix,
+                                                     extra_trainrecord_dict=extra_trainrecord_dict)
                                                      
                 if not do_fixed_target_encoding and add_fixed_encoding_epochs_after > 0:
                     raise Exception("add_fixed_encoding not yet supported")
@@ -1032,12 +881,13 @@ def run_training_command(argv):
                                                     trainpath_pairs="self", 
                                                     trainpath_group_pairs=[], data_string=data_string_targetencoding, 
                                                     batch_size=batchsize, skip_selfs=False, crosstrain_repeats=crosstrain_repeats,
-                                                    reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=True,           
+                                                    reduce_dimension=reduce_dimension,use_pretrained_encoder=False, keep_origscale_data=keep_origscale_data,           
                                                     use_lognorm_for_sc=do_use_lognorm_for_sc, 
                                                     use_truncated_svd=use_truncated_svd, 
                                                     use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                     input_transformation_info=transformation_type_string,
-                                                    precomputed_transformer_info_list=precomputed_transformer_info_list)
+                                                    precomputed_transformer_info_list=precomputed_transformer_info_list,
+                                                    extra_trainrecord_dict=extra_trainrecord_dict)
                     
                     if trainblocks > 1:
                         trainpath_list[0]['data_string']=datastring0+"_b%d" % (blockloop+1)
@@ -1046,9 +896,11 @@ def run_training_command(argv):
                     training_params_tmp['fixed_encoding']=True
                     training_params_tmp['nbepochs']=add_fixed_encoding_epochs_after
                     net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, data_origscale_list=data_orig,
-                                                     trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=100,
+                                                     trainthreads=trainthreads,display_epochs=display_epochs,save_epochs=display_epochs,
                                                      checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
-                                                     output_file_prefix=output_file_prefix)
+                                                     save_optimizer_params=optimizer_in_checkpoint,
+                                                     output_file_prefix=output_file_prefix,
+                                                     extra_trainrecord_dict=extra_trainrecord_dict)
                     
 if __name__ == "__main__":
     run_training_command(sys.argv[1:])

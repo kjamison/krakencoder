@@ -1,0 +1,10 @@
+#these are the exact versions used during training
+#python_version==3.8.12
+cycler==0.11.0
+ipython==7.32.0
+matplotlib==3.5.0
+numpy==1.21.2
+scikit_learn==1.0.1
+scipy==1.7.2
+torch==1.10.0
+colorspacious==1.1.2

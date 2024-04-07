@@ -1,19 +1,31 @@
+"""
+Miscellaneous utility functions
+"""
 
 import torch
 import numpy as np
 import random
+import os
+import scipy.interpolate
+
+def getscriptdir():
+    """Return the directory that contains this script"""
+    return os.path.realpath(os.path.dirname(__file__))
 
 def set_random_seed(seed):
+    """Set random seed for torch, numpy, and random modules"""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
 def numpyvar(x):
+    """Convert a torch tensor to a numpy array, or return the input if it is not a tensor"""
     if not torch.is_tensor(x):
         return x
     return x.numpy()
 
 def torchvar(x, astype=None):
+    """cast variable to torch (use cuda if available), with optional type conversion"""
     if torch.is_tensor(x):
         if astype is int:
             return x.int()
@@ -22,7 +34,6 @@ def torchvar(x, astype=None):
         else:
             return x
     
-    #cast variable to torch (use cuda if available)
     try:
         _ = iter(x)
     except TypeError:
@@ -46,6 +57,7 @@ def torchvar(x, astype=None):
         else:
             torchfun=torch.FloatTensor
     
+    
     if islist:
         return torchfun(x)
     else:
@@ -57,9 +69,185 @@ def torchfloat(x):
 def torchint(x):
     return torchvar(x,astype=int)
 
+def OLD_explained_variance_ratio(x_true,x_predicted,axis=0, var_true=None):
+    #compute R2
+    if torch.is_tensor(x_true):
+        if var_true is None:
+            var_true=torch.sum(torch.var(x_true,axis=axis))
+        var_resid=torch.sum(torch.var(x_true-x_predicted,axis=axis))
+    else:
+        if var_true is None:
+            var_true=np.sum(np.var(x_true,axis=axis))
+        var_resid=np.sum(np.var(x_true-x_predicted,axis=axis))
+    return 1-var_resid/var_true
+
+def explained_variance_ratio_OLD(x_true,x_predicted,axis=0, var_true=None):
+    #compute R2, whole matrix used pre 2023-10-30 (had hardcoded axis=[] (torch) and axis=None (np))
+    if torch.is_tensor(x_true):
+        if var_true is None:
+            var_true=torch.sum(torch.var(x_true-torch.mean(x_true,axis=axis),axis=[]))
+        var_resid=torch.sum(torch.var(x_true-x_predicted,axis=[]))
+    else:
+        if var_true is None:
+            var_true=np.sum(np.var(x_true-np.mean(x_true,axis=axis),axis=None))
+        var_resid=np.sum(np.var(x_true-x_predicted,axis=None))
+    return 1-var_resid/var_true
+
+def explained_variance_ratio(x_true,x_predicted,axis=0, var_true=None):
+    """
+    compute R2 the same way we would for PCA recon:
+    sum(variance of the residual of each FEATURE) / sum(variance of the each feature in TRUE)
+    """
+    
+    if torch.is_tensor(x_true):
+        if var_true is None:
+            var_true=torch.sum(torch.var(x_true,axis=axis))
+        var_resid=torch.sum(torch.var(x_true-x_predicted,axis=axis))
+    else:
+        if var_true is None:
+            var_true=np.sum(np.var(x_true,axis=axis))
+        var_resid=np.sum(np.var(x_true-x_predicted,axis=axis))
+    return 1-var_resid/var_true
+
+def nanargmax_safe(x,nanval=-1,**kwargs):
+    """Return the index of the maximum value in the array, ignoring NaNs, or return nanval if all elements are NaNs"""
+    try:
+        return np.nanargmax(x, **kwargs)
+    except ValueError:
+        if nanval is not None:
+            nanval=np.int64(nanval)
+        # Handle the case where all elements are NaNs
+        if 'axis' in kwargs:
+            # Calculate the shape of the expected output
+            shape = list(x.shape)
+            del shape[kwargs['axis']]
+            return np.full(shape, nanval)
+        else:
+            return nanval
+
+def naninterp(x,outliermat=None,axis=0,fill_value=0):
+    """linearly interpolate segments of data with nans (or outliermat!=0)
+    
+    Parameters:
+    x: 2d array
+    outliermat: 2d array of same shape as x, with 1 for outlier, 0 for normal, default=None (only interp nans)
+    axis: axis along which to interpolate, default=0
+    fill_value: value to use for out-of-bounds values, default=0
+    
+    Returns:
+    xnew: 2d array with interpolated values
+    """
+    if axis == 0:
+        do_transpose=False
+    elif axis == 1:
+        do_transpose=True
+        x=x.T
+    else:
+        raise Exception("Only 2d supported for now")
+    
+    allnan_full=np.all(np.isnan(x),axis=0)
+    x=x[:,~allnan_full]
+    notnan=~np.any(np.isnan(x),axis=1)
+    if outliermat is not None:
+        notnan[np.sum(np.abs(outliermat),axis=1)>0]=False
+    notnanidx=np.where(notnan)[0]
+    
+    if len(notnanidx)==0:
+        xnew=np.ones(x.shape)*fill_value
+    elif len(notnanidx)==1:
+        xnew=np.ones(x.shape)*fill_value
+        xnew[notnanidx,:]=x[notnanidx,:]
+    else:
+        xnew=scipy.interpolate.interp1d(notnanidx,x[notnanidx,:],axis=0,bounds_error=False,fill_value=fill_value)(np.arange(x.shape[0]))
+    
+    if np.any(allnan_full):
+        xnew_full=fill_value*np.ones((xnew.shape[0],len(allnan_full)))
+        xnew_full[:,~allnan_full]=xnew
+        xnew=xnew_full
+    
+    if do_transpose:
+        xnew=xnew.T
+    
+    return xnew
+    
+def format_columns(column_data=[],column_headers=[],column_format_list=[],delimiter=", ",align="right", header_separator=None, print_result=False):
+    """
+    Format data into columns for nicer output printing with specified alignment and delimiter
+    """
+    numcolumns=max([len(x) for x in column_data])
+
+    if column_headers and len(column_headers) != numcolumns:
+        raise Exception("column_headers must have one entry for each column")
+    
+    if column_format_list and isinstance(column_format_list,str):
+        column_format_list=[column_format_list]
+    
+    if column_format_list and len(column_format_list) != numcolumns:
+        raise Exception("column_format_list must have one entry for each column")
+    
+    column_maxlen=[0]*numcolumns
+    
+    #convert all data to strings and find longest width for each column
+    column_data_str=[]
+    separator_row=None
+    if column_headers:
+        column_data_str+=[column_headers]
+        column_maxlen=[len(s) for s in column_headers]
+        if header_separator:
+            column_data_str+=[[(header_separator*len(s))[:len(s)] for s in column_headers]]
+            separator_row=len(column_data_str)-1
+    for irow,r in enumerate(column_data):
+        row_str_list=[]
+        for icol,c in enumerate(r):
+            is_iterable=False
+            if isinstance(c,str):
+                pass
+            else:
+                try:
+                    if len(c)>1:
+                        is_iterable=True
+                except:
+                    pass
+            if column_format_list:
+                fmt=column_format_list[icol]
+            else:
+                fmt="%s"
+            if fmt.startswith("{") and fmt.endswith("}"):
+                if is_iterable:
+                    s=fmt.format(*c)
+                else:
+                    s=fmt.format(c)
+            else:
+                if is_iterable:
+                    s=fmt % tuple(c)
+                else:
+                    s=fmt % (c)
+            row_str_list+=[s]
+            column_maxlen[icol]=max(len(s),column_maxlen[icol])
+        column_data_str+=[row_str_list]
+    
+    if align=="right":
+        formatstr=delimiter.join(["%"+str(d)+"s" for d in column_maxlen])
+    else:
+        formatstr=delimiter.join(["%-"+str(d)+"s" for d in column_maxlen])
+    
+    column_result=[formatstr % tuple(r) for r in column_data_str]
+
+    if separator_row is not None:
+        column_result[separator_row]=column_result[separator_row].replace(delimiter," "*len(delimiter))
+    
+    if print_result:
+        for r in column_result:
+            print(r)
+    else:
+        return column_result
+        
 #take a dictionary where each field value is a list
 #and generate a new list of dictionaries with every combination of fields
 def dict_combination_list(listdict, reverse_field_order=False):
+    """
+    Take a dictionary where each field value is a list and generate a new list of dictionaries with every combination of fields
+    """
     keylist=list(listdict.keys())
     if reverse_field_order:
         keylist=keylist[::-1]
@@ -78,6 +266,9 @@ def dict_combination_list(listdict, reverse_field_order=False):
     return permlist
 
 def flatlist(l):
+    """
+    Flatten a list of lists (useful for argparse lists)
+    """
     if l is None:
         return []
     lnew=[]
@@ -94,6 +285,7 @@ def flatlist(l):
     return lnew
 
 def common_prefix(strlist):
+    """Find the common prefix of a list of strings"""
     strlen=[len(s) for s in strlist]
     result=""
     for i in range(1,min(strlen)):
@@ -104,6 +296,7 @@ def common_prefix(strlist):
     return result
 
 def common_suffix(strlist):
+    """Find the common suffix of a list of strings"""
     strlen=[len(s) for s in strlist]
     result=""
     for i in range(1,min(strlen)):
@@ -114,6 +307,7 @@ def common_suffix(strlist):
     return result
 
 def trim_string(s,left=0,right=0):
+    """Trim left=X and right=Y characters from a string. e.g., for removing common_prefix and common_suffix"""
     snew=s
     if left>0:
         snew=snew[left:]
@@ -121,32 +315,35 @@ def trim_string(s,left=0,right=0):
         snew=snew[:-right]
     return snew
 
-def clean_args(args, arg_defaults={}):
+def justfilename(pathstr):
+    """Return the filename from a path string (e.g., /path/to/file.txt -> file.txt)"""
+    if isinstance(pathstr,str):
+        is_iterable=False
+        pathstr=[pathstr]
+    newstr=[x.split(os.path.sep)[-1] for x in pathstr]
+    if not is_iterable:
+        newstr=newstr[0]
+    return newstr
+
+def clean_args(args, arg_defaults={}, flatten=True):
+    """
+    Clean up an argparse namespace by copying default values for missing arguments and flattening list-based arguments
+    """
     #copy defaults when not provided
     for k,v in vars(args).items():
         if k in arg_defaults:
             if v is None:
                 setattr(args,k,arg_defaults[k])
 
-    #flatten list-based arguments
-    for k,v in vars(args).items():
-        if isinstance(v,str):
-            #str are iterable but not lists
-            continue
-        try:
-            iter(v)
-            setattr(args,k,flatlist(v))
-        except:
-            continue
+    if flatten:
+        #flatten list-based arguments
+        for k,v in vars(args).items():
+            if isinstance(v,str):
+                #str are iterable but not lists
+                continue
+            try:
+                iter(v)
+                setattr(args,k,flatlist(v))
+            except:
+                continue
     return args
-
-def clean_subject_list(subjects):
-    #make all subject lists = str type
-    #(for cases where subjects are float(1234.), convert to int first to make sure they are "1234" and not "1234.0")
-    try:
-        newsubjects=[int(x) for x in subjects]
-    except:
-        newsubjects=[x for x in subjects]
-    newsubjects=np.array([str(x) for x in newsubjects])
-
-    return newsubjects
