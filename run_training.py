@@ -6,10 +6,10 @@ It loads data, creates the network, and initiates training.
 
 Main functions it calls, after parsing args:
 
-- data.py/load_hcp_data()
+- krakencoder/data.py/load_hcp_data()
     or data.py/load_input_data()
-- train.py/generate_training_paths()
-- train.py/train_network()
+- krakencoder/train.py/generate_training_paths()
+- krakencoder/train.py/train_network()
 
 Example:
 
@@ -34,11 +34,11 @@ if __name__ == "__main__":
 
 #######################
 
-from krakencoder import *
-from train import *
-from utils import *
-from data import *
-from log import Logger
+from krakencoder.model import *
+from krakencoder.train import *
+from krakencoder.utils import *
+from krakencoder.data import *
+from krakencoder.log import Logger
 
 import re
 import os
@@ -144,9 +144,12 @@ def argument_parse_runtraining(argv):
     
     misc_arg_group.add_argument('--discard_origscale',action='store_true',dest='discard_origscale',help='Throw out origscale data (for memory). OrigScale performance computed on reconstructed invPCA(PCA(input))')
     
+    misc_arg_group.add_argument('--version', action='version',version='Krakencoder v{version}'.format(version=get_version(include_date=True)))
+    
     args=parser.parse_args(argv)
     args=clean_args(args,arg_defaults)
     return args
+
 #######################################################
 #######################################################
 #### 

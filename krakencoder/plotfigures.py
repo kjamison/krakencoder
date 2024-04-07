@@ -17,8 +17,8 @@ import warnings
 from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 
-from data import canonical_data_flavor
-from utils import *
+from .data import canonical_data_flavor
+from .utils import *
 
 def extra_colormap_list():
     return ['magma2','magma2_r','flare','flare_r','rocket','rocket_r']

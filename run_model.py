@@ -5,12 +5,12 @@ Outputs can include predicted connectomes of different types, latent vectors, an
 
 Main functions it calls, after parsing args:
 
-- krakencoder.py/Krakencoder.load_checkpoint()
-- data.py/load_hcp_data()
+- krakencoder/model.py/Krakencoder.load_checkpoint()
+- krakencoder/data.py/load_hcp_data()
     or data.py/load_input_data()
-- data.py/generate_transformer()
+- krakencoder/data.py/generate_transformer()
     using information from specified saved transformer files
-- krakencoder.py/Krakencoder()
+- krakencoder/model.py/Krakencoder()
     - to run forward predictions on data
     
 Examples:
@@ -27,15 +27,15 @@ python run_model.py --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
 
 #To generate predicted connectomes, add:
     --outputname all --output mydata_20240406_022034_ep002000_{output}.mat
-#    which will generate an file predictions of each connectivity flavor in the model, named like:
-#      mydata_20240406_022034_ep002000_FCcov_shen268_hpf_FC.mat
-#    which will contain the predicted FCcov_shen268_hpf_FC from every input type provided
+# which will generate an file predictions of each connectivity flavor in the model, named like:
+#   mydata_20240406_022034_ep002000_FCcov_shen268_hpf_FC.mat
+# which will contain the predicted FCcov_shen268_hpf_FC from every input type provided
 
 #To generate the latent space outputs for this input data, add:
     --outputname encoded --output mydata_20240406_022034_ep002000_{output}.mat"
     
 #To use your own non-HCP input data, provide a .mat file for each input type, with a 'data' field containing the [subjects x region x region] 
-#    connectivity data. Then include the filenames and connectivity names using:
+# connectivity data. Then include the filenames and connectivity names using:
     --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
         '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
         '[shen268_sdstream_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
@@ -45,10 +45,10 @@ python run_model.py --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
 
 """
 
-from krakencoder import *
-from train import *
-from data import *
-from utils import *
+from krakencoder.model import *
+from krakencoder.train import *
+from krakencoder.data import *
+from krakencoder.utils import *
 
 from scipy.io import loadmat, savemat
 import re
@@ -100,11 +100,11 @@ def argument_parse_newdata(argv):
     testing_group=parser.add_argument_group('Testing options')
     testing_group.add_argument('--savetransformedinputs',action='store_true',dest='save_transformed_inputs', help='Transform inputs and save them as "encoded" values (for testing PCA/transformed space data)')
     testing_group.add_argument('--untransformedoutputs',action='store_true',dest='save_untransformed_outputs', help='Keep outputs in PCA/transformed space (for testing)')
-
     testing_group.add_argument('--hackcortex',action='store_true',dest='hack_cortex', help='Hack to only use cortex for eval (for fs86 and coco439) (for testing)')
-
     testing_group.add_argument('--ccmat',action='store_true',dest='ccmat', help='Save full SUBJxSUBJ ccmat for every prediction path (large record file)')
-
+    
+    parser.add_argument('--version', action='version',version='Krakencoder v{version}'.format(version=get_version(include_date=True)))
+    
     args=parser.parse_args(argv)
     args=clean_args(args,arg_defaults)
     return args

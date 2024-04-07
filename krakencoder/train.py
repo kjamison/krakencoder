@@ -2,12 +2,12 @@
 Functions for training the network
 """
 
-from krakencoder import *
-from adaptermodel import *
-from loss import *
-from utils import *
-from data import generate_transformer
-from plotfigures import *
+from .model import *
+from .adaptermodel import *
+from .loss import *
+from .utils import *
+from .data import generate_transformer
+from .plotfigures import *
 
 import torch.utils.data as data_utils
 import torch.optim as optim

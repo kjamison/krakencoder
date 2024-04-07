@@ -4,7 +4,8 @@ Functions related to loading and manipulating input data and creating input/outp
 Includes some hard-coded paths to HCP data files, which may need to be updated for your system.
 """
 
-from utils import *
+from .utils import *
+
 from scipy.io import loadmat
 from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.preprocessing import FunctionTransformer

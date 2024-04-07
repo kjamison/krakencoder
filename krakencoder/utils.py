@@ -8,6 +8,8 @@ import random
 import os
 import scipy.interpolate
 
+from ._version import __version__, __version_date__
+
 def getscriptdir():
     """Return the directory that contains this script"""
     return os.path.realpath(os.path.dirname(__file__))
@@ -347,3 +349,10 @@ def clean_args(args, arg_defaults={}, flatten=True):
             except:
                 continue
     return args
+
+def get_version(include_date=False):
+    """Return the version of this package"""
+    if include_date:
+        return __version__+" ("+__version_date__+")"
+    else:
+        return __version__

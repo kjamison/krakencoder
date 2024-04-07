@@ -1,13 +1,19 @@
-from krakencoder import *
+"""
+Command-line script to print information about a saved Krakencoder checkpoint (.pt) file
+"""
+
+from krakencoder.model import *
+from krakencoder.plotfigures import display_kraken_heatmap
+from krakencoder.utils import get_version
+
 from collections.abc import Iterable
 import os
 import sys
 import argparse
 import warnings
-from plotfigures import display_kraken_heatmap
 from scipy.io import loadmat
 
-def argument_parse_describemodel(argv):
+def argument_parse_describecheckpoint(argv):
     parser=argparse.ArgumentParser(description='Describe krakencoder checkpoint',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('--checkpoint',action='store',dest='checkpoint', help='Checkpoint file (.pt)')
@@ -23,11 +29,14 @@ def argument_parse_describemodel(argv):
     parser.add_argument('--heatmap_training',action='store_true',dest='heatmap_training',help='Show training performance instead of validation performance')
     parser.add_argument('--heatmap_dpi',action='store',dest='heatmap_dpi',type=int,default=200,help='(output figure dpi. default = 200)')
     parser.add_argument('--heatmap_extrashortnames',action='store_true',dest='heatmap_extrashortnames',help='Extra short names for publication figs')
+    
+    parser.add_argument('--version', action='version',version='Krakencoder v{version}'.format(version=get_version(include_date=True)))
+    
     return parser.parse_args(argv)
 
-def run_describe_model(argv):
+def run_describe_checkpoint(argv):
     #read in command-line inputs
-    args=argument_parse_describemodel(argv)
+    args=argument_parse_describecheckpoint(argv)
     
     if args.heatmap_record_file:
         recordfile=args.heatmap_record_file
@@ -94,4 +103,4 @@ def run_describe_model(argv):
             print("%d) %s -> %s" % (i+1,x,y))
     
 if __name__ == "__main__":
-    run_describe_model(sys.argv[1:])
+    run_describe_checkpoint(sys.argv[1:])
