@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from .utils import get_version
+
 #####################################
 
 class Krakencoder(nn.Module):
@@ -414,6 +416,8 @@ class Krakencoder(nn.Module):
         Save the model to a file, including all hyperparameters and model weights, as well as any additional information in extra_dict
         """
         checkpoint={"state_dict": self.state_dict()}
+        
+        checkpoint['krakencoder_version']=get_version(include_date=True)
         
         checkpoint['input_size_list']=self.inputsize_list
         checkpoint['latentsize']=self.latentsize

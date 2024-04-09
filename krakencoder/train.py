@@ -1246,6 +1246,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     trainrecord['data_string']=data_string
     trainrecord['network_string']=network_string
     trainrecord['environment_string']=env_string
+    trainrecord['krakencoder_version']=get_version(include_date=True)
     trainrecord['trainpath_shuffle']=do_trainpath_shuffle
     trainrecord['roundtrip']=do_roundtrip
     trainrecord['train_string']=train_string

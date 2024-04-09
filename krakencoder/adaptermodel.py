@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from .utils import get_version
+
 class KrakenAdapter(nn.Module):
     """
     This class takes a pre-trained Krakencoder model and a data transformer
@@ -92,6 +94,8 @@ class KrakenAdapter(nn.Module):
 
     def save_checkpoint(self, filename, extra_dict=None):
         checkpoint={"state_dict": self.state_dict()}
+        
+        checkpoint['krakencoder_version']=get_version(include_date=True)
         
         checkpoint['input_size_list']=self.inputsize_list
         checkpoint['dropout']=self.dropout
