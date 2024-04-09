@@ -149,7 +149,7 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
         else:
             return "encoded"
     
-    if conntype.lower().startswith("burst"):
+    if conntype.lower().startswith("fusion"):
         if return_groupname:
             return conntype, groupname
         else:

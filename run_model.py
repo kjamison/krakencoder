@@ -14,7 +14,7 @@ Main functions it calls, after parsing args:
     - to run forward predictions on data
 
 Examples:
-# Evaluate checkpoint on held-out "test" split from HCP data, using precomputed PCA input transformers, and save performance metrics and heatmaps
+#1. Evaluate checkpoint on held-out "test" split from HCP data, using precomputed PCA input transformers, and save performance metrics and heatmaps
 python run_model.py --inputdata test --subjectfile subject_splits_958subj_683train_79val_196test_retestInTest.mat \
     --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
     --inputxform krak_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
@@ -23,18 +23,24 @@ python run_model.py --inputdata test --subjectfile subject_splits_958subj_683tra
     --newtrainrecord hcp_20240406_022034_ep002000_mse.w1000_newver_test.mat \
     --heatmap hcp_20240406_022034_ep002000_mse.w1000_newver_test.png \
     --heatmapmetrics top1acc topNacc avgrank avgcorr_resid \
-    --burst --burstinclude burst=all burstSC=SC burstFC=FC --burstnoself --burstnoatlas
+    --fusion --fusioninclude fusion=all fusionSC=SC fusionFC=FC --fusionnoself --fusionnoatlas
 
-#To generate predicted connectomes, add:
+#2. To generate predicted connectomes, add:
     --outputname all --output mydata_20240406_022034_ep002000_{output}.mat
 # which will generate an file predictions of each connectivity flavor in the model, named like:
 #   mydata_20240406_022034_ep002000_FCcov_shen268_hpf_FC.mat
 # which will contain the predicted FCcov_shen268_hpf_FC from every input type provided
 
-#To generate the latent space outputs for this input data, add:
+#3. To generate predicted connectomes from only fusion inputs:
+    --output 'mydata_20240406_022034_ep002000_{input}.mat' --fusion --onlyfusioninputs
+# or for multiple fusion types (i.e., fusionSC=only using SC inputs):
+    --output 'mydata_20240406_022034_ep002000_{input}.mat' --fusion --onlyfusioninputs \
+    --fusioninclude fusion=all fusionSC=SC fusionFC=FC --fusionnoself --fusionnoatlas
+
+#4. To generate the latent space outputs for this input data, add:
     --outputname encoded --output mydata_20240406_022034_ep002000_{output}.mat"
-    
-#To use your own non-HCP input data, provide a .mat file for each input type, with a 'data' field containing the [subjects x region x region] 
+
+#5. To use your own non-HCP input data, provide a .mat file for each input type, with a 'data' field containing the [subjects x region x region] 
 # connectivity data. Then include the filenames and connectivity names using:
     --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
         '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
@@ -64,7 +70,7 @@ import warnings
 def argument_parse_newdata(argv):
     #for list-based inputs, need to specify the defaults this way, otherwise the argparse append just adds to them
     arg_defaults={}
-    arg_defaults['burst_include']=[]
+    arg_defaults['fusion_include']=[]
     arg_defaults['input_names']=[]
     arg_defaults['output_names']=[]
     arg_defaults['input_data_file']=[]
@@ -85,12 +91,12 @@ def argument_parse_newdata(argv):
     
     parser.add_argument('--adaptmode',action='store',dest='adapt_mode',default='none',help='How do adapt new data to fit model (default: none)')
     
-    parser.add_argument('--burstinclude',action='append',dest='burst_include',help='inputnames to include in burst average',nargs='*')
-    parser.add_argument('--burst',action ='store_true',dest='burst',help='burst mode eval')
-    parser.add_argument('--burstnoself','--burst.noself',action ='store_true',dest='burst_noself',help='Add .noself version to burst outputs (excludes latent from same input)')
-    parser.add_argument('--burstnoatlas','--burst.noatlas',action ='store_true',dest='burst_noatlas',help='Add .noatlas version to burst outputs (excludes latent from same atlas)')
-    parser.add_argument('--burstnorm',action='store_true',dest='burstnorm',help='re-normalize latent vectors after averaging')
-    parser.add_argument('--onlyburstinputs',action='store_true',dest='only_burst_inputs',help='Only predict outputs from burst inputs (not from individual flavors)')
+    parser.add_argument('--fusioninclude',action='append',dest='fusion_include',help='inputnames to include in fusion average',nargs='*')
+    parser.add_argument('--fusion',action ='store_true',dest='fusion',help='fusion mode eval')
+    parser.add_argument('--fusionnoself','--fusion.noself',action ='store_true',dest='fusion_noself',help='Add .noself version to fusion outputs (excludes latent from same input)')
+    parser.add_argument('--fusionnoatlas','--fusion.noatlas',action ='store_true',dest='fusion_noatlas',help='Add .noatlas version to fusion outputs (excludes latent from same atlas)')
+    parser.add_argument('--fusionnorm',action='store_true',dest='fusionnorm',help='re-normalize latent vectors after averaging')
+    parser.add_argument('--onlyfusioninputs',action='store_true',dest='only_fusion_inputs',help='Only predict outputs from fusion inputs (not from individual flavors)')
     
     #parser.add_argument('--pathfinder',action='append',dest='pathfinder_list', help='pathfinder evaluation path names',nargs='*')
     
@@ -145,7 +151,7 @@ def search_flavors(searchstring_list,full_list):
             
             if s.lower() == 'all':
                 new_list+=full_list
-            elif s.lower() in ['encoded','burst','transformed']:
+            elif s.lower() in ['encoded','fusion','transformed']:
                 new_list+=[s.lower()]
             elif s in full_list:
                 new_list+=[s]
@@ -169,12 +175,12 @@ def run_model_on_new_data(argv):
     ptfile=args.checkpoint
     innerptfile=args.innercheckpoint
     recordfile=args.trainrecord
-    burstmode=args.burst
-    burstnorm=args.burstnorm
-    burst_noself=args.burst_noself
-    burst_noatlas=args.burst_noatlas
-    input_burstmode_names=args.burst_include
-    only_burst_mode=args.only_burst_inputs
+    fusionmode=args.fusion
+    fusionnorm=args.fusionnorm
+    fusion_noself=args.fusion_noself
+    fusion_noatlas=args.fusion_noatlas
+    input_fusionmode_names=args.fusion_include
+    only_fusion_mode=args.only_fusion_inputs
     do_save_transformed_inputs=args.save_transformed_inputs
     outputs_in_model_space=args.save_untransformed_outputs
     outfile = args.output
@@ -205,18 +211,18 @@ def run_model_on_new_data(argv):
     if adapt_mode.lower()=='none':
         adapt_mode=None
     
-    #for burst mode, check whether we are doing multiple burst types
-    if any(['=' in b for b in input_burstmode_names]):
-        orig_input_burstmode_names=input_burstmode_names
-        input_burstmode_names={}
-        for b in orig_input_burstmode_names:
+    #for fusion mode, check whether we are doing multiple fusion types
+    if any(['=' in b for b in input_fusionmode_names]):
+        orig_input_fusionmode_names=input_fusionmode_names
+        input_fusionmode_names={}
+        for b in orig_input_fusionmode_names:
             bname=b.split("=")[0]
             blist=flatlist(b.split("=")[-1].split(","))
-            input_burstmode_names[bname]=blist
+            input_fusionmode_names[bname]=blist
     else:
-        bname='burst'
-        blist=flatlist([b.split(",") for b in input_burstmode_names])
-        input_burstmode_names={bname:blist}
+        bname='fusion'
+        blist=flatlist([b.split(",") for b in input_fusionmode_names])
+        input_fusionmode_names={bname:blist}
         
     #note: don't actually use trainrecord during model evaluation
     #checkpoint includes all info about data flavors and model design
@@ -363,38 +369,38 @@ def run_model_on_new_data(argv):
     print("Input types (%d):" % (len(input_conntype_list)), input_conntype_list)
     print("Output types (%d):" % (len(output_conntype_list)), output_conntype_list)
     
-    if burstmode:
-        #burstmode_names=search_flavors(input_burstmode_names, input_conntype_list)
-        #print("Burst input types (%d):" % (len(burstmode_names)), burstmode_names)
-        burstmode_names_dict={k:search_flavors(v, input_conntype_list) for k,v in input_burstmode_names.items()}
+    if fusionmode:
+        #fusionmode_names=search_flavors(input_fusionmode_names, input_conntype_list)
+        #print("fusion input types (%d):" % (len(fusionmode_names)), fusionmode_names)
+        fusionmode_names_dict={k:search_flavors(v, input_conntype_list) for k,v in input_fusionmode_names.items()}
         
-        original_burstmode_names_dict=burstmode_names_dict.copy()
-        if burst_noself:
+        original_fusionmode_names_dict=fusionmode_names_dict.copy()
+        if fusion_noself:
             #note: include all flavors as inputs for this, because the selection is done at the decoding stage
-            new_burstmode_names_dict=burstmode_names_dict.copy()
-            for k in original_burstmode_names_dict:
-                new_burstmode_names_dict[k+".noself"]=burstmode_names_dict[k].copy()
-            burstmode_names_dict=new_burstmode_names_dict
+            new_fusionmode_names_dict=fusionmode_names_dict.copy()
+            for k in original_fusionmode_names_dict:
+                new_fusionmode_names_dict[k+".noself"]=fusionmode_names_dict[k].copy()
+            fusionmode_names_dict=new_fusionmode_names_dict
             
-        if burst_noatlas:
+        if fusion_noatlas:
             #note: include all flavors as inputs for this, because the selection is done at the decoding stage
-            new_burstmode_names_dict=burstmode_names_dict.copy()
-            for k in original_burstmode_names_dict:
-                new_burstmode_names_dict[k+".noatlas"]=burstmode_names_dict[k].copy()
-            burstmode_names_dict=new_burstmode_names_dict
+            new_fusionmode_names_dict=fusionmode_names_dict.copy()
+            for k in original_fusionmode_names_dict:
+                new_fusionmode_names_dict[k+".noatlas"]=fusionmode_names_dict[k].copy()
+            fusionmode_names_dict=new_fusionmode_names_dict
             
-        for k in burstmode_names_dict:
-            print("Burst mode '%s' input types (%d):" % (k,len(burstmode_names_dict[k])), burstmode_names_dict[k])
+        for k in fusionmode_names_dict:
+            print("fusion mode '%s' input types (%d):" % (k,len(fusionmode_names_dict[k])), fusionmode_names_dict[k])
             
     else:
-        #burstmode_names=[]
-        burstmode_names_dict={}
+        #fusionmode_names=[]
+        fusionmode_names_dict={}
     
     #build a list of output files (either consolidated, per input/output or per input->output path)
-    if only_burst_mode and burstmode_names_dict:
-        eval_input_conntype_list=list(burstmode_names_dict.keys())
-    elif burstmode_names_dict:
-        eval_input_conntype_list=input_conntype_list.copy()+list(burstmode_names_dict.keys())
+    if only_fusion_mode and fusionmode_names_dict:
+        eval_input_conntype_list=list(fusionmode_names_dict.keys())
+    elif fusionmode_names_dict:
+        eval_input_conntype_list=input_conntype_list.copy()+list(fusionmode_names_dict.keys())
     else:
         eval_input_conntype_list=input_conntype_list.copy()
     
@@ -620,7 +626,7 @@ def run_model_on_new_data(argv):
     
     #encode all inputs to latent space
     for intype in input_conntype_list:
-        if intype == "encoded" or intype.startswith("burst"):
+        if intype == "encoded" or intype.startswith("fusion"):
             encoded_name=intype
             conn_encoded=torchfloat(conndata_alltypes[intype]['data'])
             encoded_alltypes[intype]=conn_encoded.numpy()
@@ -646,26 +652,26 @@ def run_model_on_new_data(argv):
     
             encoded_alltypes[intype]=conn_encoded.cpu().detach().numpy()
     
-    #burstmode averaging in encoding latent space
-    for bursttype, burstmode_names in burstmode_names_dict.items():
-        print("%s: Burst mode evaluation. Computing mean of input data flavors in latent space." % (bursttype))
-        print("%s: input types " % (bursttype),burstmode_names)
+    #fusionmode averaging in encoding latent space
+    for fusiontype, fusionmode_names in fusionmode_names_dict.items():
+        print("%s: fusion mode evaluation. Computing mean of input data flavors in latent space." % (fusiontype))
+        print("%s: input types " % (fusiontype),fusionmode_names)
         encoded_mean=None
         encoded_inputtype_count=0
         
         for intype in encoded_alltypes.keys():
-            if intype == bursttype:
-                print("burst type '%s' evaluation already computed in input" % (bursttype))
+            if intype == fusiontype:
+                print("fusion type '%s' evaluation already computed in input" % (fusiontype))
                 #conn_encoded=encoded_alltypes[intype]
                 encoded_mean=encoded_alltypes[intype].copy()
                 encoded_inputtype_count=1
                 break
             else:
-                if not intype in burstmode_names:
+                if not intype in fusionmode_names:
                     #only average encodings from specified input types
                     continue
                 
-                print("Burst type '%s' evaluation includes: %s" % (bursttype,intype))
+                print("fusion type '%s' evaluation includes: %s" % (fusiontype,intype))
                 conn_encoded=encoded_alltypes[intype].copy()
             
             if encoded_mean is None:
@@ -677,13 +683,13 @@ def run_model_on_new_data(argv):
         encoded_mean=encoded_mean/encoded_inputtype_count
         encoded_norm=np.sqrt(np.sum(encoded_mean**2,axis=1,keepdims=True))
         
-        if burstnorm:
-            print("Mean '%s' vector length before re-normalization: %.4f (renormed to 1.0)" % (bursttype,np.mean(encoded_norm)))
+        if fusionnorm:
+            print("Mean '%s' vector length before re-normalization: %.4f (renormed to 1.0)" % (fusiontype,np.mean(encoded_norm)))
             encoded_mean=encoded_mean/encoded_norm
         else:
-            print("Mean '%s' vector length: %.4f" % (bursttype,np.mean(encoded_norm)))
+            print("Mean '%s' vector length: %.4f" % (fusiontype,np.mean(encoded_norm)))
 
-        encoded_alltypes[bursttype]=encoded_mean.copy()
+        encoded_alltypes[fusiontype]=encoded_mean.copy()
     
     #now decode encoded inputs to requested outputs
     for intype in encoded_alltypes.keys():
@@ -704,7 +710,7 @@ def run_model_on_new_data(argv):
         predicted_alltypes[intype]={}
 
         for outtype in outtypes_for_this_input:
-            if outtype == "encoded" or outtype=='transformed' or outtype in burstmode_names_dict:
+            if outtype == "encoded" or outtype=='transformed' or outtype in fusionmode_names_dict:
                 continue
             
             if not outtype in conn_names:
@@ -718,7 +724,7 @@ def run_model_on_new_data(argv):
             
             ############# intergroup
             conn_encoded=None
-            if intype in burstmode_names_dict and (".noself" in intype or ".noatlas" in intype):
+            if intype in fusionmode_names_dict and (".noself" in intype or ".noatlas" in intype):
                 pass
             else:
                 conn_encoded=torchfloat(encoded_alltypes[intype])
@@ -742,31 +748,31 @@ def run_model_on_new_data(argv):
             ############# end intergroup
             
             noself_str=''
-            if intype in burstmode_names_dict and ".noself" in intype:
-                #"noself" burst mode has to compute a new average of all inputs except self
-                noself_intype=[k_in for k_in in burstmode_names_dict[intype] if k_in != outtype]
+            if intype in fusionmode_names_dict and ".noself" in intype:
+                #"noself" fusion mode has to compute a new average of all inputs except self
+                noself_intype=[k_in for k_in in fusionmode_names_dict[intype] if k_in != outtype]
                 conn_encoded=np.add.reduce([encoded_alltypes_thisgroup[k_in] for k_in in noself_intype])/len(noself_intype)
-                if burstnorm:
+                if fusionnorm:
                     encoded_norm=np.sqrt(np.sum(conn_encoded**2,axis=1,keepdims=True))
                     conn_encoded=conn_encoded/encoded_norm
                 conn_encoded=torchfloat(conn_encoded)
                 noself_str=' (%d encoded inputs)' % (len(noself_intype))
                 
-            elif intype in burstmode_names_dict and ".noatlas" in intype:
-                #"noself" burst mode has to compute a new average of all inputs except self
+            elif intype in fusionmode_names_dict and ".noatlas" in intype:
+                #"noself" fusion mode has to compute a new average of all inputs except self
                 out_atlas=atlas_from_flavors(outtype)
-                noself_intype=[k_in for k_in in burstmode_names_dict[intype] if atlas_from_flavors(k_in) != out_atlas]
+                noself_intype=[k_in for k_in in fusionmode_names_dict[intype] if atlas_from_flavors(k_in) != out_atlas]
                 conn_encoded=np.add.reduce([encoded_alltypes_thisgroup[k_in] for k_in in noself_intype])/len(noself_intype)
-                if burstnorm:
+                if fusionnorm:
                     encoded_norm=np.sqrt(np.sum(conn_encoded**2,axis=1,keepdims=True))
                     conn_encoded=conn_encoded/encoded_norm
                 conn_encoded=torchfloat(conn_encoded)
                 noself_str=' (%d encoded inputs)' % (len(noself_intype))
                 
-            elif intype in burstmode_names_dict and net.intergroup:
-                #for intergroup, we have to re-compute averages for each output type, even for burst mode
-                conn_encoded=np.add.reduce([encoded_alltypes_thisgroup[k_in] for k_in in burstmode_names_dict[intype]])/len(burstmode_names_dict[intype])
-                if burstnorm:
+            elif intype in fusionmode_names_dict and net.intergroup:
+                #for intergroup, we have to re-compute averages for each output type, even for fusion mode
+                conn_encoded=np.add.reduce([encoded_alltypes_thisgroup[k_in] for k_in in fusionmode_names_dict[intype]])/len(fusionmode_names_dict[intype])
+                if fusionnorm:
                     encoded_norm=np.sqrt(np.sum(conn_encoded**2,axis=1,keepdims=True))
                     conn_encoded=conn_encoded/encoded_norm
                 conn_encoded=torchfloat(conn_encoded)
@@ -804,10 +810,10 @@ def run_model_on_new_data(argv):
             
             outdict['predicted_alltypes']={k_in:{k_out:v_out for k_out,v_out in v_in.items() if k_out in outdict['outputtypes']} for k_in,v_in in predicted_alltypes.items() if k_in in outdict['inputtypes']}
 
-            if burstmode_names_dict:
-                outdict['burstmode_inputtypes']=burstmode_names_dict
+            if fusionmode_names_dict:
+                outdict['fusionmode_inputtypes']=fusionmode_names_dict
             
-            for encout in ['encoded','transformed']+list(burstmode_names_dict.keys()):
+            for encout in ['encoded','transformed']+list(fusionmode_names_dict.keys()):
                 if encout in outdict['outputtypes']:
                     for k_in in outdict['inputtypes']:
                         outdict['predicted_alltypes'][k_in]={encout:encoded_alltypes[k_in]}
@@ -882,8 +888,8 @@ def run_model_on_new_data(argv):
             orig_intype=intype
             if intype == 'all':
                 intype=eval_input_conntype_list
-            #elif intype == ['burst']:
-            #    orig_intype='burst'
+            #elif intype == ['fusion']:
+            #    orig_intype='fusion'
             #    intype=input_conntype_list
             
             if outtype == 'all':

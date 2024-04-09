@@ -2304,7 +2304,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     # with latentsize=16, I get to val (n=42) ident top1 acc=1.0 after 150 or so epochs
     # with latentsize=4, I get val id=0.80 after 200 epochs and then val decreases
 
-def run_network(net, trainpath_list, maxthreads=1, burstmode=False, pathfinder_list=[], burstmode_search_list=[], burstmode_do_not_normalize=False):
+def run_network(net, trainpath_list, maxthreads=1, fusionmode=False, pathfinder_list=[], fusionmode_search_list=[], fusionmode_do_not_normalize=False):
     trainpath_names=['%s->%s' % (tp['input_name'],tp['output_name']) for tp in trainpath_list]
     trainpath_names_short=['%s->%s' % (tp['input_name_short'],tp['output_name_short']) for tp in trainpath_list]
     data_string=trainpath_list[0]['data_string']
@@ -2390,18 +2390,18 @@ def run_network(net, trainpath_list, maxthreads=1, burstmode=False, pathfinder_l
         trainpath_list[itp]['val_outputs_predicted']=torch.clone(conn_predicted)
         trainpath_list[itp]['val_inputs_encoded']=torch.clone(conn_encoded)
     
-    if burstmode:
-        burstmode_trainpath_mask=np.ones(len(trainpath_list))>0
-        if len(burstmode_search_list)>0:
-            burstmode_trainpath_mask=[any([x in tp["input_name"] for x in burstmode_search_list]) for tp in trainpath_list]
+    if fusionmode:
+        fusionmode_trainpath_mask=np.ones(len(trainpath_list))>0
+        if len(fusionmode_search_list)>0:
+            fusionmode_trainpath_mask=[any([x in tp["input_name"] for x in fusionmode_search_list]) for tp in trainpath_list]
             for itp, trainpath in enumerate(trainpath_list):
-                print(burstmode_trainpath_mask[itp],trainpath["input_name"],trainpath["output_name"])
+                print(fusionmode_trainpath_mask[itp],trainpath["input_name"],trainpath["output_name"])
         
         if train_inputs is not None:
-            traindata_encoded_mean=torch.mean(torch.stack([tp['train_inputs_encoded'] for itp,tp in enumerate(trainpath_list) if burstmode_trainpath_mask[itp]]),axis=0)
-        valdata_encoded_mean=torch.mean(torch.stack([tp['val_inputs_encoded'] for itp,tp in enumerate(trainpath_list) if burstmode_trainpath_mask[itp]]),axis=0)
+            traindata_encoded_mean=torch.mean(torch.stack([tp['train_inputs_encoded'] for itp,tp in enumerate(trainpath_list) if fusionmode_trainpath_mask[itp]]),axis=0)
+        valdata_encoded_mean=torch.mean(torch.stack([tp['val_inputs_encoded'] for itp,tp in enumerate(trainpath_list) if fusionmode_trainpath_mask[itp]]),axis=0)
         
-        if net.latent_normalize and not burstmode_do_not_normalize:
+        if net.latent_normalize and not fusionmode_do_not_normalize:
             if train_inputs is not None:
                 traindata_encoded_mean=nn.functional.normalize(traindata_encoded_mean,p=2,dim=1)
             valdata_encoded_mean=nn.functional.normalize(valdata_encoded_mean,p=2,dim=1)

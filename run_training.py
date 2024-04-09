@@ -122,7 +122,7 @@ def argument_parse_runtraining(argv):
     fixed_arg_group.add_argument('--targetencoding',action='store_true',dest='target_encoding', help='Train encoders/decoders while trying to match latent->target')
     fixed_arg_group.add_argument('--fixedtargetencoding',action='store_true',dest='fixed_target_encoding', help='Just train encoders/decoders to match FIXED (input->fixed, fixed->output) --encodinginputfile')
     fixed_arg_group.add_argument('--onlyselfpathtargetencoding',action='store_true',dest='only_self_target_encoding', help='Only train each input to itself (no cross-flavors)')
-    fixed_arg_group.add_argument('--targetencodingname',action='store',dest='target_encoding_name', help='Encoding type for target-encoding ("self" for per-flavor latent space input, "burst", or specific flavor)')
+    fixed_arg_group.add_argument('--targetencodingname',action='store',dest='target_encoding_name', help='Encoding type for target-encoding ("self" for per-flavor latent space input, "fusion", or specific flavor)')
     fixed_arg_group.add_argument('--addfixedencodingepochsafter',action='store',dest='add_fixed_encoding_epochs_after', type=int, default=0, help='Add fixedencoding epochs AFTER normal epochs')
     fixed_arg_group.add_argument('--addfixedencodingepochsbefore',action='store',dest='add_fixed_encoding_epochs_before', type=int, default=0, help='Add fixedencoding epochs BEFORE normal epochs')
 
