@@ -286,6 +286,50 @@ def flatlist(l):
     #return [x for y in l for x in y]
     return lnew
 
+
+def triu_indices_torch(n,k=0):
+    """pytorch triu_indices doesn't work the same way so use custom function that will"""
+    ia,ib=torch.triu_indices(n,n,offset=k)
+    return [ia,ib]
+
+def square2tri(C, tri_indices=None, k=1, return_indices=False):
+    """
+    Convert a single square matrix to a triangular matrix
+    """
+    
+    if tri_indices is None:
+        if torch.is_tensor(C):
+            tri_indices=triu_indices_torch(C.shape[0],k=k)
+        else:
+            tri_indices=np.triu_indices(C.shape[0],k=k)
+    if return_indices:
+        return C[tri_indices], tri_indices
+    else:
+        return C[tri_indices]
+
+def tri2square(Ctri, tri_indices=None, numroi=None, k=1, diagval=0):
+    """
+    Convert a 1d vectorized matrix to a square symmetrical matrix
+    """
+    if tri_indices is None and numroi is None:
+        raise Exception("Must provide either tri_indices or numroi")
+    
+    if tri_indices is None:
+        if torch.is_tensor(Ctri):
+            tri_indices=triu_indices_torch(numroi,k=k)
+        else:
+            tri_indices=np.triu_indices(numroi,k=k)
+    else:
+        numroi=np.array(max(max(tri_indices[0]),max(tri_indices[1])))+1
+    if torch.is_tensor(Ctri):
+        C=torch.zeros(numroi,numroi,dtype=Ctri.dtype,device=Ctri.device)+torch.tensor(diagval,dtype=Ctri.dtype,device=Ctri.device)
+    else:
+        C=np.zeros((numroi,numroi),dtype=Ctri.dtype)+diagval
+    
+    C[tri_indices]=Ctri
+    C[tri_indices[1],tri_indices[0]]=Ctri
+    return C
+
 def common_prefix(strlist):
     """Find the common prefix of a list of strings"""
     strlen=[len(s) for s in strlist]

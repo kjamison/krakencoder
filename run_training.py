@@ -17,9 +17,9 @@ python run_training.py --subjectfile subject_splits_993subj_710train_80val_203te
     --roinames fs86 shen268 coco439 --datagroups SCFC --latentsize 128 --pcadim 256  --latentunit --dropout 0.5 \
     --losstype correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000 \
     --epochs 2000 --checkpointepochsevery 500 --displayepochs 25 \
-    --inputxform connae_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        connae_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        connae_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+    --inputxform krak_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
+        krak_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
+        krak_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
    
 """
 

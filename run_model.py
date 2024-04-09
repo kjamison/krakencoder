@@ -12,14 +12,14 @@ Main functions it calls, after parsing args:
     using information from specified saved transformer files
 - krakencoder/model.py/Krakencoder()
     - to run forward predictions on data
-    
+
 Examples:
 # Evaluate checkpoint on held-out "test" split from HCP data, using precomputed PCA input transformers, and save performance metrics and heatmaps
-python run_model.py --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform connae_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        connae_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        connae_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
-    --inputdata test --subjectfile subject_splits_958subj_683train_79val_196test_retestInTest.mat \
+python run_model.py --inputdata test --subjectfile subject_splits_958subj_683train_79val_196test_retestInTest.mat \
+    --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
+    --inputxform krak_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
+        krak_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
+        krak_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
     --newtrainrecord hcp_20240406_022034_ep002000_mse.w1000_newver_test.mat \
     --heatmap hcp_20240406_022034_ep002000_mse.w1000_newver_test.png \
     --heatmapmetrics top1acc topNacc avgrank avgcorr_resid \
@@ -41,7 +41,10 @@ python run_model.py --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
         '[shen268_sdstream_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
         '[shen268_ifod2act_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
         '[coco439_sdstream_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
-        '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat'
+        '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
+    --adaptmode meanfit+meanshift
+#where "--adaptmode meanfit+meanshift" uses minimal approach for domain shift by linearly mapping the population mean of your input data to the 
+# population mean of the training data. This is a simple way to adapt the input data to the model, but may not be sufficient for all cases."
 
 """
 

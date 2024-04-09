@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from .utils import *
 
 def xycorr(x,y,axis=1):
     """
@@ -280,11 +281,6 @@ def corr_ident_parts(x=None, y=None ,cc=None):
         cc_other=cc[np.triu_indices(cc.shape[0],k=1)].mean()
     
     return cc_self,cc_other
-
-def triu_indices_torch(n,k=0):
-    """pytorch triu_indices doesn't work the same way so use custom function that will"""
-    ia,ib=torch.triu_indices(n,n,offset=k)
-    return [ia,ib]
 
 def corrmatch(x,y):
     """Loss function: minimize matrix norm of xycorr(x,x)-xycorr(x,y) 
