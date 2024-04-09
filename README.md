@@ -1,4 +1,10 @@
 # krakencoder
+The Krakencoder is a joint connectome mapping tool that simultaneously, bidirectionally translates between structural and functional connectivity, and across different atlases and processing choices via a common latent representation.
+
+### Citation
+Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Krakencoder: A unified brain connectome translation and fusion tool". bioRxiv [doi: XXXXXX](https://www.biorxiv.org/content/XXXXXXXX)
+
+<img src="krakencoder_overview.png" alt="krakencoder overview" width=50%>
 
 # Contents
 1. [Code organization](#Code-organization)
@@ -78,16 +84,17 @@ fusionSC_to_FCshen_triu=Mpred['predicted_alltypes']['fusionSC']['FCcov_shen268_h
 #fusionSC_to_FCshen_triu is [Nsubj x 35778], where each row is a 1x(upper triangular) for a 268x268 matrix
 
 #Now convert the [Nsubj x 35778] stacked upper triangular vectors to a list of [268x268] square matrices for each subject
+#by default, the diagonal is filled with zeros. For FC, we might want to set those to 1 with tri2square(..., diagval=1)
 nsubj=fusionSC_to_FCshen_triu.shape[0]
 n=268
 triu=np.triu_indices(n,k=1)
-fusionSC_to_FCshen_list=[tri2square(fusionSC_to_FCshen_triu[i,:],tri_indices=triu) for i in range(nsubj)]
+fusionSC_to_FCshen_list=[tri2square(fusionSC_to_FCshen_triu[i,:],tri_indices=triu, diagval=1) for i in range(nsubj)]
 
 #or convert to an [Nsubj x region x region] 3D matrix:
 fusionSC_to_FCshen_3D=np.stack(fusionSC_to_FCshen_list)
 
 #or compute a single [region x region] mean across subjects:
-fusionSC_to_FCshen_mean=np.mean(np.stack([tri2square(fusionSC_to_FCshen_triu[i,:],tri_indices=triu) for i in range(nsubj)]), axis=0)
+fusionSC_to_FCshen_mean=np.mean(np.stack([tri2square(fusionSC_to_FCshen_triu[i,:],tri_indices=triu, diagval=1) for i in range(nsubj)]), axis=0)
 ```
 # Pretrained connectivity types
 The current pre-trained model has been trained on the following 15 connectivity flavors, including 3 FC and 2 SC estimates from each of 3 atlases:
@@ -133,3 +140,4 @@ The current pre-trained model has been trained on the following 15 connectivity 
 # Downloads
 * Data and other files associated with this model can found here: [https://osf.io/dfp92](https://osf.io/dfp92/?view_only=449aed6ae3e9471881be76cbb50480dc)
     * `krak_ioxfm_SCFC_[fs86,shen268,coco439]_993subj_pc256_25paths_710train_20220527.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
+    * `krak_chkpt_SCFC_20240406_022034_ep002000.pt`: pretrained model checkpoint
