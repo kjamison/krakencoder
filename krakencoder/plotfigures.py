@@ -174,7 +174,7 @@ def shorten_names(namelist,extrashort=0,remove_common=True):
         namelist=[re.sub("_SCsdstream","_SCsd",x) for x in namelist]
         namelist=[re.sub("_SCifod2act","_SCifod",x) for x in namelist]
         
-        if all(["#hpf" in x for x in namelist if "FC" in x and not "burst" in x]):
+        if all(["#hpf" in x for x in namelist if "FC" in x and not "fusion" in x]):
             namelist=[x.replace("#hpf","") for x in namelist]
         
     if extrashort == 2:
@@ -238,9 +238,9 @@ def flavor_reorder(conntypes, pcorr_at_end=True, sort_atlas_last=False):
     conntype_order_groups=[]
     if sort_atlas_last:
         conntype_order_groups.append([y[0] if len(y)>0 else len(atlas_order) for y in [np.where([a in x for a in atlas_order])[0] for x in conntypes]])
-    conntype_order_groups.append([re.match("^burst.*",x) is not None for x in conntypes])
-    conntype_order_groups.append([re.match("^burst.*noatlas",x) is not None for x in conntypes])
-    conntype_order_groups.append([re.match("^burst.*noself",x) is not None for x in conntypes])
+    conntype_order_groups.append([re.match("^(fusion|burst).*",x) is not None for x in conntypes])
+    conntype_order_groups.append([re.match("^(fusion|burst).*noatlas",x) is not None for x in conntypes])
+    conntype_order_groups.append([re.match("^(fusion|burst).*noself",x) is not None for x in conntypes])
     conntype_order_groups.append([x=='gap' for x in conntypes])
     conntype_order_groups.append([x=='mean' for x in conntypes])
     conntype_order_groups.append([re.match(".*(sdstream|ifod2).*",x) is not None for x in conntypes])
@@ -269,15 +269,15 @@ def flavor2group(conntype):
         g='FC'
     else:
         g='SC'
-        
-    if 'burst' in conntype:
-        g='burst'
+    
+    if 'fusion' in conntype or 'burst' in conntype:
+        g='fusion'
     if '.noself' in conntype:
         g+='.noself'
     elif '.noatlas' in conntype:
         g+='.noatlas'
     return g
-    
+
 def display_kraken_heatmap(trainrecord, 
                            metrictype="top1acc", 
                            single_epoch=True, epoch_spacing=None, explicit_epoch=None, epoch_filter_size=1, best_epoch_fraction=False,
@@ -589,9 +589,9 @@ def display_kraken_heatmap(trainrecord,
         for itp, tp in enumerate(M['trainpath_names']):
             tp1,tp2=tp.split("->")
             tp2g=canonical_data_flavor(tp2,accept_unknowns=True,return_groupname=True)[1]
-            if tp1=='burstFC.noself' and tp2g == 'SC':
+            if tp1=='fusionFC.noself' and tp2g == 'SC':
                 v[itp]=np.nan
-            elif tp1=='burstSC.noself' and tp2g == 'FC':
+            elif tp1=='fusionSC.noself' and tp2g == 'FC':
                 v[itp]=np.nan
     
     v_exclude=np.zeros(v.shape,dtype=bool)
@@ -704,8 +704,8 @@ def display_kraken_heatmap(trainrecord,
 
     #add mean row/column
     if do_addmean:
-        #first add mean across rows (for non-burst rows only)
-        conntype_idx_for_mean=[i for i,c in enumerate(conntypes) if not "burst" in c]
+        #first add mean across rows (for non-fusion rows only)
+        conntype_idx_for_mean=[i for i,c in enumerate(conntypes) if not "fusion" in c]
         mean_is_last_row=len(conntype_idx_for_mean)==len(conntypes)
         
         vmat_meanrow=np.nanmean(vmat[conntype_idx_for_mean,:],axis=0,keepdims=True)
@@ -725,7 +725,7 @@ def display_kraken_heatmap(trainrecord,
         vmat_count=np.concatenate((vmat_count,vmat_count_meanrow),axis=0)
         vmat_exclude=np.concatenate((vmat_exclude,vmat_exclude_meanrow),axis=0)
         
-        #now add mean across columns (for non-burst columns only)
+        #now add mean across columns (for non-fusion columns only)
         #but also include mean of the mean row
         vmat_meancol=np.nanmean(vmat[:,conntype_idx_for_mean],axis=1,keepdims=True)
         vmat_count_meancol=np.sum(vmat_count[:,conntype_idx_for_mean],axis=1,keepdims=True)
@@ -762,7 +762,7 @@ def display_kraken_heatmap(trainrecord,
     #conntypes_short=shorten_names([canonical_data_flavor(x) for x in conntypes])
     conntypes_short=[]
     for x in conntypes:
-        if x.lower() == 'encoded' or x.lower().startswith("burst") or x.lower()=='mean':
+        if x.lower() == 'encoded' or x.lower().startswith("fusion") or x.lower()=='mean':
             conntypes_short+=[x]
         elif x.lower() in ['unrel','sib','DZ','MZ','self','retest']:
             conntypes_short+=[x]
@@ -821,7 +821,7 @@ def display_kraken_heatmap(trainrecord,
     vmat=vmat[~vmat_never_input,:][:,~vmat_never_output]
     xlabels_to_display=list(np.array(conntypes_short)[~vmat_never_output])
     ylabels_to_display=list(np.array(conntypes_short)[~vmat_never_input])
-
+    
     xlabel_colors=[flavor2color(x) for x in xlabels_to_display]
     ylabel_colors=[flavor2color(x) for x in ylabels_to_display]
 
@@ -833,8 +833,7 @@ def display_kraken_heatmap(trainrecord,
         #need to do extra shortening AFTER flavor2color
         xlabels_to_display=shorten_names(xlabels_to_display,extrashort=extra_short_names)
         ylabels_to_display=shorten_names(ylabels_to_display,extrashort=extra_short_names)
-        
-
+    
     if ax is None:
         plt.figure(figsize=figsize)
         ax=plt.gca()
