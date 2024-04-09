@@ -104,6 +104,8 @@ The current pre-trained model has been trained on the following 15 connectivity 
 ### Structural Connectivity (SC) types
 * `<parc>_ifod2act_volnorm` Streamline counts from iFOD2+ACT (Probabilistic whole-brain tractography with anatomical constraint), with pairwise streamline counts normalized by region volumes
 * `<parc>_sdstream_volnorm`  Streamline counts from SD_STREAM (Deterministic whole-brain tractography), with pairwise streamline counts normalized by region volumes
+* Tractography was performed using MRtrix3, with whole-brain dynamic seeding, and 5 million streamlines per subject.
+
 ### Parcellations
 * `FS86` or `FreeSurfer86`: 86-region FreeSurfer Desikan-Killiany (DKT) cortical atlas with "aseg" subcortical regions(ie: aparc+aseg.nii.gz) [Desikan 2006](https://pubmed.ncbi.nlm.nih.gov/16530430/), [Fischl 2002](https://pubmed.ncbi.nlm.nih.gov/11832223/)
     * This atlas includes the 68 cortical DKT regions + 18 subcortical (excluding brain-stem)
@@ -130,3 +132,4 @@ The current pre-trained model has been trained on the following 15 connectivity 
 
 # Downloads
 * Data and other files associated with this model can found here: [https://osf.io/dfp92](https://osf.io/dfp92/?view_only=449aed6ae3e9471881be76cbb50480dc)
+    * `krak_ioxfm_SCFC_[fs86,shen268,coco439]_993subj_pc256_25paths_710train_20220527.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.

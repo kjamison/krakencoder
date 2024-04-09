@@ -310,6 +310,11 @@ def square2tri(C, tri_indices=None, k=1, return_indices=False):
 def tri2square(Ctri, tri_indices=None, numroi=None, k=1, diagval=0):
     """
     Convert a 1d vectorized matrix to a square symmetrical matrix
+    
+    Example applying to a Nsubj x edges:
+    C_list=[tri2square(Ctri[i,:],tri_indices=triu) for i in range(Ctri.shape[0])]
+    or
+    C_3D=np.stack([tri2square(Ctri[i,:],tri_indices=triu) for i in range(Ctri.shape[0])])
     """
     if tri_indices is None and numroi is None:
         raise Exception("Must provide either tri_indices or numroi")
