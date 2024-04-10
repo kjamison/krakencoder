@@ -16,10 +16,10 @@ Main functions it calls, after parsing args:
 Examples:
 #1. Evaluate checkpoint on held-out "test" split from HCP data, using precomputed PCA input transformers, and save performance metrics and heatmaps
 python run_model.py --inputdata test --subjectfile subject_splits_958subj_683train_79val_196test_retestInTest.mat \
-    --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform krak_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+    --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
+    --inputxform kraken_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
     --newtrainrecord hcp_20240406_022034_ep002000_mse.w1000_newver_test.mat \
     --heatmap hcp_20240406_022034_ep002000_mse.w1000_newver_test.png \
     --heatmapmetrics top1acc topNacc avgrank avgcorr_resid \

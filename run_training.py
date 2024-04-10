@@ -17,9 +17,9 @@ python run_training.py --subjectfile subject_splits_993subj_710train_80val_203te
     --roinames fs86 shen268 coco439 --datagroups SCFC --latentsize 128 --pcadim 256  --latentunit --dropout 0.5 \
     --losstype correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000 \
     --epochs 2000 --checkpointepochsevery 500 --displayepochs 25 \
-    --inputxform krak_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+    --inputxform kraken_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
    
 """
 
@@ -132,7 +132,7 @@ def argument_parse_runtraining(argv):
     misc_arg_group.add_argument('--displayepochs',action='store',dest='display_epochs', type=int, default=100, help='How often to print training progress')
     misc_arg_group.add_argument('--optimizercheckpoint',action='store_true',dest='optimizer_in_checkpoint',help='Include optimizer params in checkpoint (allows resumed training)')
     misc_arg_group.add_argument('--maxthreads',action='store',dest='max_threads', type=int, default=10, help='How many CPU threads to use')
-    misc_arg_group.add_argument('--outputprefix',action='store',dest='output_file_prefix', default="krak", help='Prefix for output files')
+    misc_arg_group.add_argument('--outputprefix',action='store',dest='output_file_prefix', default="kraken", help='Prefix for output files')
     misc_arg_group.add_argument('--logfile',action='store',dest='logfile', default='auto',help='Optional file to print outputs to (along with stdout). "auto"=<prefix>_log_*.txt')
 
     misc_arg_group.add_argument('--intergroup',action='store_true',dest='intergroup', help='Do separate inter-group mapping (experimental)')
