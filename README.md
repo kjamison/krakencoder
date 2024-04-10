@@ -29,7 +29,7 @@ Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Kraken
 
 # Examples
 
-## Generating latent space representations on new data, using pre-trained model:
+## Generating predicted connectomes from new SC data, using pre-trained model:
 ```bash
 python run_model.py --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
         '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
@@ -38,39 +38,37 @@ python run_model.py --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_vo
         '[coco439_sdstream_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
         '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift \
-    --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform krak_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
-    --fusion --outputname encoded --output mydata_20240406_022034_ep002000_out.{output}.mat
-```
-* Each input file should have a 'data' field containing the [subjects x region x region] connectivity data for that input flavor.
-* `--adaptmode meanfit+meanshift` uses a minimal approach for domain shift by linearly mapping the population mean of your input data to the population mean of the training data
-* The more input flavors you can provide, the better the predictions are.
-* Latent outputs will be in the file `mydata_20240406_022034_ep002000_out.encoded.mat`
-
-## Generating predicted connectomes on new SC data, using pre-trained model:
-```bash
-python run_model.py --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
-        '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
-        '[shen268_sdstream_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
-        '[shen268_ifod2act_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
-        '[coco439_sdstream_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
-        '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
-    --adaptmode meanfit+meanshift \
-    --checkpoint krak_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform krak_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        krak_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+    --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
+    --inputxform kraken_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
     --outputname all --output 'mydata_20240406_022034_ep002000_in.{input}.mat' \
     --fusion --fusioninclude fusion=all fusionSC=SC fusionFC=FC --onlyfusioninputs
 ```
 * Each input file should have a 'data' field containing the [subjects x region x region] connectivity data for that input flavor.
-* This will predict all 15 connectome flavors as outputs, based on whatever inputs are provided.
+* This will predict all 15 connectome flavors as outputs, based on whatever inputs are provided. The more input flavors you can provide, the better the predictions are.
+* `--adaptmode meanfit+meanshift` uses a minimal approach for domain shift by linearly mapping the population mean of your input data to the population mean of the training data
 * `--fusion` includes "fusion" predictions incorporating all inputs (or subsets, as below) into each predicted output.
 * `--onlyfusioninputs` means the script will NOT output predictions for each individual input type, but only for fusion types
 * `--fusioninclude fusion=all fusionSC=SC fusionFC=FC` produces "fusion", based on all inputs, and "fusion(SC|FC)" based on only SC or FC inputs
 * Predicted outputs will be one file per input type flavor, for instance: `mydata_20240406_022034_ep002000_in.fusionSC.mat`
+
+## Generating latent space representations from new data, using pre-trained model:
+```bash
+python run_model.py --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
+        '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
+        '[shen268_sdstream_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
+        '[shen268_ifod2act_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
+        '[coco439_sdstream_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
+        '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
+    --adaptmode meanfit+meanshift \
+    --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
+    --inputxform kraken_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
+        kraken_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+    --fusion --outputname encoded --output mydata_20240406_022034_ep002000_out.{output}.mat
+```
+* Latent outputs will be in the file `mydata_20240406_022034_ep002000_out.encoded.mat`
 
 ## Reading predicted outputs:
 ```python
@@ -139,5 +137,5 @@ The current pre-trained model has been trained on the following 15 connectivity 
 
 # Downloads
 * Data and other files associated with this model can found here: [https://osf.io/dfp92](https://osf.io/dfp92/?view_only=449aed6ae3e9471881be76cbb50480dc)
-    * `krak_ioxfm_SCFC_[fs86,shen268,coco439]_993subj_pc256_25paths_710train_20220527.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
-    * `krak_chkpt_SCFC_20240406_022034_ep002000.pt`: pretrained model checkpoint
+    * `kraken_ioxfm_SCFC_[fs86,shen268,coco439]_993subj_pc256_25paths_710train_20220527.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
+    * `kraken_chkpt_SCFC_20240406_022034_ep002000.pt`: pretrained model checkpoint
