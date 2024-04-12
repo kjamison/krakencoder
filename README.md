@@ -3,7 +3,7 @@
 
 The Krakencoder is a joint connectome mapping tool that simultaneously, bidirectionally translates between structural and functional connectivity, and across different atlases and processing choices via a common latent representation.
 
-<img src="images/krakencoder_overview.png" alt="krakencoder overview" width=60%>
+<img src="images/krakencoder_overview.png" alt="krakencoder overview" width=75%>
 
 ### Citation
 Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Krakencoder: A unified brain connectome translation and fusion tool". bioRxiv [doi: XXXXXX](https://www.biorxiv.org/content/XXXXXXXX)
@@ -107,11 +107,12 @@ The current pre-trained model has been trained on the following 15 connectivity 
 * `FCcov_<parc>_hpfgsr_FC` Pearson correlation FC after global signal regression
 * `FCpcorr_<parc>_hpf_FC` Regularized partial correlation FC
 * Time series have been denoised using ICA+FIX, high-pass filter > 0.01 Hz, with nuisance regression using WM+CSF aCompCor and 24 motion parameters.
+* Data were preprocessed using the HCP minimal prepocessing pipeline ([Glasser 2013](https://pubmed.ncbi.nlm.nih.gov/23668970/)). Post-processing was performed using scripts found here: [github.com/kjamison/fmriclean](https://github.com/kjamison/fmriclean)
 
 ### Structural Connectivity (SC) types
 * `<parc>_ifod2act_volnorm` Streamline counts from iFOD2+ACT (Probabilistic whole-brain tractography with anatomical constraint), with pairwise streamline counts normalized by region volumes
 * `<parc>_sdstream_volnorm`  Streamline counts from SD_STREAM (Deterministic whole-brain tractography), with pairwise streamline counts normalized by region volumes
-* Tractography was performed using MRtrix3, with whole-brain dynamic seeding, and 5 million streamlines per subject.
+* Data were preprocessed using the HCP minimal prepocessing pipeline ([Glasser 2013](https://pubmed.ncbi.nlm.nih.gov/23668970/)). Tractography was performed using [MRtrix3](https://www.mrtrix.org/), with whole-brain dynamic seeding, and 5 million streamlines per subject.
 
 ### Parcellations
 * `FS86` or `FreeSurfer86`: 86-region FreeSurfer Desikan-Killiany (DKT) cortical atlas with "aseg" subcortical regions(ie: aparc+aseg.nii.gz) [Desikan 2006](https://pubmed.ncbi.nlm.nih.gov/16530430/), [Fischl 2002](https://pubmed.ncbi.nlm.nih.gov/11832223/)
