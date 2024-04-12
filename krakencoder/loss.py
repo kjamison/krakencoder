@@ -22,10 +22,6 @@ def xycorr(x,y,axis=1):
     which means cc[i,:] is cc[true subject i, predicted for all subjects]
     and thus top1acc, which uses argmax(xycorr(true,predicted),axis=1) is:
     for every TRUE output, which subject's PREDICTED output is the best match
-    
-    For xycorr(x=meas, y=pred), each ROW (axis=0) is a measured subject, each COLUMN (axis=1) is a predicted subject
-    so cc[i,j] is the correlation between measured subject i and predicted subject j
-    so top1acc is.... for every measured subject i, is the prediction for subject i better than prediction for all other subjects?
     """
     if torch.is_tensor(x):
         cx=x-x.mean(keepdims=True,axis=axis)
@@ -104,83 +100,6 @@ def correye(x,y):
     cc=xycorr(x,y)
     #need keepdim for some reason now that correye and enceye are separated
     loss=torch.norm(cc-torch.eye(cc.shape[0],device=cc.device),keepdim=True)
-    return loss
-
-
-def correye_encodedeye(x,y,xe,w):
-    """
-    Combined loss function for reconstruction loss xycorr(x,y) and latent space loss xycorr(xe,xe)
-    
-    Inputs:
-    x: torch tensor (Nsubj x M), generally the measured data
-    y: torch tensor (Nsubj x M), generally the predicted data
-    xe: torch tensor (Nsubj x L), the latent vector (dimension L) for each subject
-    w: float, weight for latent space loss
-    
-    Returns: torch tensor, combined loss
-    """
-    cc=xycorr(x,y)
-    loss1=torch.norm(cc-torch.eye(cc.shape[0],device=cc.device))
-    cc_enc=xycorr(xe,xe)
-    loss2=torch.norm(cc_enc-torch.eye(cc_enc.shape[0],device=cc_enc.device))
-    loss=loss1+w*loss2
-    return loss
-
-def dist_encodeddist(x,y,xe,w,margin=None,encoder_margin=None,neighbor=False, encode_dot=False):
-    """
-    Combined loss function for reconstruction distance loss and latent space loss, with optional margin for both.
-    If neighbor=True, reconstruction loss applies only to nearest neighbor distance, otherwise to mean distance between all
-    off-diagonal pairs.
-    
-    Inputs:
-    x: torch tensor (Nsubj x M), generally the measured data
-    y: torch tensor (Nsubj x M), generally the predicted data
-    xe: torch tensor (Nsubj x L), the latent vector (dimension L) for each subject
-    w: float, weight for latent space loss
-    margin: float, optional margin for distance loss (distance above margin is penalized, below is ignored)
-    encoder_margin: float, optional margin for latent space loss (distance above margin is penalized, below is ignored)
-    
-    neighbor: bool, (optional, default=False), True for maximizing nearest neighbor distance, False for maximizing mean distance
-    encode_dot: bool, (optional, default=False), True for pairwise dot product on latent space, instead of pairwise distance
-    
-    Returns: torch FloatTensor, combined loss
-    """
-    #main x,y distance:
-    d=torch.cdist(x,y)
-    dtrace=torch.trace(d)
-    dself=dtrace/d.shape[0] #mean predicted->true distance
-    if neighbor:
-        dnei=d+torch.eye(d.shape[0],device=d.device)*d.max()
-        dother=torch.mean((dnei.min(axis=0)[0]+dnei.min(axis=1)[0])/2)
-    else:
-        dother=(torch.sum(d)-dtrace)/(d.shape[0]*(d.shape[0]-1)) #mean predicted->other distance
-    
-    ##########
-    #encoder xe,xe distance
-    if encode_dot:
-        #for dot, perfect=1, orthog=0, opposite=-1
-        #so 1-dot, perfeoct=0, orthog=1, opposite=2
-        #corr and dot are identical if norm=1
-        #dist and dot are monotonic if norm=1
-        d=1-xe.dot(xe.T)
-    else:
-        d=torch.cdist(xe,xe)
-    
-    
-    if neighbor:
-        dnei=d+torch.eye(d.shape[0],device=d.device)*d.max()
-        denc_other=torch.mean((dnei.min(axis=0)[0]+dnei.min(axis=1)[0])/2)
-    else:
-        denc_other=torch.sum(d)/(d.shape[0]*(d.shape[0]-1)) #diag is all zeros by definition anyway
-    
-    ###########
-    if margin is not None:
-        #dother=torch.min(dother,margin)
-        dother=-torch.nn.ReLU()(dother-margin)
-    if encoder_margin is not None:
-        #denc_other=torch.min(denc_other,encoder_margin)
-        denc_other=-torch.nn.ReLU()(denc_other-encoder_margin)
-    loss=(dself-dother)-w*denc_other
     return loss
 
 def var_match_loss(xpred,xtrue,axis=0,relative_to_true=True):
@@ -307,15 +226,7 @@ def disttop1acc(x=None, y=None ,d=None):
 def corrtop1acc(x=None, y=None ,cc=None):
     """
     Compute top-1 accuracy for xycorr(x=meas,y=predicted)
-    i.e., argmax(axis=1): for every subject (row) in x=meas, which subject (row) in y=predicted is closest match
-    
-    #note: in manuscript I say: Top-1 measures the fraction of subjects whose predicted connectome is more similar
-(higher Pearson correlation) to their measured connectome than any other subject’s measured connectome (random
-chance 1/nsub j = 0.005, and give the formula: 
-    mean ( argmax_a (corr(Xmeas_a, Xpred_s)) == s )
-    
-    but if x=meas, y=pred, it should be:
-    mean ( argmax_a (corr(Xmeas_s, Xpred_a)) == s )
+    i.e., argmax(axis=1): for every subject (row) in x=meas, which subject (column) in y=predicted is closest match
     
     Inputs: either x and y must be provided, or cc must be provided
     x: torch tensor or numpy array (Nsubj x M) (ignored if cc is provided)

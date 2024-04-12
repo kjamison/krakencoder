@@ -71,30 +71,6 @@ def torchfloat(x):
 def torchint(x):
     return torchvar(x,astype=int)
 
-def OLD_explained_variance_ratio(x_true,x_predicted,axis=0, var_true=None):
-    #compute R2
-    if torch.is_tensor(x_true):
-        if var_true is None:
-            var_true=torch.sum(torch.var(x_true,axis=axis))
-        var_resid=torch.sum(torch.var(x_true-x_predicted,axis=axis))
-    else:
-        if var_true is None:
-            var_true=np.sum(np.var(x_true,axis=axis))
-        var_resid=np.sum(np.var(x_true-x_predicted,axis=axis))
-    return 1-var_resid/var_true
-
-def explained_variance_ratio_OLD(x_true,x_predicted,axis=0, var_true=None):
-    #compute R2, whole matrix used pre 2023-10-30 (had hardcoded axis=[] (torch) and axis=None (np))
-    if torch.is_tensor(x_true):
-        if var_true is None:
-            var_true=torch.sum(torch.var(x_true-torch.mean(x_true,axis=axis),axis=[]))
-        var_resid=torch.sum(torch.var(x_true-x_predicted,axis=[]))
-    else:
-        if var_true is None:
-            var_true=np.sum(np.var(x_true-np.mean(x_true,axis=axis),axis=None))
-        var_resid=np.sum(np.var(x_true-x_predicted,axis=None))
-    return 1-var_resid/var_true
-
 def explained_variance_ratio(x_true,x_predicted,axis=0, var_true=None):
     """
     compute R2 the same way we would for PCA recon:
