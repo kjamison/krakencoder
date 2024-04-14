@@ -1197,14 +1197,14 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         #starting_point_base=re.sub("_[0-9_]+_ep[0-9]+\.pt$","",starting_point_base)
         starting_point_base=re.sub("\.pt$","",starting_point_base)
         recordfile=starting_point_base.replace("_chkpt_","_trainrecord_")+".mat"
-        imgfile=starting_point_base.replace("_chkpt_","_")+".png"
+        imgfile=starting_point_base.replace("_chkpt_","_loss_")+".png"
         imgfile_heatmap=starting_point_base.replace("_chkpt_","_heatmap_")+".png"
         #keep checkpoint_filebase so we don't overwrite anything. shouldn't be saved in the nbepochs=0 case anyway
         checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
         
     else:
         recordfile="%s_trainrecord_%s_%s_%s_%s.mat" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
-        imgfile="%s_%s_%s_%s_%s.png" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
+        imgfile="%s_loss_%s_%s_%s_%s.png" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
         imgfile_heatmap="%s_heatmap_%s_%s_%s_%s.png" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
         checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
     
