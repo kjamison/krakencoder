@@ -33,17 +33,17 @@ Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Releas
 
 ## Generating predicted connectomes from new SC data, using pre-trained model:
 ```bash
-python run_model.py --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
-        '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
-        '[shen268_sdstream_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
-        '[shen268_ifod2act_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
-        '[coco439_sdstream_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
-        '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
+python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
+        '[SCifod2act_fs86_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
+        '[SCsdstream_shen268_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
+        '[SCifod2act_shen268_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
+        '[SCsdstream_coco439_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
+        '[SCifod2act_coco439_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift \
     --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform kraken_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        kraken_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        kraken_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+    --inputxform kraken_ioxfm_SCFC_710train_fs86_pc256.npy \
+        kraken_ioxfm_SCFC_710train_shen268_pc256.npy \
+        kraken_ioxfm_SCFC_710train_coco439_pc256.npy \
     --outputname all --output 'mydata_20240406_022034_ep002000_in.{input}.mat' \
     --fusion --fusioninclude fusion=all fusionSC=SC fusionFC=FC --onlyfusioninputs
 ```
@@ -57,17 +57,17 @@ python run_model.py --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_vo
 
 ## Generating latent space representations from new data, using pre-trained model:
 ```bash
-python run_model.py --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
-        '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
-        '[shen268_sdstream_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
-        '[shen268_ifod2act_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
-        '[coco439_sdstream_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
-        '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
+python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
+        '[SCifod2act_fs86_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
+        '[SCsdstream_shen268_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
+        '[SCifod2act_shen268_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
+        '[SCsdstream_coco439_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
+        '[SCifod2act_coco439_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift \
     --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform kraken_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
-        kraken_ioxfm_SCFC_fs86_993subj_pc256_25paths_710train_20220527.npy \
-        kraken_ioxfm_SCFC_shen268_993subj_pc256_25paths_710train_20220527.npy \
+    --inputxform kraken_ioxfm_SCFC_710train_fs86_pc256.npy \
+        kraken_ioxfm_SCFC_710train_shen268_pc256.npy \
+        kraken_ioxfm_SCFC_710train_coco439_pc256.npy \
     --fusion --outputname encoded --output mydata_20240406_022034_ep002000_out.{output}.mat
 ```
 * Latent outputs will be in the file `mydata_20240406_022034_ep002000_out.encoded.mat`
@@ -80,7 +80,7 @@ from krakencoder.utils import tri2square
 
 Mpred=loadmat('mydata_20240406_022034_ep002000_in.fusionSC.mat',simplify_cells=True)
 #predicted outputs are stored in Mpred['predicted_alltypes'][inputtype][outputtype]
-fusionSC_to_FCshen_triu=Mpred['predicted_alltypes']['fusionSC']['FCcov_shen268_hpf_FC'] 
+fusionSC_to_FCshen_triu=Mpred['predicted_alltypes']['fusionSC']['FCcorr_shen268_hpf'] 
 #fusionSC_to_FCshen_triu is [Nsubj x 35778], where each row is a 1x(upper triangular) for a 268x268 matrix
 
 #Now convert the [Nsubj x 35778] stacked upper triangular vectors to a list of [268x268] square matrices for each subject
@@ -98,20 +98,20 @@ fusionSC_to_FCshen_mean=np.mean(np.stack([tri2square(fusionSC_to_FCshen_triu[i,:
 ```
 # Pretrained connectivity types
 The current pre-trained model has been trained on the following 15 connectivity flavors, including 3 FC and 2 SC estimates from each of 3 atlases:
-* `FCcov_fs86_hpf_FC` `FCcov_fs86_hpfgsr_FC` `FCpcorr_fs86_hpf_FC` `fs86_ifod2act_volnorm` `fs86_sdstream_volnorm` 
-* `FCcov_shen268_hpf_FC` `FCcov_shen268_hpfgsr_FC` `FCpcorr_shen268_hpf_FC` `shen268_ifod2act_volnorm` `shen268_sdstream_volnorm`
-* `FCcov_coco439_hpf_FC` `FCcov_coco439_hpfgsr_FC` `FCpcorr_coco439_hpf_FC` `coco439_ifod2act_volnorm` `coco439_sdstream_volnorm`
+* `FCcorr_fs86_hpf` `FCcorr_fs86_hpfgsr` `FCpcorr_fs86_hpf` `SCifod2act_fs86_volnorm` `SCsdstream_fs86_volnorm` 
+* `FCcorr_shen268_hpf` `FCcorr_shen268_hpfgsr` `FCpcorr_shen268_hpf` `SCifod2act_shen268_volnorm` `SCsdstream_shen268_volnorm`
+* `FCcorr_coco439_hpf` `FCcorr_coco439_hpfgsr` `FCpcorr_coco439_hpf` `SCifod2act_coco439_volnorm` `SCsdstream_coco439_volnorm`
 
 ### Functional Connectivity (FC) types
-* `FCcov_<parc>_hpf_FC` Pearson correlation FC
-* `FCcov_<parc>_hpfgsr_FC` Pearson correlation FC after global signal regression
-* `FCpcorr_<parc>_hpf_FC` Regularized partial correlation FC
+* `FCcorr_<parc>_hpf` Pearson correlation FC
+* `FCcorr_<parc>_hpfgsr` Pearson correlation FC after global signal regression
+* `FCpcorr_<parc>_hpf` Regularized partial correlation FC
 * Time series have been denoised using ICA+FIX, high-pass filter > 0.01 Hz, with nuisance regression using WM+CSF aCompCor and 24 motion parameters.
 * Data were preprocessed using the HCP minimal prepocessing pipeline ([Glasser 2013](https://pubmed.ncbi.nlm.nih.gov/23668970/)). Post-processing was performed using scripts found here: [github.com/kjamison/fmriclean](https://github.com/kjamison/fmriclean)
 
 ### Structural Connectivity (SC) types
-* `<parc>_ifod2act_volnorm` Streamline counts from iFOD2+ACT (Probabilistic whole-brain tractography with anatomical constraint), with pairwise streamline counts normalized by region volumes
-* `<parc>_sdstream_volnorm`  Streamline counts from SD_STREAM (Deterministic whole-brain tractography), with pairwise streamline counts normalized by region volumes
+* `SCifod2act_<parc>_volnorm` Streamline counts from iFOD2+ACT (Probabilistic whole-brain tractography with anatomical constraint), with pairwise streamline counts normalized by region volumes
+* `SCsdstream_<parc>_volnorm`  Streamline counts from SD_STREAM (Deterministic whole-brain tractography), with pairwise streamline counts normalized by region volumes
 * Data were preprocessed using the HCP minimal prepocessing pipeline ([Glasser 2013](https://pubmed.ncbi.nlm.nih.gov/23668970/)). Tractography was performed using [MRtrix3](https://www.mrtrix.org/), with whole-brain dynamic seeding, and 5 million streamlines per subject.
 
 ### Parcellations
@@ -139,6 +139,7 @@ The current pre-trained model has been trained on the following 15 connectivity 
 * *See [`requirements.txt`](requirements.txt) and [`requirements_exact.txt`](requirements_exact.txt)*
 
 # Downloads
-* Data and other files associated with this model can found here: [https://osf.io/dfp92](https://osf.io/dfp92/?view_only=449aed6ae3e9471881be76cbb50480dc)
-    * `kraken_ioxfm_SCFC_[fs86,shen268,coco439]_993subj_pc256_25paths_710train_20220527.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
+* Data and other files associated with this model can found here: [https://osf.io/dfp92](https://osf.io/dfp92)
+    * `kraken_ioxfm_SCFC_710train_[fs86,shen268,coco439]_pc256.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
     * `kraken_chkpt_SCFC_20240406_022034_ep002000.pt`: pretrained model checkpoint
+    * `subject_splits_993subj_683train_79val_196test_retestInTest.mat`: Subject file containing list of training, validation, and testing subjects.

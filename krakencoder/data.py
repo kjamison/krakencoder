@@ -70,7 +70,7 @@ def load_hcp_subject_list(numsubj=993):
     
     return subjects, familyidx
 
-def get_hcp_data_flavors(roi_list=["fs86","shen268","coco439"], 
+def get_hcp_data_flavors_OLD(roi_list=["fs86","shen268","coco439"], 
                          sc_type_list=["ifod2act_volnorm","sdstream_volnorm"], 
                          fc_type_list=["FCcov","FCcovgsr","FCpcorr"], 
                          fc_filter_list=["hpf","bpf","nofilt"],
@@ -107,6 +107,7 @@ def get_hcp_data_flavors(roi_list=["fs86","shen268","coco439"],
     for r in roi_list:
         for sc in sc_type_list:
             conntype_list+=["%s_%s" % (r,sc)]
+            
         for f in fc_filter_list:
             for fc in fc_type_list:
                 fctmp=fc.replace("_gsr","").replace("gsr","")
@@ -116,10 +117,11 @@ def get_hcp_data_flavors(roi_list=["fs86","shen268","coco439"],
                 conntype_list+=[c]
     return conntype_list
 
-def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=False, accept_unknowns=False):
+
+def canonical_data_flavor_OLD(conntype, only_if_brackets=False, return_groupname=False, accept_unknowns=False):
     """
     Returns the canonical data flavor name for a (possibly) non-canonical input name. 
-    eg: canonical_data_flavor('fs86_hpf_FCcov') -> 'FCcov_fs86_hpf_FC'
+    eg: canonical_data_flavor('fs86_hpf_FCcov') -> 'FCcorr_fs86_hpf_FC'
     
     Parameters:
     conntype: str, input data flavor name
@@ -194,7 +196,7 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
         if not accept_unknowns:
             raise Exception("Unknown data flavor for input type: %s" % (conntype))
     
-    #FC: FCcov_<atlas>_<fcfilt>[gsr?]_FC, FCpcorr_<atlas>_<fcfilt>_FC
+    #FC: FCcorr_<atlas>_<fcfilt>[gsr?]_FC, FCpcorr_<atlas>_<fcfilt>_FC
     #SC: <atlas>_sdstream_volnorm, <atlas>_ifod2act_volnorm
     
     if "FC" in input_flavor:
@@ -216,6 +218,324 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
         groupname="SC"
         conntype_canonical="%s_%s_%s" % (input_atlasname,input_flavor,input_scproc) #orig style
         #conntype_canonical="SC%s_%s_%s" % (input_flavor,input_atlasname,input_scproc) #new style with SC<algo>_<atlas>_volnorm
+
+    if return_groupname:
+        return conntype_canonical, groupname
+    else:
+        return conntype_canonical
+
+def get_hcp_data_flavors_OLD(roi_list=["fs86","shen268","coco439"], 
+                         sc_type_list=["ifod2act_volnorm","sdstream_volnorm"], 
+                         fc_type_list=["FCcov","FCcovgsr","FCpcorr"], 
+                         fc_filter_list=["hpf","bpf","nofilt"],
+                         sc=True,
+                         fc=True):
+    """
+    DEPRECATED old version from before first release. Some older checkpoints use this.
+    ################################################
+    Returns a list of data flavors based on the input lists of roi_list, sc_type_list, fc_type_list, and fc_filter_list
+    """
+    if not roi_list:
+        roi_list=[]
+    if not sc_type_list:
+        sc_type_list=[]
+    if not fc_type_list:
+        fc_type_list=[]
+    if not fc_filter_list:
+        fc_filter_list=[]
+    
+    if isinstance(roi_list,str):
+        roi_list=[roi_list]
+    if isinstance(sc_type_list,str):
+        sc_type_list=[sc_type_list]
+    if isinstance(fc_type_list,str):
+        fc_type_list=[fc_type_list]
+    if isinstance(fc_filter_list,str):
+        fc_filter_list=[fc_filter_list]
+    
+    if not sc:
+        sc_type_list=[]
+    
+    if not fc:
+        fc_filter_list=[]
+    
+    conntype_list=[]
+    for r in roi_list:
+        for sc in sc_type_list:
+            conntype_list+=["%s_%s" % (r,sc)]
+            
+        for f in fc_filter_list:
+            for fc in fc_type_list:
+                fctmp=fc.replace("_gsr","").replace("gsr","")
+                c="%s_%s_%s" % (fctmp,r,f)
+                if "gsr" in fc:
+                    c+="gsr"
+                conntype_list+=[c]
+
+    return conntype_list
+
+
+def canonical_data_flavor_OLD(conntype, only_if_brackets=False, return_groupname=False, accept_unknowns=False):
+    """
+    DEPRECATED old version from before first release. Some older checkpoints use this.
+    ################################################
+    Returns the canonical data flavor name for a (possibly) non-canonical input name. 
+    eg: canonical_data_flavor('fs86_hpf_FCcov') -> 'FCcv_fs86_hpf_FC'
+    
+    Parameters:
+    conntype: str, input data flavor name
+    only_if_brackets: bool (optional, default=False), if True, will only change the name if the input is in the form "[name]", otherwise return name as-is
+    return_groupname: bool (optional, default=False), if True, will return the group name ("SC", "FC", or "encoded") as a second return value
+    accept_unknowns: bool (optional, default=False), if True, will not raise an exception if an unknown input is provided
+    
+    Returns:
+    conntype_canonical: str, canonical data flavor name
+    groupname: str, group name ("SC", "FC", or "encoded"), if return_groupname=True
+    """
+    groupname=None
+    
+    if only_if_brackets:
+        #special mode that leaves inputs intact unless they are in the form "[name]", in which case
+        #it will return the canonical version of "name"
+        if not re.match(".*\[.+\].*",conntype.lower()):
+            if return_groupname:
+                return conntype, groupname
+            else:
+                return conntype
+        conntype=re.sub("^.*\[(.+)\].*$",'\\1',conntype)
+    
+    if conntype.lower() == "encoded":
+        if return_groupname:
+            return "encoded", groupname
+        else:
+            return "encoded"
+    
+    if conntype.lower().startswith("fusion"):
+        if return_groupname:
+            return conntype, groupname
+        else:
+            return conntype
+    
+    if conntype.lower() == "mean":
+        if return_groupname:
+            return conntype, groupname
+        else:
+            return conntype
+    
+    # parse user-specified input data type
+    input_atlasname=""
+    input_flavor=""
+    input_fcfilt=""
+    input_fcgsr=""
+    input_scproc="volnorm"
+    
+    input_conntype_lower=conntype.lower()
+    if "fs86" in input_conntype_lower:
+        input_atlasname="fs86"
+    elif "shen268" in input_conntype_lower:
+        input_atlasname="shen268"
+    elif "coco439" in input_conntype_lower or "cocommpsuit439" in input_conntype_lower:
+        input_atlasname="coco439"
+    else:
+        if not accept_unknowns:
+            raise Exception("Unknown atlas name for input type: %s" % (conntype))
+    
+    if ("fccorr" in input_conntype_lower or "fccov" in input_conntype_lower) and "gsr" in input_conntype_lower:
+        input_flavor="FCcov"
+        input_fcgsr="gsr"
+    elif "fccorr" in input_conntype_lower or "fccov" in input_conntype_lower:
+        input_flavor="FCcov"
+    elif "pcorr" in input_conntype_lower:
+        input_flavor="FCpcorr"
+    elif "sdstream" in input_conntype_lower:
+        input_flavor="sdstream"
+    elif "ifod2act" in input_conntype_lower:
+        input_flavor="ifod2act"
+    else:
+        if not accept_unknowns:
+            raise Exception("Unknown data flavor for input type: %s" % (conntype))
+    
+    #FC: FCcorr_<atlas>_<fcfilt>[gsr?]_FC, FCpcorr_<atlas>_<fcfilt>_FC
+    #SC: <atlas>_sdstream_volnorm, <atlas>_ifod2act_volnorm
+    
+    if "FC" in input_flavor:
+        if "hpf" in input_conntype_lower:
+            input_fcfilt="hpf"
+        elif "bpf" in input_conntype_lower:
+            input_fcfilt="bpf"
+        elif "nofilt" in input_conntype_lower:
+            input_fcfilt="nofilt"
+        else:
+            if not accept_unknowns:
+                raise Exception("Unknown FC filter for input type: %s" % (conntype))
+    
+    if "FC" in input_flavor:
+        groupname="FC"
+        conntype_canonical="%s_%s_%s%s_FC" % (input_flavor,input_atlasname,input_fcfilt,input_fcgsr) #orig style with FC<flavor>_<atlas>_<filt><gsr>_FC
+        #conntype_canonical="%s_%s_%s%s" % (input_flavor,input_atlasname,input_fcfilt,input_fcgsr) #new style with FC<flavor>_<atlas>_<filt><gsr>
+    else:
+        groupname="SC"
+        conntype_canonical="%s_%s_%s" % (input_atlasname,input_flavor,input_scproc) #orig style
+        #conntype_canonical="SC%s_%s_%s" % (input_flavor,input_atlasname,input_scproc) #new style with SC<algo>_<atlas>_volnorm
+
+    if return_groupname:
+        return conntype_canonical, groupname
+    else:
+        return conntype_canonical
+
+
+def get_hcp_data_flavors(roi_list=["fs86","shen268","coco439"], 
+                         sc_type_list=["SCifod2act_volnorm","SCsdstream_volnorm"], 
+                         fc_type_list=["FCcorr","FCcorrgsr","FCpcorr"], 
+                         fc_filter_list=["hpf","bpf","nofilt"],
+                         sc=True,
+                         fc=True):
+    """
+    Returns a list of data flavors based on the input lists of roi_list, sc_type_list, fc_type_list, and fc_filter_list
+    """
+    if not roi_list:
+        roi_list=[]
+    if not sc_type_list:
+        sc_type_list=[]
+    if not fc_type_list:
+        fc_type_list=[]
+    if not fc_filter_list:
+        fc_filter_list=[]
+    
+    if isinstance(roi_list,str):
+        roi_list=[roi_list]
+    if isinstance(sc_type_list,str):
+        sc_type_list=[sc_type_list]
+    if isinstance(fc_type_list,str):
+        fc_type_list=[fc_type_list]
+    if isinstance(fc_filter_list,str):
+        fc_filter_list=[fc_filter_list]
+    
+    if not sc:
+        sc_type_list=[]
+    
+    if not fc:
+        fc_filter_list=[]
+    
+    conntype_list=[]
+    for r in roi_list:
+        for sc in sc_type_list:
+            c="%s_%s" % (sc,r)
+            if '_volnorm' in c:
+                c=c.replace('_volnorm','')+"_volnorm"
+            
+            conntype_list+=[c]
+            
+        for f in fc_filter_list:
+            for fc in fc_type_list:
+                fctmp=fc.replace("_gsr","").replace("gsr","")
+                c="%s_%s_%s" % (fctmp,r,f)
+                if "gsr" in fc:
+                    c+="gsr"
+                conntype_list+=[c]
+
+    conntype_list=[canonical_data_flavor(c) for c in conntype_list]
+    return conntype_list
+
+
+def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=False, accept_unknowns=False):
+    """
+    Returns the canonical data flavor name for a (possibly) non-canonical input name. 
+    eg: canonical_data_flavor('fs86_hpf_FCcorr') -> 'FCcorr_fs86_hpf'
+    
+    Parameters:
+    conntype: str, input data flavor name
+    only_if_brackets: bool (optional, default=False), if True, will only change the name if the input is in the form "[name]", otherwise return name as-is
+    return_groupname: bool (optional, default=False), if True, will return the group name ("SC", "FC", or "encoded") as a second return value
+    accept_unknowns: bool (optional, default=False), if True, will not raise an exception if an unknown input is provided
+    
+    Returns:
+    conntype_canonical: str, canonical data flavor name
+    groupname: str, group name ("SC", "FC", or "encoded"), if return_groupname=True
+    """
+    groupname=None
+    
+    if only_if_brackets:
+        #special mode that leaves inputs intact unless they are in the form "[name]", in which case
+        #it will return the canonical version of "name"
+        if not re.match(".*\[.+\].*",conntype.lower()):
+            if return_groupname:
+                return conntype, groupname
+            else:
+                return conntype
+        conntype=re.sub("^.*\[(.+)\].*$",'\\1',conntype)
+    
+    if conntype.lower() == "encoded":
+        if return_groupname:
+            return "encoded", groupname
+        else:
+            return "encoded"
+    
+    if conntype.lower().startswith("fusion"):
+        if return_groupname:
+            return conntype, groupname
+        else:
+            return conntype
+    
+    if conntype.lower() == "mean":
+        if return_groupname:
+            return conntype, groupname
+        else:
+            return conntype
+    
+    # parse user-specified input data type
+    input_atlasname=""
+    input_flavor=""
+    input_fcfilt=""
+    input_fcgsr=""
+    input_scproc="volnorm"
+    
+    input_conntype_lower=conntype.lower()
+    if "fs86" in input_conntype_lower:
+        input_atlasname="fs86"
+    elif "shen268" in input_conntype_lower:
+        input_atlasname="shen268"
+    elif "coco439" in input_conntype_lower or "cocommpsuit439" in input_conntype_lower:
+        input_atlasname="coco439"
+    else:
+        if not accept_unknowns:
+            raise Exception("Unknown atlas name for input type: %s" % (conntype))
+    
+    if ("fccorr" in input_conntype_lower or "fccov" in input_conntype_lower) and "gsr" in input_conntype_lower:
+        input_flavor="FCcorr"
+        input_fcgsr="gsr"
+    elif "fccorr" in input_conntype_lower or "fccov" in input_conntype_lower:
+        input_flavor="FCcorr"
+    elif "pcorr" in input_conntype_lower:
+        input_flavor="FCpcorr"
+    elif "sdstream" in input_conntype_lower:
+        input_flavor="sdstream"
+    elif "ifod2act" in input_conntype_lower:
+        input_flavor="ifod2act"
+    else:
+        if not accept_unknowns:
+            raise Exception("Unknown data flavor for input type: %s" % (conntype))
+    
+    #FC: FCcorr_<atlas>_<fcfilt>[gsr?], FCpcorr_<atlas>_<fcfilt>
+    #SC: SCsdstream_<atlas>_volnorm, SCifod2act_<atlas>_volnorm
+    
+    if "FC" in input_flavor:
+        if "hpf" in input_conntype_lower:
+            input_fcfilt="hpf"
+        elif "bpf" in input_conntype_lower:
+            input_fcfilt="bpf"
+        elif "nofilt" in input_conntype_lower:
+            input_fcfilt="nofilt"
+        else:
+            if not accept_unknowns:
+                raise Exception("Unknown FC filter for input type: %s" % (conntype))
+    
+    if "FC" in input_flavor:
+        groupname="FC"
+        conntype_canonical="%s_%s_%s%s" % (input_flavor,input_atlasname,input_fcfilt,input_fcgsr) #new style with FC<flavor>_<atlas>_<filt><gsr>
+    else:
+        groupname="SC"
+        conntype_canonical="SC%s_%s_%s" % (input_flavor,input_atlasname,input_scproc) #new style with SC<algo>_<atlas>_volnorm
 
     if return_groupname:
         return conntype_canonical, groupname
@@ -321,76 +641,76 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
     #  log10(0)->0 because then log10(.1)-> -1 would look < 0 
 
     pretrained_transformer_file={}
-    pretrained_transformer_file['fs86_ifod2act_volnorm']=None
-    pretrained_transformer_file['shen268_ifod2act_volnorm']=None
-    pretrained_transformer_file['shen268_sdstream_volnorm']=None
-    pretrained_transformer_file['coco439_ifod2act_volnorm']=None
-    pretrained_transformer_file['coco439_sdstream_volnorm']=None
-    pretrained_transformer_file['FCcov_fs86_hpf']=None
-    pretrained_transformer_file['FCcov_fs86_hpfgsr']=None
+    pretrained_transformer_file['SCifod2act_fs86_volnorm']=None
+    pretrained_transformer_file['SCifod2act_shen268_volnorm']=None
+    pretrained_transformer_file['SCsdstream_shen268_volnorm']=None
+    pretrained_transformer_file['SCifod2act_coco439_volnorm']=None
+    pretrained_transformer_file['SCsdstream_coco439_volnorm']=None
+    pretrained_transformer_file['FCcorr_fs86_hpf']=None
+    pretrained_transformer_file['FCcorr_fs86_hpfgsr']=None
     pretrained_transformer_file['FCpcorr_fs86_hpf']=None
-    pretrained_transformer_file['FCcov_shen268_hpf']=None
-    pretrained_transformer_file['FCcov_shen268_hpfgsr']=None
+    pretrained_transformer_file['FCcorr_shen268_hpf']=None
+    pretrained_transformer_file['FCcorr_shen268_hpfgsr']=None
     pretrained_transformer_file['FCpcorr_shen268_hpf']=None
-    pretrained_transformer_file['FCcov_coco439_hpf']=None
-    pretrained_transformer_file['FCcov_coco439_hpfgsr']=None
+    pretrained_transformer_file['FCcorr_coco439_hpf']=None
+    pretrained_transformer_file['FCcorr_coco439_hpfgsr']=None
     pretrained_transformer_file['FCpcorr_coco439_hpf']=None
 
     #build list of possijble HCP data files to load
-
+    
     if len(conn_name_list)==0:
         fc_filter_list=["hpf","bpf","nofilt"]
     
     connfile_info=[]
     datagroup='SC'
     
-    connfile_info.append({'name':'fs86_ifod2act_volnorm','file':'%s/sc_fs86_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'fs86_sdstream_volnorm','file':'%s/sc_fs86_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'shen268_ifod2act_volnorm','file':'%s/sc_shen268_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'shen268_sdstream_volnorm','file':'%s/sc_shen268_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'coco439_ifod2act_volnorm','file':'%s/sc_cocommpsuit439_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
-    connfile_info.append({'name':'coco439_sdstream_volnorm','file':'%s/sc_cocommpsuit439_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
+    connfile_info.append({'name':'SCifod2act_fs86_volnorm','file':'%s/sc_fs86_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
+    connfile_info.append({'name':'SCsdstream_fs86_volnorm','file':'%s/sc_fs86_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
+    connfile_info.append({'name':'SCifod2act_shen268_volnorm','file':'%s/sc_shen268_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
+    connfile_info.append({'name':'SCsdstream_shen268_volnorm','file':'%s/sc_shen268_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
+    connfile_info.append({'name':'SCifod2act_coco439_volnorm','file':'%s/sc_cocommpsuit439_ifod2act_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
+    connfile_info.append({'name':'SCsdstream_coco439_volnorm','file':'%s/sc_cocommpsuit439_sdstream_volnorm_993subj.mat' % (datafolder),'fieldname':'SC','group':datagroup})
 
     datagroup='FC'
     #consider: do np.arctanh for FC inputs?
 
     #hpf
-    connfile_info.append({'name':'FCcov_fs86_hpf','file':'%s/fc_fs86_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_fs86_hpfgsr','file':'%s/fc_fs86_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_fs86_hpf','file':'%s/fc_fs86_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_fs86_hpfgsr','file':'%s/fc_fs86_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_fs86_hpf','file':'%s/fc_fs86_FCpcorr_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
 
-    connfile_info.append({'name':'FCcov_shen268_hpf','file':'%s/fc_shen268_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_shen268_hpfgsr','file':'%s/fc_shen268_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_shen268_hpf','file':'%s/fc_shen268_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_shen268_hpfgsr','file':'%s/fc_shen268_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_shen268_hpf','file':'%s/fc_shen268_FCpcorr_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
 
-    connfile_info.append({'name':'FCcov_coco439_hpf','file':'%s/fc_cocommpsuit439_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_coco439_hpfgsr','file':'%s/fc_cocommpsuit439_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_coco439_hpf','file':'%s/fc_cocommpsuit439_FCcov_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_coco439_hpfgsr','file':'%s/fc_cocommpsuit439_FCcov_hpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_coco439_hpf','file':'%s/fc_cocommpsuit439_FCpcorr_hpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
 
     #bpf
-    connfile_info.append({'name':'FCcov_fs86_bpf','file':'%s/fc_fs86_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_fs86_bpfgsr','file':'%s/fc_fs86_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_fs86_bpf','file':'%s/fc_fs86_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_fs86_bpfgsr','file':'%s/fc_fs86_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_fs86_bpf','file':'%s/fc_fs86_FCpcorr_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     
-    connfile_info.append({'name':'FCcov_shen268_bpf','file':'%s/fc_shen268_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_shen268_bpfgsr','file':'%s/fc_shen268_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_shen268_bpf','file':'%s/fc_shen268_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_shen268_bpfgsr','file':'%s/fc_shen268_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_shen268_bpf','file':'%s/fc_shen268_FCpcorr_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     
-    connfile_info.append({'name':'FCcov_coco439_bpf','file':'%s/fc_cocommpsuit439_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_coco439_bpfgsr','file':'%s/fc_cocommpsuit439_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_coco439_bpf','file':'%s/fc_cocommpsuit439_FCcov_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_coco439_bpfgsr','file':'%s/fc_cocommpsuit439_FCcov_bpf_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_coco439_bpf','file':'%s/fc_cocommpsuit439_FCpcorr_bpf_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-        
+    
     #nofilt (no compcor, hp2000)
-    connfile_info.append({'name':'FCcov_fs86_nofilt','file':'%s/fc_fs86_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_fs86_nofiltgsr','file':'%s/fc_fs86_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_fs86_nofilt','file':'%s/fc_fs86_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_fs86_nofiltgsr','file':'%s/fc_fs86_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_fs86_nofilt','file':'%s/fc_fs86_FCpcorr_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
 
-    connfile_info.append({'name':'FCcov_shen268_nofilt','file':'%s/fc_shen268_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_shen268_nofiltgsr','file':'%s/fc_shen268_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_shen268_nofilt','file':'%s/fc_shen268_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_shen268_nofiltgsr','file':'%s/fc_shen268_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_shen268_nofilt','file':'%s/fc_shen268_FCpcorr_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     
-    connfile_info.append({'name':'FCcov_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-    connfile_info.append({'name':'FCcov_coco439_nofiltgsr','file':'%s/fc_cocommpsuit439_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
+    connfile_info.append({'name':'FCcorr_coco439_nofiltgsr','file':'%s/fc_cocommpsuit439_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCpcorr_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
 
     if load_retest:
@@ -406,28 +726,35 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
     conn_names_available=[x['name'] for x in connfile_info]
     for i,cname in enumerate(conn_name_list):
         if cname.endswith("_volnorm"):
-            conntype="volnorm"
+            connfield="volnorm"
+            connsuffix="_volnorm"
             cname=cname.replace("_volnorm","")
         elif cname.endswith("_sift2"):
-            conntype="sift2"
+            connfield="sift2"
+            connsuffix="_sift2"
             cname=cname.replace("_sift2","")
         elif cname.endswith("_sift2volnorm"):
-            conntype="sift2volnorm"
+            connfield="sift2volnorm"
+            connsuffix="_sift2volnorm"
             cname=cname.replace("_sift2volnorm","")
         elif cname.endswith("_orig"):
-            conntype="orig"
+            connfield="orig"
+            connsuffix="_orig"
             cname=cname.replace("_orig","")
         elif cname.endswith("_FC"):
-            conntype="FC"
+            connfield="FC"
+            connsuffix=""
             cname=cname.replace("_FC","")
         elif cname.startswith("FC"):
-            conntype="FC" #FC but didn't add the "_FC" to end
+            connsuffix=""
+            connfield="FC" #FC but didn't add the "_FC" to end
         elif "ifod2act" in cname or "sdstream" in cname:
-            conntype="orig"
+            connfield="orig"
+            connsuffix="_orig"
         else:
             raise Exception("Unknown data flavor for %s" % (cname))
         
-        connsearch='%s_%s' % (cname,conntype)
+        connsearch='%s%s' % (cname,connsuffix)
         connsearch=connsearch.replace("_FC","")
         ci=[x for x in connfile_info if x['name']==connsearch]
         if len(ci)==0:
@@ -444,7 +771,6 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
             subjects=subjects997
 
         connfield_list=[connfile_info[i]['fieldname'], "SC","FC"]
-        connfield=conntype
         for cf in connfield_list:
             if cf in Cdata:
                 connfield=cf
@@ -459,7 +785,7 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
         Ctriu=[x[trimask] for x in Cdata[connfield][~subjmissing]]
         #restrict to 420 unrelated subjects
         Ctriu=[x for i,x in enumerate(Ctriu) if subjects997[i] in subjects]
-        conn_name='%s_%s' % (cname,conntype)
+        conn_name='%s%s' % (cname,connsuffix)
         
         transformer_file=None
         if conn_name in pretrained_transformer_file:

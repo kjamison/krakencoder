@@ -28,8 +28,8 @@ python run_model.py --inputdata test --subjectfile subject_splits_958subj_683tra
 #2. To generate predicted connectomes, add:
     --outputname all --output mydata_20240406_022034_ep002000_{output}.mat
 # which will generate an file predictions of each connectivity flavor in the model, named like:
-#   mydata_20240406_022034_ep002000_FCcov_shen268_hpf_FC.mat
-# which will contain the predicted FCcov_shen268_hpf_FC from every input type provided
+#   mydata_20240406_022034_ep002000_FCcorr_shen268_hpf_FC.mat
+# which will contain the predicted FCcorr_shen268_hpf_FC from every input type provided
 
 #3. To generate predicted connectomes from only fusion inputs:
     --output 'mydata_20240406_022034_ep002000_{input}.mat' --fusion --onlyfusioninputs
@@ -42,12 +42,12 @@ python run_model.py --inputdata test --subjectfile subject_splits_958subj_683tra
 
 #5. To use your own non-HCP input data, provide a .mat file for each input type, with a 'data' field containing the [subjects x region x region] 
 # connectivity data. Then include the filenames and connectivity names using:
-    --inputdata '[fs86_sdstream_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
-        '[fs86_ifod2act_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
-        '[shen268_sdstream_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
-        '[shen268_ifod2act_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
-        '[coco439_sdstream_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
-        '[coco439_ifod2act_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
+    --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
+        '[SCifod2act_fs86_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
+        '[SCsdstream_shen268_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
+        '[SCifod2act_shen268_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
+        '[SCsdstream_coco439_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
+        '[SCifod2act_coco439_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift
 #where "--adaptmode meanfit+meanshift" uses minimal approach for domain shift by linearly mapping the population mean of your input data to the 
 # population mean of the training data. This is a simple way to adapt the input data to the model, but may not be sufficient for all cases."
@@ -86,7 +86,7 @@ def argument_parse_newdata(argv):
     parser.add_argument('--output',action='store',dest='output', help='file to save model outputs. Can include "{input}" and/or "{output}" in name to save separate files for each input/output combo (or just group inputs and outputs)')
     parser.add_argument('--inputdata',action='append',dest='input_data_file', help='.mat file(s) containing input data to transform (instead of default HCP validation set). Can be "name=file"', nargs='*')
     
-    parser.add_argument('--inputname','--inputnames',action='append',dest='input_names', help='Name(s) of input data flavors (eg: FCcov_fs86_hpf, SCsdstream_fs86, encoded)',nargs='*')
+    parser.add_argument('--inputname','--inputnames',action='append',dest='input_names', help='Name(s) of input data flavors (eg: FCcorr_fs86_hpf, SCsdstream_fs86, encoded)',nargs='*')
     parser.add_argument('--outputname','--outputnames',action='append',dest='output_names', help='List of data flavors from model to predict (default=all)',nargs='*')
     
     parser.add_argument('--adaptmode',action='store',dest='adapt_mode',default='none',help='How do adapt new data to fit model (default: none)')

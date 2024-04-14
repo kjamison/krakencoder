@@ -49,7 +49,7 @@ def argument_parse_runtraining(argv):
     #for list-based inputs, need to specify the defaults this way, otherwise the argparse append just adds to them
     arg_defaults={}
     arg_defaults['roinames']=["fs86+shen268+coco439"]
-    arg_defaults['dataflavors']=["SCifod2act","SCsdstream","FCcov","FCcovgsr","FCpcorr"]
+    arg_defaults['dataflavors']=["SCifod2act","SCsdstream","FCcorr","FCcorrgsr","FCpcorr"]
     arg_defaults['fcfilt']=["hpf"]
     arg_defaults['pathgroups']=['all']
     arg_defaults['losstype']=['correye+enceye']
@@ -63,7 +63,7 @@ def argument_parse_runtraining(argv):
 
     input_arg_group=parser.add_argument_group('Input data options')
     input_arg_group.add_argument('--subjectcount',action='store',dest='subjectcount',type=int, default=993, help='HCPTRAIN: Which HCP subject set? 993 (default) or 420')
-    input_arg_group.add_argument('--dataflavors',action='append',dest='dataflavors',help='HCPTRAIN: SCifod2act,SCsdstream,FCcov,FCcovgsr,FCpcorr (default=%s)' % (arg_defaults["dataflavors"]),nargs='*')
+    input_arg_group.add_argument('--dataflavors',action='append',dest='dataflavors',help='HCPTRAIN: SCifod2act,SCsdstream,FCcorr,FCcorrgsr,FCpcorr (default=%s)' % (arg_defaults["dataflavors"]),nargs='*')
     input_arg_group.add_argument('--roinames',action='append',dest='roinames',help='HCPTRAIN: fs86,shen268,coco439... (default=%s)' % (arg_defaults["roinames"]),nargs='*')
     input_arg_group.add_argument('--fcfilt',action='append',dest='fcfilt',help='list of hpf, bpf, nofilt (default=%s)' % (arg_defaults["fcfilt"]),nargs='*')
     input_arg_group.add_argument('--inputdata',action='append',dest='input_data_file', help='name=file, name=file, (or name@group=file)... Override HCPTRAIN: .mat file(s) containing input data to transform (instead of default HCP set).', nargs='*')
@@ -372,15 +372,15 @@ def run_training_command(argv):
         
         filttypes_full=["hpf","bpf","nofilt"]
         sctypes_full=["ifod2act","sdstream"]
-        fctypes_full=["FCcov","FCcovgsr","FCpcorr"]
+        fctypes_full=["FCcorr","FCcorrgsr","FCpcorr"]
         #fcfilt_types=[x for x in filttypes_full if any([x in y for y in input_dataflavors])]
         sctypes=[x+"_volnorm" for x in sctypes_full if any([x in y for y in input_dataflavors])]
         #fctypes=[x for x in fctypes_full if any([x in y for y in input_dataflavors])]
         fctypes=[]
-        if any(["FCcov" in y and not "gsr" in y for y in input_dataflavors]):
-            fctypes+=["FCcov"]
-        if any(["FCcov" in y and "gsr" in y for y in input_dataflavors]):
-            fctypes+=["FCcovgsr"]
+        if any(["FCcorr" in y and not "gsr" in y for y in input_dataflavors]):
+            fctypes+=["FCcorr"]
+        if any(["FCcorr" in y and "gsr" in y for y in input_dataflavors]):
+            fctypes+=["FCcorrgsr"]
         if any(["FCpcorr" in y for y in input_dataflavors]):
             fctypes+=["FCpcorr"]
 
@@ -393,7 +393,7 @@ def run_training_command(argv):
         
         input_conn_name_list=get_hcp_data_flavors(roi_list=input_roilist, fc_type_list=fctypes ,sc_type_list=sctypes, fc_filter_list=fcfilt_types, 
                                                   sc=sc_in_pathgroups, fc=fc_in_pathgroups)
-
+        
         subjects_out, conndata_alltypes = load_hcp_data(subjects=subjects, conn_name_list=input_conn_name_list)
     
     nsubj=conndata_alltypes[list(conndata_alltypes.keys())[0]]['data'].shape[0]

@@ -231,7 +231,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     data_string: string to identify this dataset (e.g., 'SCFC_fs86+shen268+coco439_993subj')
     
     === Returns ===
-    trainpath_list: list of dictionaries with training path information for each path (e.g., FCcov_fs86_hpf_FC -> shen268_ifod2act_volnorm)
+    trainpath_list: list of dictionaries with training path information for each path (e.g., FCcorr_fs86_hpf -> SCifod2act_shen268_volnorm)
         trainpath_list[i]['input_name'] ['output_name']: name of input/output connectivity type for this path
         trainpath_list[i]['input_npairs'] ['output_npairs']: number of pairs in input/output data for this path
         trainpath_list[i]['input_transformer'] ['output_transformer']: transformer object for input/output type
@@ -379,7 +379,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     
     traindata_origscale_list={}
     valdata_origscale_list={}
-
+    
     unames=list(set(flatlist(trainpath_pairs)))
     #unames=[str(s) for s in np.unique(np.stack(trainpath_pairs).flatten())]
     for iconn,conn_name in enumerate(unames):
@@ -655,7 +655,7 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
                       criterion=[], encoded_criterion=[], output_margin=None, encoder_margin=None, 
                       latentnorm_loss_weight=0, latent_maxrad_weight=0, latent_maxrad=None, return_list=False):
     """
-    Compute batch loss for a given path (e.g., FCcov_fs86 -> shen268_ifod2act)
+    Compute batch loss for a given path (e.g., FCcorr_fs86 -> SCifod2act_shen268)
     Depending on inputs, it may compute reconstruction loss and/or latent space loss
     Loops through each reconstruction loss function in OrderedDict 'criterion' and latent space loss function in OrderedDict 'encoded_criterion'
     
