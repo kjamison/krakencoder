@@ -46,9 +46,9 @@ python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_
         '[SCifod2act_coco439_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift \
     --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform kraken_ioxfm_SCFC_710train_fs86_pc256.npy \
-        kraken_ioxfm_SCFC_710train_shen268_pc256.npy \
-        kraken_ioxfm_SCFC_710train_coco439_pc256.npy \
+    --inputxform kraken_ioxfm_SCFC_fs86_pc256_710train.npy \
+        kraken_ioxfm_SCFC_shen268_pc256_710train.npy \
+        kraken_ioxfm_SCFC_coco439_pc256_710train.npy \
     --outputname all --output 'mydata_20240406_022034_ep002000_in.{input}.mat' \
     --fusion --fusioninclude fusion=all fusionSC=SC fusionFC=FC --onlyfusioninputs
 ```
@@ -71,9 +71,9 @@ python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_
         '[SCifod2act_coco439_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift \
     --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
-    --inputxform kraken_ioxfm_SCFC_710train_fs86_pc256.npy \
-        kraken_ioxfm_SCFC_710train_shen268_pc256.npy \
-        kraken_ioxfm_SCFC_710train_coco439_pc256.npy \
+    --inputxform kraken_ioxfm_SCFC_fs86_pc256_710train.npy \
+        kraken_ioxfm_SCFC_shen268_pc256_710train.npy \
+        kraken_ioxfm_SCFC_coco439_pc256_710train.npy \
     --fusion --outputname encoded --output mydata_20240406_022034_ep002000_out.{output}.mat
 ```
 * Latent outputs will be in the file `mydata_20240406_022034_ep002000_out.encoded.mat`
@@ -184,6 +184,6 @@ The current pre-trained model has been trained on the following 15 connectivity 
 
 # Downloads
 * Data and other files associated with this model can found here: [https://osf.io/dfp92](https://osf.io/dfp92)
-    * `kraken_ioxfm_SCFC_710train_[fs86,shen268,coco439]_pc256.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
+    * `kraken_ioxfm_SCFC_[fs86,shen268,coco439]_pc256_710train.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
     * `kraken_chkpt_SCFC_20240406_022034_ep002000.pt`: pretrained model checkpoint
     * `subject_splits_993subj_683train_79val_196test_retestInTest.mat`: Subject file containing list of training, validation, and testing subjects.
