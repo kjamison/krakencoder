@@ -152,30 +152,33 @@ def shorten_names(namelist,extrashort=0,remove_common=True):
     if len(namelist)>1 and all([x==namelist[0] for x in namelist]):
         return namelist
     namelist=[re.sub("_FC$","",x) for x in namelist]
-    namelist=[re.sub("(FCcov|FCpcorr)_(fs86|shen268|coco439)_(.+)",r"\2_\1_\3",x) for x in namelist]
+    namelist=[re.sub("(FCcov|FCcorr|FCpcorr)_(fs86|shen268|coco439)_(.+)",r"\2_\1_\3",x) for x in namelist]
     namelist=[re.sub("(fs86|shen268|coco439)_(sdstream|ifod2act)(_(volnorm?))",r"\1_SC\2",x) for x in namelist]
-
+    namelist=[re.sub("SC(sdstream|ifod2act)_(fs86|shen268|coco439)(_(volnorm?))",r"\2_SC\1",x) for x in namelist]
+    
     if extrashort > 0:
-        namelist=[re.sub("_FCcov_hpf$","_FC#hpf",x) for x in namelist]
-        namelist=[re.sub("_FCcov_hpfgsr$","_FCgsr#hpf",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_hpf$","_FC#hpf",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_hpfgsr$","_FCgsr#hpf",x) for x in namelist]
         namelist=[re.sub("_FCpcorr_hpf$","_FCpc#hpf",x) for x in namelist]
         #namelist=[re.sub("_FCcov_hpf$","_FC",x) for x in namelist]
         #namelist=[re.sub("_FCcov_hpfgsr$","_FCgsr",x) for x in namelist]
         #namelist=[re.sub("_FCpcorr_hpf$","_FCpc",x) for x in namelist]
         
-        namelist=[re.sub("_FCcov_bpf$","_FC#bpf",x) for x in namelist]
-        namelist=[re.sub("_FCcov_bpfgsr$","_FCgsr#bpf",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_bpf$","_FC#bpf",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_bpfgsr$","_FCgsr#bpf",x) for x in namelist]
         namelist=[re.sub("_FCpcorr_bpf$","_FCpc#bpf",x) for x in namelist]
         
-        namelist=[re.sub("_FCcov_nofilt$","_FC#nf",x) for x in namelist]
-        namelist=[re.sub("_FCcov_nofiltgsr$","_FCgsr#nf",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_nofilt$","_FC#nf",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_nofiltgsr$","_FCgsr#nf",x) for x in namelist]
         namelist=[re.sub("_FCpcorr_nofilt$","_FCpc#nf",x) for x in namelist]
         
         namelist=[re.sub("_SCsdstream","_SCsd",x) for x in namelist]
         namelist=[re.sub("_SCifod2act","_SCifod",x) for x in namelist]
         
-        if all(["#hpf" in x for x in namelist if "FC" in x and not "fusion" in x]):
+        if all(["#hpf" in x for x in namelist if "FC" in x and not ("fusion" in x or "burst" in x)]):
             namelist=[x.replace("#hpf","") for x in namelist]
+        
+        namelist=[re.sub("burst","fusion",x) for x in namelist]
         
     if extrashort == 2:
         namelist=[re.sub("shen268","sh268",x) for x in namelist]
@@ -192,16 +195,18 @@ def shorten_names(namelist,extrashort=0,remove_common=True):
     pref=common_prefix(namelist)
     suff=common_suffix(namelist)
     
-    if remove_common and len(pref)>0:
-        namelist=[x[len(pref):] for x in namelist]
-    if remove_common and len(suff)>0:
-        namelist=[x[:-len(suff)] for x in namelist]
+    if len(namelist)>1:
+        if remove_common and len(pref)>0:
+            namelist=[x[len(pref):] for x in namelist]
+        if remove_common and len(suff)>0:
+            namelist=[x[:-len(suff)] for x in namelist]
     return namelist
 
 def flavor2color(conntype):
+    conntype=conntype.lower()
     color=[0,0,0]
     if "fs86" in conntype:
-        if "cov" in conntype:
+        if "fccov" or "fccorr" in conntype:
             color=[1,0,0]
         elif "pcorr" in conntype:
             color=[.5,0,0]
@@ -211,7 +216,7 @@ def flavor2color(conntype):
             color=[0,.75,0]
 
     elif "shen268" in conntype:
-        if "cov" in conntype:
+        if "fccov" or "fccorr" in conntype:
             color=[0,0,1]
         elif "pcorr" in conntype:
             color=[0,0,.5]
@@ -221,7 +226,7 @@ def flavor2color(conntype):
             color=[.75,0,.75]
 
     elif "coco439" in conntype:
-        if "cov" in conntype:
+        if "fccov" or "fccorr" in conntype:
             color=[0,.5,.5]
         elif "pcorr" in conntype:
             color=[0,.25,.25]
@@ -705,7 +710,7 @@ def display_kraken_heatmap(trainrecord,
     #add mean row/column
     if do_addmean:
         #first add mean across rows (for non-fusion rows only)
-        conntype_idx_for_mean=[i for i,c in enumerate(conntypes) if not "fusion" in c]
+        conntype_idx_for_mean=[i for i,c in enumerate(conntypes) if (not "fusion" in c and not "burst" in c)]
         mean_is_last_row=len(conntype_idx_for_mean)==len(conntypes)
         
         vmat_meanrow=np.nanmean(vmat[conntype_idx_for_mean,:],axis=0,keepdims=True)
@@ -757,12 +762,11 @@ def display_kraken_heatmap(trainrecord,
     vmat_count=vmat_count[newidx,:][:,newidx]
     vmat_exclude=vmat_exclude[newidx,:][:,newidx]
     
-    #breakpoint()
     #conntypes=list(conntypes)*2
     #conntypes_short=shorten_names([canonical_data_flavor(x) for x in conntypes])
     conntypes_short=[]
     for x in conntypes:
-        if x.lower() == 'encoded' or x.lower().startswith("fusion") or x.lower()=='mean':
+        if x.lower() == 'encoded' or x.lower().startswith("fusion") or x.lower().startswith("burst") or x.lower()=='mean':
             conntypes_short+=[x]
         elif x.lower() in ['unrel','sib','DZ','MZ','self','retest']:
             conntypes_short+=[x]
@@ -771,8 +775,6 @@ def display_kraken_heatmap(trainrecord,
         else:
             conntypes_short+=[canonical_data_flavor(x,accept_unknowns=True)]
     conntypes_short=shorten_names(conntypes_short)
-    
-    
 
     #vmat=np.vstack((vmat,vmat))
     #vmat=np.hstack((vmat,vmat))
