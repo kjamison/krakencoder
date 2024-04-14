@@ -11,6 +11,10 @@ Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Releas
 # Contents
 1. [Code organization](#Code-organization)
 2. [Examples](#examples)
+    * [Generating predicted connectomes from new data](#generating-predicted-connectomes-from-new-data)
+    * [Generating latent space representations from new data](#generating-latent-space-representations-from-new-data)
+    * [Training a model from scratch](#training-a-model-from-scratch)
+    * [Reading output files](#reading-output-files)
 3. [Pretrained connectivity types](#pretrained-connectivity-types)
 4. [Requirements](#requirements)
 5. [Downloads](#downloads)
@@ -31,7 +35,8 @@ Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Releas
 
 # Examples
 
-## Generating predicted connectomes from new SC data, using pre-trained model:
+## Generating predicted connectomes from new data
+This example evaluates a pre-trained model on new SC data to predict all 15 output connectome types for each subject.
 ```bash
 python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
         '[SCifod2act_fs86_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
@@ -55,7 +60,8 @@ python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_
 * `--fusioninclude fusion=all fusionSC=SC fusionFC=FC` produces "fusion", based on all inputs, and "fusion(SC|FC)" based on only SC or FC inputs
 * Predicted outputs will be one file per input type flavor, for instance: `mydata_20240406_022034_ep002000_in.fusionSC.mat`
 
-## Generating latent space representations from new data, using pre-trained model:
+## Generating latent space representations from new data
+This example computes the latent space representations from new SC data using a pre-trained model.
 ```bash
 python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
         '[SCifod2act_fs86_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
@@ -72,7 +78,44 @@ python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_
 ```
 * Latent outputs will be in the file `mydata_20240406_022034_ep002000_out.encoded.mat`
 
-## Reading predicted outputs:
+## Training a model from scratch
+This example trains a new Krakencoder model on 5 flavors of FS86 data (3 FC, 2 SC).
+```bash
+python run_training.py \
+    --inputdata '[FCcorr_fs86_hpf]@FC=mydata_fs86_FC_hpf.mat' \
+        '[FCcorr_fs86_hpfgsr]@FC=mydata_fs86_FC_hpf_gsr.mat' \
+        '[FCpcorr_fs86_hpf]@FC=mydata_fs86_FCpcorr_hpf.mat' \
+        '[SCsdstream_fs86_volnorm]@SC=mydata_fs86_sdstream_volnorm.mat' \
+        '[SCifod2act_fs86_volnorm]@SC=mydata_fs86_ifod2act_volnorm.mat' \
+    --datagroups SCFC \
+    --latentsize 128 --latentunit --pcadim 256 \
+    --dropout .5 --losstype correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000 \
+    --trainvalsplitfrac .8 --valsplitfrac .1 \
+    --outputprefix mykraken --epochs 2000 --checkpointepochsevery 500 --displayepochs 25
+```
+* input data is specified as `'[flavor]@group=datafile.mat'`
+    * `[flavor]` will be auto-corrected to canonical data flavors. To skip auto-correction, use `flavor@group=...`
+    * `group` is optional, but will be automatically guessed based on `flavor` if not specified. `group` might be SC or FC
+* `--datagroups SCFC` in means all groups should be included in model
+* `--latentsize 128 --latentunit` means latent dimension is 128, and will be explicitly L2-normalized during training
+* `--pcadim 256` will compute a new 256-dimensional PCA reduction for each input, and save it to a file `mykraken_ioxfm_....npy`
+    * To use an existing PCA transform, add `--inputxform mykraken_ioxfm_...` with the given file(s).
+* `--dropout .5` uses 50% dropout regularization during training
+* `--losstype ...` specifies the loss functions and associated weights. See manuscript for details
+* `--trainvalsplitfrac .8 --valsplitfrac .1` Use 80% of input subjects for training+validation, and 10% **of those** for validation
+    * Final split will be 72% training, 8% validation, and 20% testing (completely left out)
+* `--epochs 2000 --checkpointepochsevery 500` train for a total of 2000 epochs, with checkpoints every 500
+* `--outputprefix mykraken` outputs will be `mykraken_*`
+    * `mykraken_ioxfm_*.npy` for saved input transforms (unless `--inputxform` argument was provided)
+    * `mykraken_chkpt_*_ep######.pt` saved model checkpoints
+    * `mykraken_trainrecord_*.mat` training record file with training details, loss functions, etc...
+    * `mykraken_log_*.txt` log outputs with training progress
+    * `mykraken_loss_*.png` figure show loss curves
+    * `mykraken_heatmap_*.png` heatmap figure showing pathwise prediction performance on validation data at current training epoch
+* See [run_training.py](run_training.py) or `python run_training.py --help` for more arguments, specifying deep network architectures, etc.
+
+
+## Reading output files
 ```python
 import numpy as np
 from scipy.io import loadmat
@@ -96,6 +139,7 @@ fusionSC_to_FCshen_3D=np.stack(fusionSC_to_FCshen_list)
 #or compute a single [region x region] mean across subjects:
 fusionSC_to_FCshen_mean=np.mean(np.stack([tri2square(fusionSC_to_FCshen_triu[i,:],tri_indices=triu, diagval=1) for i in range(nsubj)]), axis=0)
 ```
+
 # Pretrained connectivity types
 The current pre-trained model has been trained on the following 15 connectivity flavors, including 3 FC and 2 SC estimates from each of 3 atlases:
 * `FCcorr_fs86_hpf` `FCcorr_fs86_hpfgsr` `FCpcorr_fs86_hpf` `SCifod2act_fs86_volnorm` `SCsdstream_fs86_volnorm` 
