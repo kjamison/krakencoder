@@ -199,9 +199,9 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     subjidx_val: list of indices for validation subjects
     
     === Training path generation ===
-    trainpath_pairs: list of pairs of connectivity types to train on (e.g., [['fs86_sdstream_volnorm','shen268_ifod2act_volnorm']]). default=all pairs
+    trainpath_pairs: list of pairs of connectivity types to train on (e.g., [['SCsdstream_fs86_volnorm','SCifod2act_shen268_volnorm']]). default=all pairs
     trainpath_group_pairs: list of pairs of connectivity type groups to train on (e.g., [['SC','SC']]). default=all group pairs
-    skip_selfs: bool (default False), skip auto-encoders (e.g., fs86_sdstream_volnorm->fs86_sdstream_volnorm)
+    skip_selfs: bool (default False), skip auto-encoders (e.g., SCsdstream_fs86_volnorm->SCsdstream_fs86_volnorm)
     crosstrain_repeats: int (default 1), number of times to train transcoders for each epoch (to upweight versus auto-encoders)
     
     === Data transformation parameters ===
@@ -220,7 +220,6 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     keep_origscale_data: bool (default False), keep original scale data in data_origscale_list
         - useful for tracking prediction versus original data, but takes up more memory
         - if False, only the reduced input data is kept and OrigScale metrics are computed by inverse transforming the reduced data
-    quiet: bool (default False), suppress output messages about data transformations, variance explained, etc
     use_lognorm_for_sc: bool (default False), use lognorm+rownorm for SC data (to try to transform raw SC data to a more FC-like distribution)
     use_truncated_svd: bool (default False), use truncated SVD for dimensionality reduction instead of PCA
     use_truncated_svd_for_sc: bool (default False), use truncated SVD for SC data only (but PCA for FC)
@@ -229,6 +228,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     batch_size: int (default 40), batch size for training
     create_data_loader: bool (default True), create DataLoader objects for training and validation data
     data_string: string to identify this dataset (e.g., 'SCFC_fs86+shen268+coco439_993subj')
+    quiet: bool (default False), suppress output messages about data transformations, variance explained, etc
     
     === Returns ===
     trainpath_list: list of dictionaries with training path information for each path (e.g., FCcorr_fs86_hpf -> SCifod2act_shen268_volnorm)
@@ -250,7 +250,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         data_origscale_list['traindata_origscale_mean'][conn_name]: torch tensor with pop. mean of original training data for each connectivity type (1 x Npairs)
     data_transformer_info_list: dictionary with information about the transformers used for each connectivity type
     """
-    #data_string='fs86_volnorm'
+    
     if not data_string:
         data_string=common_prefix(conn_names)+common_suffix(conn_names)
 
@@ -747,7 +747,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                   trainthreads=16, display_epochs=20, display_seconds=None, 
                   save_epochs=100, checkpoint_epochs=None, update_single_checkpoint=True, save_optimizer_params=True,
                   explicit_checkpoint_epoch_list=[], precomputed_transformer_info_list={}, save_input_transforms=True,
-                  output_file_prefix="krak",logger=None, extra_trainrecord_dict={}):
+                  output_file_prefix="kraken",logger=None, extra_trainrecord_dict={}):
     """
     Train a network on a set of training paths. 
     This function is designed to be called from a script or notebook, and will handle all the training details.
@@ -822,7 +822,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     explicit_checkpoint_epoch_list: list of epochs to save checkpoints (overrides checkpoint_epochs)
     precomputed_transformer_info_list: dictionary with precomputed transformer information for each connectivity type
     save_input_transforms: bool (default=True), save input transformation information to an '<prefix>_ioxfm_*.npy' file
-    output_file_prefix: string (default="krak"), prefix for output files (e.g., training record, checkpoint files)
+    output_file_prefix: string (default="kraken"), prefix for output files (e.g., training record, checkpoint files)
     logger: (optional) Logger object to log training progress (see log.py)
     extra_trainrecord_dict: dictionary with additional fields to save in the training record (e.g., include the command line inputs used to call this function)
     """
