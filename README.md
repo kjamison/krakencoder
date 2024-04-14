@@ -3,10 +3,13 @@
 
 The Krakencoder is a joint connectome mapping tool that simultaneously, bidirectionally translates between structural and functional connectivity, and across different atlases and processing choices via a common latent representation.
 
-<img src="images/krakencoder_overview.png" alt="krakencoder overview" width=75%>
-
 ### Citation
 Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Release the Krakencoder: A unified brain connectome translation and fusion tool". bioRxiv [doi: XXXXXX](https://www.biorxiv.org/content/XXXXXXXX)
+
+<img src="images/krakencoder_overview.png" alt="krakencoder overview" width=75%>
+
+The model presented in the manuscript uses a pre-computed 256-dimensional PCA to transform inputs to a common dimension, trains a 256x128 linear layer for each encoder, and a 128x256 linear layer for each decoder. The package presented here can be used to explore more complex architectures, including deeper, nonlinear encoders and decoders, alternative input/output transformations, separate latent spaces for SC or FC (bridged by an additional group-wise intergroup transformation), among many other possibilities. For our application, we found the simpler linear network to be the most robust and generalizable. See [`run_training.py`](run_training.py) for options.
+ 
 
 # Contents
 1. [Code organization](#Code-organization)
@@ -36,47 +39,67 @@ Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Releas
 # Examples
 
 ## Generating predicted connectomes from new data
-This example evaluates a pre-trained model on new SC data to predict all 15 output connectome types for each subject.
+This example evaluates a pre-trained model on new data to predict all 15 output connectome types for each subject.
 ```bash
-python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
+python run_model.py --inputdata '[FCcorr_fs86_hpf]=mydata_fs86_FCcorr_hpf.mat' \
+        '[FCcorr_fs86_hpfgsr]=mydata_fs86_FCcorr_hpf_gsr.mat' \
+        '[FCpcorr_fs86_hpf]=mydata_fs86_FCpcorr_hpf.mat' \
+        '[FCcorr_shen268_hpf]=mydata_shen268_FCcorr_hpf.mat' \
+        '[FCcorr_shen268_hpfgsr]=mydata_shen268_FCcorr_hpf_gsr.mat' \
+        '[FCpcorr_shen268_hpf]=mydata_shen268_FCpcorr_hpf.mat' \
+        '[FCcorr_coco439_hpf]=mydata_coco439_FCcorr_hpf.mat' \
+        '[FCcorr_coco439_hpfgsr]=mydata_coco439_FCcorr_hpf_gsr.mat' \
+        '[FCpcorr_coco439_hpf]=mydata_coco439_FCpcorr_hpf.mat' \
+        '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
         '[SCifod2act_fs86_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
         '[SCsdstream_shen268_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
         '[SCifod2act_shen268_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
         '[SCsdstream_coco439_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
         '[SCifod2act_coco439_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift \
-    --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
+    --checkpoint kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt \
     --inputxform kraken_ioxfm_SCFC_fs86_pc256_710train.npy \
         kraken_ioxfm_SCFC_shen268_pc256_710train.npy \
         kraken_ioxfm_SCFC_coco439_pc256_710train.npy \
-    --outputname all --output 'mydata_20240406_022034_ep002000_in.{input}.mat' \
+    --outputname all --output 'mydata_20240413_ep002000_in.{input}.mat' \
     --fusion --fusioninclude fusion=all fusionSC=SC fusionFC=FC --onlyfusioninputs
 ```
 * Each input file should have a 'data' field containing the [subjects x region x region] connectivity data for that input flavor.
-* This will predict all 15 connectome flavors as outputs, based on whatever inputs are provided. The more input flavors you can provide, the better the predictions are.
+* This will predict all 15 connectome flavors as outputs, based on whatever inputs are provided. Not all input flavors are required, but the more input flavors you can provide, the better the predictions are.
 * `--adaptmode meanfit+meanshift` uses a minimal approach for domain shift by linearly mapping the population mean of your input data to the population mean of the training data
 * `--fusion` includes "fusion" predictions incorporating all inputs (or subsets, as below) into each predicted output.
 * `--onlyfusioninputs` means the script will NOT output predictions for each individual input type, but only for fusion types
 * `--fusioninclude fusion=all fusionSC=SC fusionFC=FC` produces "fusion", based on all inputs, and "fusion(SC|FC)" based on only SC or FC inputs
-* Predicted outputs will be one file per input type flavor, for instance: `mydata_20240406_022034_ep002000_in.fusionSC.mat`
+    * **fusionFC** requires that some FC flavors are provided as inputs
+* Predicted outputs will be one file per input type flavor, for instance: `mydata_20240413_ep002000_in.fusionSC.mat`
 
 ## Generating latent space representations from new data
-This example computes the latent space representations from new SC data using a pre-trained model.
+This example computes the latent space representations from new data using a pre-trained model.
 ```bash
-python run_model.py --inputdata '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
+python run_model.py --inputdata '[FCcorr_fs86_hpf]=mydata_fs86_FCcorr_hpf.mat' \
+        '[FCcorr_fs86_hpfgsr]=mydata_fs86_FCcorr_hpf_gsr.mat' \
+        '[FCpcorr_fs86_hpf]=mydata_fs86_FCpcorr_hpf.mat' \
+        '[FCcorr_shen268_hpf]=mydata_shen268_FCcorr_hpf.mat' \
+        '[FCcorr_shen268_hpfgsr]=mydata_shen268_FCcorr_hpf_gsr.mat' \
+        '[FCpcorr_shen268_hpf]=mydata_shen268_FCpcorr_hpf.mat' \
+        '[FCcorr_coco439_hpf]=mydata_coco439_FCcorr_hpf.mat' \
+        '[FCcorr_coco439_hpfgsr]=mydata_coco439_FCcorr_hpf_gsr.mat' \
+        '[FCpcorr_coco439_hpf]=mydata_coco439_FCpcorr_hpf.mat' \
+        '[SCsdstream_fs86_volnorm]=mydata_fs86_sdstream_volnorm.mat' \
         '[SCifod2act_fs86_volnorm]=mydata_fs86_ifod2act_volnorm.mat' \
         '[SCsdstream_shen268_volnorm]=mydata_shen268_sdstream_volnorm.mat' \
         '[SCifod2act_shen268_volnorm]=mydata_shen268_ifod2act_volnorm.mat' \
         '[SCsdstream_coco439_volnorm]=mydata_coco439_sdstream_volnorm.mat' \
         '[SCifod2act_coco439_volnorm]=mydata_coco439_ifod2act_volnorm.mat' \
     --adaptmode meanfit+meanshift \
-    --checkpoint kraken_chkpt_SCFC_20240406_022034_ep002000.pt \
+    --checkpoint kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt \
     --inputxform kraken_ioxfm_SCFC_fs86_pc256_710train.npy \
         kraken_ioxfm_SCFC_shen268_pc256_710train.npy \
         kraken_ioxfm_SCFC_coco439_pc256_710train.npy \
-    --fusion --outputname encoded --output mydata_20240406_022034_ep002000_out.{output}.mat
+    --fusion --outputname encoded --output mydata_20240413_ep002000_out.{output}.mat
 ```
-* Latent outputs will be in the file `mydata_20240406_022034_ep002000_out.encoded.mat`
+* All 15 input flavors are not required, but more is better.
+* Latent outputs will be in the file `mydata_20240413_ep002000_out.encoded.mat`
 
 ## Training a model from scratch
 This example trains a new Krakencoder model on 5 flavors of FS86 data (3 FC, 2 SC).
@@ -106,13 +129,15 @@ python run_training.py \
     * Final split will be 72% training, 8% validation, and 20% testing (completely left out)
 * `--epochs 2000 --checkpointepochsevery 500` train for a total of 2000 epochs, with checkpoints every 500
 * `--outputprefix mykraken` outputs will be `mykraken_*`
-    * `mykraken_ioxfm_*.npy` for saved input transforms (unless `--inputxform` argument was provided)
     * `mykraken_chkpt_*_ep######.pt` saved model checkpoints
+    * `mykraken_ioxfm_*.npy` for saved input transforms (unless `--inputxform` argument was provided)
     * `mykraken_trainrecord_*.mat` training record file with training details, loss functions, etc...
     * `mykraken_log_*.txt` log outputs with training progress
-    * `mykraken_loss_*.png` figure show loss curves
+    * `mykraken_loss_*.png` figure showing loss curves
     * `mykraken_heatmap_*.png` heatmap figure showing pathwise prediction performance on validation data at current training epoch
 * See [run_training.py](run_training.py) or `python run_training.py --help` for more arguments, specifying deep network architectures, etc.
+
+* A note on training times: The full 15 flavor model (225 paths) took 12 hours for 2000 epochs (23 sec/epoch) on an Nvidia A100 GPU. The training generally scales with the number of paths. A model with 5 inputs (25 paths) takes about 1 hour for 2000 epochs (1.8 sec/epoch).
 
 
 ## Reading output files
@@ -121,7 +146,7 @@ import numpy as np
 from scipy.io import loadmat
 from krakencoder.utils import tri2square
 
-Mpred=loadmat('mydata_20240406_022034_ep002000_in.fusionSC.mat',simplify_cells=True)
+Mpred=loadmat('mydata_20240413_ep002000_in.fusionSC.mat',simplify_cells=True)
 #predicted outputs are stored in Mpred['predicted_alltypes'][inputtype][outputtype]
 fusionSC_to_FCshen_triu=Mpred['predicted_alltypes']['fusionSC']['FCcorr_shen268_hpf'] 
 #fusionSC_to_FCshen_triu is [Nsubj x 35778], where each row is a 1x(upper triangular) for a 268x268 matrix
@@ -159,12 +184,12 @@ The current pre-trained model has been trained on the following 15 connectivity 
 * Data were preprocessed using the HCP minimal prepocessing pipeline ([Glasser 2013](https://pubmed.ncbi.nlm.nih.gov/23668970/)). Tractography was performed using [MRtrix3](https://www.mrtrix.org/), with whole-brain dynamic seeding, and 5 million streamlines per subject.
 
 ### Parcellations
-* `FS86` or `FreeSurfer86`: 86-region FreeSurfer Desikan-Killiany (DKT) cortical atlas with "aseg" subcortical regions(ie: aparc+aseg.nii.gz) [Desikan 2006](https://pubmed.ncbi.nlm.nih.gov/16530430/), [Fischl 2002](https://pubmed.ncbi.nlm.nih.gov/11832223/)
-    * This atlas includes the 68 cortical DKT regions + 18 subcortical (excluding brain-stem)
-* `Shen268`: 268-region cortical+subcortical atlas from [Shen 2013](https://pubmed.ncbi.nlm.nih.gov/23747961/). This atlas is defined in MNI voxel space.
+* `FS86` or `FreeSurfer86`: 86-region FreeSurfer Desikan-Killiany (DK) cortical atlas with "aseg" subcortical regions(ie: aparc+aseg.nii.gz) [Desikan 2006](https://pubmed.ncbi.nlm.nih.gov/16530430/), [Fischl 2002](https://pubmed.ncbi.nlm.nih.gov/11832223/)
+    * This atlas includes the 68 cortical DK regions + 18 subcortical (excluding brain-stem)
+* `Shen268`: 268-region cortical+subcortical atlas from [Shen 2013](https://pubmed.ncbi.nlm.nih.gov/23747961/). This atlas was created by clustering resting state fMRI data. It is defined in MNI voxel space.
 * `Coco439` or `CocoMMPSUIT439`: 439-region atlas combining parts of several atlases:
     * 358 cortical ROIs from the HCP multi-modal parcellation ([Glasser 2016](https://pubmed.ncbi.nlm.nih.gov/27437579/))
-    * 12 subcortical ROIs from aseg, adjusted by FSL's FIRST tool ([Patenaude 2011](https://pubmed.ncbi.nlm.nih.gov/21352927/))
+    * 12 subcortical ROIs from FreeSurfer aseg, adjusted by FSL's FIRST tool ([Patenaude 2011](https://pubmed.ncbi.nlm.nih.gov/21352927/))
         * Hippocampus from HCP-MMP cortex is merged with aseg hippocampus
     * 30 thalamic nuclei from FreeSurfer7 [Iglesias 2018](https://pubmed.ncbi.nlm.nih.gov/30121337/) (50 nuclei merged down to 30 to remove the smallest nuclei, as with AAL3v1)
     * 12 subcortical nuclei from AAL3v1 [Rolls 2020](https://pubmed.ncbi.nlm.nih.gov/31521825/) (VTA L/R, SN_pc L/R, SN_pr L/R, Red_N L/R, LC L/R, Raphe D/M)
@@ -185,5 +210,7 @@ The current pre-trained model has been trained on the following 15 connectivity 
 # Downloads
 * Data and other files associated with this model can found here: [https://osf.io/dfp92](https://osf.io/dfp92)
     * `kraken_ioxfm_SCFC_[fs86,shen268,coco439]_pc256_710train.npy`: precomputed PCA transformations for fs86, shen268, and coco439 atlases. Each file contains the PCA transformations for FC, FCgsr, FCpcorr, SCsdstream, and SCifod2act inputs for that atlas.
-    * `kraken_chkpt_SCFC_20240406_022034_ep002000.pt`: pretrained model checkpoint
+    * `kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt`: pretrained model checkpoint
+        * This is the model used in the manuscript. It was trained on all 15 input flavors using the loss function *correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000*, 256-dimensional PCA, 128 dimensional latent space with latent normalization, single linear 256x128 layer per encoder/decoder, 50% dropout, learning rate 1e-4, AdamW optimizer with weight decay 0.01
     * `subject_splits_993subj_683train_79val_196test_retestInTest.mat`: Subject file containing list of training, validation, and testing subjects.
+        * These subjects splits were created to ensure family groups (siblings, twins, etc) are all within the same split, to avoid data leakage.
