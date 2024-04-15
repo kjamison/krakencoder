@@ -943,8 +943,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     
     lrstr="lr%g" % (lr)
     optimstr=""
-    #if do_separate_optimizer:
-    #    optimstr="_pathoptim"
     if not do_separate_optimizer:
         optimstr="_1op"
     
@@ -955,8 +953,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         optimname_str+=".w%g" % (adam_decay)
     
     zgstr=""
-    #if do_zerograd_none:
-    #    zgstr="_zgnone"
     skipaccstr=""
     if do_skip_accurate_paths:
         skipaccstr="_skipacc"
@@ -1089,8 +1085,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         loss_str+="+targlatent"
 
     train_string="%depoch_%s%s%s%s%s%s%s" % (nbepochs,lrstr,loss_str,optimstr,optimname_str,zgstr,skipaccstr,initstr)
-    #if do_trainpath_shuffle:
-    #       train_string+="_tpshuffle"
     if do_roundtrip:
         if do_use_existing_net:
             train_string+="_addroundtrip"
@@ -1194,7 +1188,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
 
     if 'starting_point_file' in training_params and training_params['starting_point_file'] and nbepochs<=1:
         starting_point_base=os.path.join(os.path.split(output_file_prefix)[0],os.path.split(training_params['starting_point_file'])[1])
-        #starting_point_base=re.sub("_[0-9_]+_ep[0-9]+\.pt$","",starting_point_base)
         starting_point_base=re.sub("\.pt$","",starting_point_base)
         recordfile=starting_point_base.replace("_chkpt_","_trainrecord_")+".mat"
         imgfile=starting_point_base.replace("_chkpt_","_loss_")+".png"
@@ -1904,18 +1897,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                         valOrig_predicted-=trainOrig_meandiff
                 
                     #################
-                    if True:
-                        valOrig_outputs=torchfloat(valOrig_outputs) #.cpu()
-                        valOrig_predicted=torchfloat(valOrig_predicted) #.cpu()
-                    else:
-                        if not torch.is_tensor(valOrig_outputs):
-                            #for some reason we need to explicitly convert this sometimes
-                            valOrig_outputs=torch.from_numpy(valOrig_outputs).float()
-            
-                        if not torch.is_tensor(valOrig_predicted):
-                            #for some reason we need to explicitly convert this sometimes
-                            valOrig_predicted=torch.from_numpy(valOrig_predicted).float()
-            
+                    valOrig_outputs=torchfloat(valOrig_outputs)
+                    valOrig_predicted=torchfloat(valOrig_predicted)
+                    
                     #for even less clear reason, these are sometimes double() instead of float
                     valOrig_cc=xycorr(valOrig_outputs.float(),valOrig_predicted.float())
                     
@@ -1967,11 +1951,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                     continue
                 
                 tmp_encmse_count+=1
-                #epoch time is 2.1sec for just mse
-                #epoch time is 7.8sec for mse+ val and train corrself/other
-                #epoch time is 2.2sec for NONE
-                #epoch time is 2.2sec for mse+ VAL corrself/other
-                #epoch time is 2.5sec for mse+ VAL full corr set
                 tmp_encmse_val+=torch.mean((allpath_val_enc[itp]-allpath_val_enc[jtp])**2)
                 tmp_encmse_train+=torch.mean((allpath_train_enc[itp]-allpath_train_enc[jtp])**2)
                 
@@ -2089,7 +2068,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                                     "%.6f","%.6f","%.3f","%.3f","%.3f/%d","%.3f","%.3f","%.3f","%.3f/%d"],
                                 header_separator="-")
                 [print(s) for s in tmp_column_str[:-1]];
-                #print("-"*len(tmp_column_str[0]))
+                
                 if len(trainpath_list)>1:
                     print(tmp_column_str[1]) #print column separator again before mean row
                     print(tmp_column_str[-1])
@@ -2197,7 +2176,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                     statefile=checkpoint_filebase+"_ep%06d.pt" % (nbepochs)
                 else:
                     statefile=checkpoint_filebase+"_ep%06d.pt" % (epoch)
-            #checkpoint={"state_dict": net.state_dict(),"epoch": epoch}
             checkpoint={"epoch": epoch}
             
             #copy network description fields into checkpoint
@@ -2212,8 +2190,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                     checkpoint['optimizer']=[opt.state_dict() for opt in optimizer_list]
                 else:
                     checkpoint['optimizer']=optimizer.state_dict()
-            #torch.save(net.state_dict(), statefile)
-            #torch.save(checkpoint, statefile)
             net.save_checkpoint(statefile, checkpoint)
             print("Ep %d) Saved %s" % (epoch, statefile))
             
@@ -2296,15 +2272,15 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                             colormap='magma2',outputimagefile={'file':imgfile_heatmap,'dpi':200})
     
     print("Ep %d) Saved %s" % (epoch, imgfile_heatmap))
-
-    #torch.save(net, statefile) #saves whole class
-    #torch.save(net.state_dict(), statefile) #saves the weights (less sensitive to class changes)
+    
     return net, trainrecord
-    #interesting re single-path: 
-    # with latentsize=16, I get to val (n=42) ident top1 acc=1.0 after 150 or so epochs
-    # with latentsize=4, I get val id=0.80 after 200 epochs and then val decreases
 
 def run_network(net, trainpath_list, maxthreads=1, fusionmode=False, pathfinder_list=[], fusionmode_search_list=[], fusionmode_do_not_normalize=False):
+    """
+    Evaluate a network on a list of trainpaths
+    
+    For now, run_model.py is NOT calling this function. It was used for testing and debugging earlier in development. It might need some fixes.
+    """
     trainpath_names=['%s->%s' % (tp['input_name'],tp['output_name']) for tp in trainpath_list]
     trainpath_names_short=['%s->%s' % (tp['input_name_short'],tp['output_name_short']) for tp in trainpath_list]
     data_string=trainpath_list[0]['data_string']
