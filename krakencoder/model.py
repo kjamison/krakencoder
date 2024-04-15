@@ -450,13 +450,14 @@ class Krakencoder(nn.Module):
         torch.save(checkpoint,filename)
     
     @staticmethod
-    def load_checkpoint(filename, checkpoint_override=None):
+    def load_checkpoint(filename, checkpoint_override=None, eval_mode=False):
         """
         Static function to load a model from a file, including all hyperparameters and model weights.
         
         Parameters:
         filename: str, path to the checkpoint file (.pt)
         checkpoint_override: dict (optional), dictionary of hyperparameters to override in the checkpoint file
+        eval_mode: bool (default=False), if True, set the model to evaluation mode (no dropout, etc.)
         
         Returns:
         net: Krakencoder model
@@ -530,6 +531,9 @@ class Krakencoder(nn.Module):
         extra_dict=checkpoint.copy()
         del extra_dict['state_dict']
         
+        if eval_mode:
+            net.eval()
+            
         return net, extra_dict
     
 class Normalize(nn.Module):
