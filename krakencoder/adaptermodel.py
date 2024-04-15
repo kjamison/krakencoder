@@ -52,9 +52,11 @@ class KrakenAdapter(nn.Module):
         #and return x_enc, x_dec
         if encoder_index >= 0 and decoder_index >= 0:
             x = self.encoder_outer_layer_list[encoder_index](x)
-            x = self.data_transformer_list[encoder_index].transform(x)
+            if not self.data_transformer_list is None:
+                x = self.data_transformer_list[encoder_index].transform(x)
             x_enc, x_dec = self.inner_model(x, encoder_index=encoder_index, decoder_index=decoder_index, **kwargs)
-            x_dec = self.data_transformer_list[decoder_index].inverse_transform(x_dec)
+            if not self.data_transformer_list is None:
+                x_dec = self.data_transformer_list[decoder_index].inverse_transform(x_dec)
             x_dec = self.decoder_outer_layer_list[decoder_index](x_dec)
             return x_enc, x_dec
         
@@ -64,7 +66,8 @@ class KrakenAdapter(nn.Module):
         elif encoder_index < 0:
             x_enc = x
             _, x_dec = self.inner_model(x_enc, encoder_index=encoder_index, decoder_index=decoder_index, **kwargs)
-            x_dec = self.data_transformer_list[decoder_index].inverse_transform(x_dec)
+            if not self.data_transformer_list is None:
+                x_dec = self.data_transformer_list[decoder_index].inverse_transform(x_dec)
             x_dec = self.decoder_outer_layer_list[decoder_index](x_dec)
             return x_enc, x_dec
         
@@ -72,10 +75,11 @@ class KrakenAdapter(nn.Module):
         #so encode and return x_enc
         elif decoder_index < 0:
             x = self.encoder_outer_layer_list[encoder_index](x)
-            x = self.data_transformer_list[encoder_index].transform(x)
+            if not self.data_transformer_list is None:
+                x = self.data_transformer_list[encoder_index].transform(x)
             x_enc = self.inner_model(x, encoder_index=encoder_index, decoder_index=decoder_index, **kwargs)
             return x_enc
-        
+    
     def freeze_inner_model(self, do_freeze=True):
         for param in self.inner_model.parameters():
             param.requires_grad = not do_freeze
@@ -171,6 +175,8 @@ class SimpleLinearTransform(nn.Module):
     def forward(self, x):
         # Applying different linear transformations to each feature
         #output = x * self.weights + self.biases
+        if self.polynomial_order == 0:
+            return x
         output = self.biases
         for p in range(self.polynomial_order):
             output = output + (x**(p+1))*self.weights[p]
