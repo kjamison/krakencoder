@@ -929,8 +929,8 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         output_dimension=traindata.shape[1]
         
     if transformer_type == "none":
-        transformer=FunctionTransformer(func=lambda x:x,
-                                        inverse_func=lambda x:x)
+        transformer=FunctionTransformer(func=lambda x:torchfloat(x),
+                                        inverse_func=lambda x:torchfloat(x))
         transformer_info["type"]="none"
         transformer_info["params"]={}
     
@@ -1299,3 +1299,18 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
     
     
     return transformer, transformer_info
+
+def load_transformers_from_file(input_transform_file_list, input_names=None):
+    if isinstance(input_transform_file_list,str):
+        input_transform_file_list=[input_transform_file_list]
+    transformer_list={}
+    transformer_info_list={}
+    for ioxfile in input_transform_file_list:
+        print("Loading precomputed input transformations: %s" % (ioxfile))
+        ioxtmp=np.load(ioxfile,allow_pickle=True).item()
+        for conntype in ioxtmp:
+            if input_names is not None and conntype not in input_names:
+                continue
+            transformer_list[conntype], transformer_info_list[conntype] = generate_transformer(transformer_type=ioxtmp[conntype]['type'],  
+                                                                                               precomputed_transformer_params=ioxtmp[conntype])
+    return transformer_list, transformer_info_list
