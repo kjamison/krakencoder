@@ -111,7 +111,7 @@ python run_training.py \
         '[SCsdstream_fs86_volnorm]@SC=mydata_fs86_sdstream_volnorm.mat' \
         '[SCifod2act_fs86_volnorm]@SC=mydata_fs86_ifod2act_volnorm.mat' \
     --datagroups SCFC \
-    --latentsize 128 --latentunit --pcadim 256 \
+    --latentsize 128 --latentunit --transformation pca256 \
     --dropout .5 --losstype correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000 \
     --trainvalsplitfrac .8 --valsplitfrac .1 \
     --outputprefix mykraken --epochs 2000 --checkpointepochsevery 500 --displayepochs 25
@@ -121,7 +121,7 @@ python run_training.py \
     * `group` is optional, but will be automatically guessed based on `flavor` if not specified. `group` might be SC or FC
 * `--datagroups SCFC` in means all groups should be included in model
 * `--latentsize 128 --latentunit` means latent dimension is 128, and will be explicitly L2-normalized during training
-* `--pcadim 256` will compute a new 256-dimensional PCA reduction for each input, and save it to a file `mykraken_ioxfm_....npy`
+* `--transformation pca256` will compute a new 256-dimensional PCA reduction for each input, and save it to a file `mykraken_ioxfm_....npy`
     * To use an existing PCA transform, add `--inputxform mykraken_ioxfm_...` with the given file(s).
 * `--dropout .5` uses 50% dropout regularization during training
 * `--losstype ...` specifies the loss functions and associated weights. See manuscript for details

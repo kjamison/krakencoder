@@ -14,7 +14,7 @@ Main functions it calls, after parsing args:
 Example:
 
 python run_training.py --subjectfile subject_splits_993subj_710train_80val_203test_retestInTest.mat \
-    --roinames fs86 shen268 coco439 --datagroups SCFC --latentsize 128 --pcadim 256  --latentunit --dropout 0.5 \
+    --roinames fs86 shen268 coco439 --datagroups SCFC --latentsize 128 --transformation pca256  --latentunit --dropout 0.5 \
     --losstype correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000 \
     --epochs 2000 --checkpointepochsevery 500 --displayepochs 25 \
     --inputxform kraken_ioxfm_SCFC_coco439_993subj_pc256_25paths_710train_20220527.npy \
