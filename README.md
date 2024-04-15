@@ -194,6 +194,8 @@ The current pre-trained model has been trained on the following 15 connectivity 
     * 30 thalamic nuclei from FreeSurfer7 [Iglesias 2018](https://pubmed.ncbi.nlm.nih.gov/30121337/) (50 nuclei merged down to 30 to remove the smallest nuclei, as with AAL3v1)
     * 12 subcortical nuclei from AAL3v1 [Rolls 2020](https://pubmed.ncbi.nlm.nih.gov/31521825/) (VTA L/R, SN_pc L/R, SN_pr L/R, Red_N L/R, LC L/R, Raphe D/M)
     * 27 SUIT cerebellar subregions [Diedrichsen 2009](https://pubmed.ncbi.nlm.nih.gov/19457380/) (10 left, 10 right, 7 vermis)
+    
+<img src="images/parc_figure_horz_small.png" alt="parcellations" width=90%>
 
 # Requirements
 * python >= 3.8
