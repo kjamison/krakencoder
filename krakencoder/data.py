@@ -893,6 +893,69 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
 
 #################################
 #################################
+def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+meanshift',input_data_fitsubjmask=None, target_data_fitsubjmask=None):
+    """
+    Generate a transformer to adapt input data domain to match training data
+    
+    Parameters:
+    input_data: np.array, input data to use for computing fit. Could be a [1 x Nfeat] mean or [Nsubj x Nfeat] data
+    target_data: np.array, target data to use for computing fit. Could be a [1 x Nfeat] mean or [Nsubj x Nfeat] data
+        Or it could be a dict from generate_transformer (with a 'params' field containing a 'input_mean' or 'pca_input_mean' field)
+    adapt_mode: str (optional, default='meanfit+meanshift'), mode to use for adapting input data to target data
+        Options: 'meanfit', 'meanshift', 'meanfit+meanshift'
+    input_data_fitsubjmask: np.array (optional), boolean mask for input data subjects to use for fitting
+    target_data_fitsubjmask: np.array (optional), boolean mask for target data subjects to use for fitting
+    
+    Returns:
+    transformer: transformer object (with .fit() and .fit_transform() methods, etc...)   
+    """
+    #test if target_data is a dict with field 'params'
+    if isinstance(target_data,dict):
+        if 'params' in target_data and 'input_mean' in target_data['params']:
+            target_data=np.atleast_2d(target_data['params']['input_mean'])
+        elif 'params' in target_data and 'pca_input_mean' in target_data['params']:
+            target_data=np.atleast_2d(target_data['params']['pca_input_mean'])
+        elif 'input_mean' in target_data:
+            target_data=np.atleast_2d(target_data['input_mean'])
+        elif 'pca_input_mean' in target_data:
+            target_data=np.atleast_2d(target_data['pca_input_mean'])
+    
+    if input_data_fitsubjmask is None:
+        input_data_fitsubjmask=np.ones(input_data.shape[0])>0
+    if target_data_fitsubjmask is None:
+        target_data_fitsubjmask=np.ones(target_data.shape[0])>0
+    
+    input_data_mean=np.atleast_2d(np.mean(input_data[input_data_fitsubjmask,:],axis=0,keepdims=True))
+    target_data_mean=np.atleast_2d(np.mean(target_data[target_data_fitsubjmask,:],axis=0,keepdims=True))
+    
+    if adapt_mode is None:
+        transformer=FunctionTransformer(func=lambda x:torchfloat(x),
+                                        inverse_func=lambda x:torchfloat(x))
+    elif adapt_mode.lower() == 'meanshift':
+        transformer=FunctionTransformer(func=lambda x:torchfloat(x - input_data_mean + target_data_mean),
+                                        inverse_func=lambda x:torchfloat(x - target_data_mean + input_data_mean))
+    elif adapt_mode.lower() == 'meanfit+meanshift' or adapt_mode.lower() == 'meanfitshift':
+        A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
+        beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0]
+        print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
+        #print("\tShifting input data mean to transformer mean: %s" % (x))
+        transformer=FunctionTransformer(func=lambda x:torchfloat(x*beta[0] - input_data_mean*beta[0] + target_data_mean),
+                                        inverse_func=lambda x:torchfloat(x/beta[0] - target_data_mean/beta[0] + input_data_mean))
+    elif adapt_mode.lower() == 'meanfit':
+        #use np.linalg.lstsq to least squares fit of actual_data_mean to transformer_data_mean
+        A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
+        beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0]
+        print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
+        transformer=FunctionTransformer(func=lambda x:torchfloat(x*beta[0] + beta[1]),
+                                        inverse_func=lambda x:torchfloat(x/beta[0]-beta[1]/beta[0]))
+    else:
+        raise Exception("Unknown adapt_mode: %s" % (adapt_mode))
+
+    return transformer
+        
+    
+#################################
+#################################
 #create data input/output transformers, datasets/dataloaders, and TRAINING PATHS
 
 def generate_transformer(traindata=None, transformer_type=None, transformer_param_dict=None, precomputed_transformer_params=None, return_components=True):
