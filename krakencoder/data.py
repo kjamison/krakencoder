@@ -1363,13 +1363,24 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
     
     return transformer, transformer_info
 
-def load_transformers_from_file(input_transform_file_list, input_names=None):
+def load_transformers_from_file(input_transform_file_list, input_names=None, quiet=False):
+    """
+    Load precomputed input transformers from a list of files
+    
+    Parameters:
+    input_transform_file_list: list of str, list of input transformer files (kraken_ioxfm_*.npy) to load
+    input_names: list of str (optional), list of input names to load (default=None, load all)
+    
+    Returns:
+    transformer_list: dict, with input names as keys and transformer objects as values
+    """
     if isinstance(input_transform_file_list,str):
         input_transform_file_list=[input_transform_file_list]
     transformer_list={}
     transformer_info_list={}
     for ioxfile in input_transform_file_list:
-        print("Loading precomputed input transformations: %s" % (ioxfile))
+        if not quiet:
+            print("Loading precomputed input transformations: %s" % (ioxfile))
         ioxtmp=np.load(ioxfile,allow_pickle=True).item()
         for conntype in ioxtmp:
             if input_names is not None and conntype not in input_names:

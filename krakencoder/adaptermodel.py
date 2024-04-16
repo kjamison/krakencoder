@@ -13,7 +13,8 @@ class KrakenAdapter(nn.Module):
                  linear_polynomial_order=1,
                  leaky_relu=False,
                  dropout=0.0,
-                 inner_model_extra_dict={}):
+                 inner_model_extra_dict={},
+                 eval_mode=False):
         super(KrakenAdapter, self).__init__()
         if inputsize_list is None:
             inputsize_list=inner_model.inputsize_list
@@ -44,6 +45,9 @@ class KrakenAdapter(nn.Module):
             if dropout > 0:
                 nnseq+=[nn.Dropout(dropout)]
             self.decoder_outer_layer_list.append(nn.Sequential(*nnseq))
+            
+        if eval_mode:
+            self.eval()
         
             
     def forward(self, x, encoder_index, decoder_index, **kwargs):
