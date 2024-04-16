@@ -9,11 +9,12 @@ Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Releas
 <img src="images/krakencoder_overview.png" alt="krakencoder overview" width=75%>
 
 The model presented in the manuscript uses a pre-computed 256-dimensional PCA to transform inputs to a common dimension, trains a 256x128 linear layer for each encoder, and a 128x256 linear layer for each decoder. The package presented here can be used to explore more complex architectures, including deeper, nonlinear encoders and decoders, alternative input/output transformations, separate latent spaces for SC or FC (bridged by an additional group-wise intergroup transformation), among many other possibilities. For our application, we found the simpler linear network to be the most robust and generalizable. See [`run_training.py`](run_training.py) for options.
- 
+
 
 # Contents
 1. [Code organization](#Code-organization)
 2. [Examples](#examples)
+    * [Jupyter example using pre-trained model on new data](#jupyter-example-using-pre-trained-model-on-new-data)
     * [Generating predicted connectomes from new data](#generating-predicted-connectomes-from-new-data)
     * [Generating latent space representations from new data](#generating-latent-space-representations-from-new-data)
     * [Training a model from scratch](#training-a-model-from-scratch)
@@ -23,7 +24,7 @@ The model presented in the manuscript uses a pre-computed 256-dimensional PCA to
 5. [Downloads](#downloads)
 
 # Code organization
-### CLI-facing scripts:
+### Command-line scripts:
 * [`run_training.py`](run_training.py): Train a new model
 * [`run_model.py`](run_model.py): Run a saved checkpoint on new data
 * [`describe_checkpoint.py`](describe_checkpoint.py): Print information about a saved checkpoint
@@ -33,10 +34,14 @@ The model presented in the manuscript uses a pre-computed 256-dimensional PCA to
 * [`train.py`](krakencoder/train.py): Training-related functions
 * [`loss.py`](krakencoder/loss.py): Specifies different loss functions to be used during training and evaluation
 * [`data.py`](krakencoder/data.py): Functions for loading and transforming input data
+* [`adaptermodel.py`](krakencoder/adaptermodel.py): KrakenAdapter model class definition, helps wrap I/O transformations
 * [`plotfigures.py`](krakencoder/plotfigures.py): Functions for plotting loss curves and performance heatmaps
 * [`utils.py`](krakencoder/utils.py): Miscellaneous utility functions
 
 # Examples
+
+## Jupyter example using pre-trained model on new data
+See [`krakencoder_example.ipynb`](krakencoder_example.ipynb) [![Try it in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kjamison/krakencoder/blob/main/krakencoder_example.ipynb) 
 
 ## Generating predicted connectomes from new data
 This example evaluates a pre-trained model on new data to predict all 15 output connectome types for each subject.
