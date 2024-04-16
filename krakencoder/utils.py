@@ -24,7 +24,7 @@ def numpyvar(x):
     """Convert a torch tensor to a numpy array, or return the input if it is not a tensor"""
     if not torch.is_tensor(x):
         return x
-    return x.numpy()
+    return x.detach().numpy()
 
 def torchvar(x, astype=None):
     """cast variable to torch (use cuda if available), with optional type conversion"""
