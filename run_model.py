@@ -511,21 +511,6 @@ def run_model_on_new_data(argv):
 
             print(x,conndata_alltypes[x]['data'].shape)
     else:
-        """
-        input_file="all"
-        if len(input_file_list) > 0 and not input_file_list[0]=='all':
-            if input_file_list[0]=='retest':
-                subjects_out, conndata_alltypes = load_hcp_data(subjects=None, conn_name_list=input_conntype_list, load_retest=True,quiet=False)
-            elif input_file_list[0] in ['train','val','test']:
-                if input_subject_splits is None:
-                    raise Exception("Must provide --subjectsplitfile for train, val, test options")
-                if input_file_list[0]=='train':
-                    subjects_out, conndata_alltypes = load_hcp_data(subjects=subjects_train, conn_name_list=input_conntype_list, quiet=False)
-                elif input_file_list[0]=='val':
-                    subjects_out, conndata_alltypes = load_hcp_data(subjects=subjects_val, conn_name_list=input_conntype_list, quiet=False)
-                elif input_file_list[0]=='test':
-                    subjects_out, conndata_alltypes = load_hcp_data(subjects=subjects_test, conn_name_list=input_conntype_list, quiet=False)            
-        """
         input_file="all"
         if len(input_file_list) > 0:
             if any([x in input_file_list for x in ["train","val","test"]]) and input_subject_splits is None:
