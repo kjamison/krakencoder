@@ -110,7 +110,6 @@ def argument_parse_runtraining(argv):
     train_arg_group.add_argument('--addroundtripepochs',action='store',dest='add_roundtrip_epochs', type=int, default=0, help='add roundtrip training paths A->B->A AFTER normal training')
     train_arg_group.add_argument('--addmeanlatentepochs',action='store',dest='add_meanlatent_epochs', type=int, default=0, help='add meanlatent training paths AFTER normal training')
     train_arg_group.add_argument('--trainblocks',action='store',dest='trainblocks', type=int, default=1, help='How many total times perform normal training + (roundtrip or meanlatent) set? (optimizer resets each block)')
-    train_arg_group.add_argument('--latentsimbatchsize',dest='latent_sim_batch_size',type=int,default=0,help='Batch size for latentsimloss. default=0 (no batch)')
     train_arg_group.add_argument('--adamdecay',action='store',dest='adam_decay',type=float, default=0.01, help='Adam weight decay')
     train_arg_group.add_argument('--learningrate',action='store',dest='learning_rate',type=float, default=1e-4, help='Learning rate')
 
@@ -187,7 +186,6 @@ def run_training_command(argv):
     input_mse_weight=args.mseweight
     input_latent_inner_loss_weight=args.latent_inner_loss_weight
     input_batchsize=args.batch_size
-    input_latentsimbatchsize=args.latent_sim_batch_size
     input_encodingfile=args.encoded_input_file
     do_fixed_target_encoding=args.fixed_target_encoding
     do_target_encoding=args.target_encoding
@@ -851,7 +849,6 @@ def run_training_command(argv):
                     print("Adding %d meanlatent epochs" % (add_meanlatent_epochs))
                     training_params_tmp=training_params.copy()
                     training_params_tmp['meantarget_latentsim']=True
-                    training_params_tmp['latentsim_batchsize']=batchsize #maybe?
                     training_params_tmp['nbepochs']=add_meanlatent_epochs
                     net, trainrecord = train_network(trainpath_list,training_params_tmp, net=net, 
                                                      data_optimscale_list=data_optimscale, data_origscale_list=data_orig,

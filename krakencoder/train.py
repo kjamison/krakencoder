@@ -785,7 +785,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         training_params['origscalecorr_epochs']: int (default=0=never), number of epochs between computing performance metrics for inverse-transformed 'origscale' data
         training_params['trainpath_shuffle']: bool (default=False), shuffle training paths each epoch
         training_params['roundtrip']: bool (default=False), train encoder[i]->latent->decoder[j]->encoder[j]->latent->decoder[i], loss(meas_i, pred_i)
-        training_params['latentsim_batchsize']: int (default=0=full training set), batch size for latent space intra-subject, inter-flavor similarity loss
         training_params['meantarget_latentsim']: bool (default=False), use inter-flavor mean as target for intra-subject similarity loss
         training_params['target_encoding']: bool (default=False), a target encoding is provided for each subject, to LOOSELY guide the encoder and decoder:
             - We compute input->latent->pred_output, then loss(latent, target latent) and loss(pred_output, target output)
@@ -858,11 +857,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     #how often to compute selfcc and othercc for untransformed space? (eg not PCA)
     origscalecorr_epochs=training_params['origscalecorr_epochs'] if 'origscalecorr_epochs' in training_params else 0
     
-    do_batchwise_latentsim=False
-    latentsim_batchsize=0
-    if 'latentsim_batchsize' in training_params:
-        latentsim_batchsize=training_params['latentsim_batchsize']
-        do_batchwise_latentsim=latentsim_batchsize>0
     
     do_meantarget_latentsim = training_params['meantarget_latentsim'] if 'meantarget_latentsim' in training_params else False
     do_target_encoding = training_params['target_encoding'] if 'target_encoding' in training_params else False
@@ -1134,10 +1128,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     #make subject index dataloader for latentsimloss
     numsubjects_train=len(trainpath_list[0]['subjidx_train'])
     
-    if do_batchwise_latentsim:
-        tmp_latent_batchsize=latentsim_batchsize
-    else:
-        tmp_latent_batchsize=numsubjects_train
+    tmp_latent_batchsize=numsubjects_train
     
     latentsimloss_subjidx_dataloader=data_utils.DataLoader(np.arange(numsubjects_train), batch_size=tmp_latent_batchsize, shuffle=True, drop_last=True)
 
@@ -1201,7 +1192,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     trainrecord['nbepochs']=nbepochs
     trainrecord['learningrate']=lr
     trainrecord['batchsize']=batchsize
-    trainrecord['latentsim_batchsize']=latentsim_batchsize
     trainrecord['losstype']=losstype
     trainrecord['latent_inner_loss_weight']=latent_inner_loss_weight
     trainrecord['mse_weight']=mse_weight
@@ -1532,143 +1522,75 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             
             trainrecord['inputwise_latentsim_loss']=do_inputwise_latentsim
             trainrecord['meantarget_loss']=do_meantarget_latentsim
-            #note: for contrastive, do we want batchwise? (need batchsize larger to make sure we have each encoder to train enough times)
-            #like:
-            #allinput_train_encoded stacked into (numencoders*numtrainsubj) x latentsize = 1470 x 128, and a [1470 x 1] subject label
-            #except we need the input data during net.train(), so .... allinput_train = [numencoders*numtrainsubj] x inputsize = 5*294 x 256 = 1470x256 and 1470x1 subject label
-            #for batchidx, trainset in dataloader(batchsize=42*numencoders):
-            #   traininputs, subjlabel, encoderlabel = trainset
-            #   net.train()
-            #   for ienc in unique(encoderlabel):
-            #       train_encoded[encoderlabel==ienc] = net(traininputs[encoderlabel==ienc,encoder_index=ienc,decoder_index=-1)
-            #   for subj in np.unique(subjlabel):
-            #       subjdata=train_encoded[subjlabel==subj]
-            #       posdist=similarity(subjdata,normalize(subjdata.mean(axis=0,keepdim=True),axis=1)) #note: need to normalize after averaging
-            #       negdist=similarity(subjdata,train_encoded[subjlabel!=subj])
-            #       #note similarity(x,y) = x@y.T which gives (numencoder x 1) for proto and (numencoder x numothersubj*numencoder) for negative
-            #       #so we can then sum those or something
-            #       loss+=posdist-negdist 
-            #       #using loss with logs and exponents and all that fun stuff from Konkle paper
-            #   loss.backwards()
-            #   optim.step()
             
-            do_contrastive_latentsim=False
+            #tpidx = [first trainingpath for encoder=0, first training path for encoder=1, etc...]
+            encidx , tpidx=np.unique([tp['encoder_index'] for tp in trainpath_list],return_index=True)
             
-            if do_inputwise_latentsim:
-                #tpidx = [first trainingpath for encoder=0, first training path for encoder=1, etc...]
-                encidx , tpidx=np.unique([tp['encoder_index'] for tp in trainpath_list],return_index=True)
+            loss=0
+            
+            #compute the total inter-input encoding similarity loss
+            for batch_idx, batchsubjidx in enumerate(latentsimloss_subjidx_dataloader):
                 
-                
-                #if epoch % 10 == 0:
-                #    savemat("testCC%05d.mat" % (epoch),{"allinput_train_enc":[x.numpy().copy() for x in allinput_train_encoded]},format='5',do_compression=True)
-                
-                
-                loss=0
-                
-                #compute the total inter-input encoding similarity loss
-                for batch_idx, batchsubjidx in enumerate(latentsimloss_subjidx_dataloader):
+                batchinput_train_encoded=[]
+                batchinput_train_encoded_mean=0
+                batchinput_train_encoded_count=0
+                net.eval()
+            
+                #compute the training data encoding for each input
+                for ienc, itp in enumerate(tpidx):
+                    train_inputs=trainpath_list[itp]['train_inputs'][batchsubjidx]
+                    encoder_index=trainpath_list[itp]['encoder_index']
+                    encoder_index_torch=torchint(encoder_index)
                     
-                    batchinput_train_encoded=[]
-                    batchinput_train_encoded_mean=0
-                    batchinput_train_encoded_count=0
-                    net.eval()
-                
-                    #compute the training data encoding for each input
-                    for ienc, itp in enumerate(tpidx):
-                        train_inputs=trainpath_list[itp]['train_inputs'][batchsubjidx]
-                        encoder_index=trainpath_list[itp]['encoder_index']
-                        encoder_index_torch=torchint(encoder_index)
-                        
-                        with torch.no_grad():
-                            conn_encoded = net(train_inputs,encoder_index_torch,neg1_index)
-                        
-                        if do_meantarget_latentsim:
-                            batchinput_train_encoded_mean+=conn_encoded
-                            batchinput_train_encoded_count+=1
-                        else:
-                            batchinput_train_encoded+=[conn_encoded]
-                    if do_meantarget_latentsim:
-                        batchinput_train_encoded_mean=batchinput_train_encoded_mean/batchinput_train_encoded_count
-                        if latent_normalize:
-                            #renormalize mean to hypersphere shell
-                            batchinput_train_encoded_mean=nn.functional.normalize(batchinput_train_encoded_mean,p=2,dim=1)
-                        
-                    net.train()
-                    optimizer.zero_grad(set_to_none=do_zerograd_none)
-                    
-                    loss=0
-                    for ienc, itp in enumerate(tpidx):
-                        train_inputs=trainpath_list[itp]['train_inputs'][batchsubjidx]
-                        encoder_index=trainpath_list[itp]['encoder_index']
-                        encoder_index_torch=torchint(encoder_index)
-                        
+                    with torch.no_grad():
                         conn_encoded = net(train_inputs,encoder_index_torch,neg1_index)
-                        
-                        #conn_encoded = numtrainsubj x latentsize
-                        #allinput_train_encoded = [num encoders] list of conn_encodeds
-                        
-                        if do_meantarget_latentsim:
-                            loss+=criterion_latentsim(conn_encoded,batchinput_train_encoded_mean)
-                        else:
-                            if intergroup:
-                                do_latentsim_on_intergroup=True
-                                if do_latentsim_on_intergroup:
-                                    #new mode starting 2/29/2024, do latentsim on all groups after transformation
-                                    #this will translate each jenc to the same group as ienc and compute the latentsim loss
-                                    loss+=sum([criterion_latentsim(conn_encoded,net.intergroup_transform_latent(x,jenc,ienc)) for jenc,x in enumerate(batchinput_train_encoded) if ienc != jenc])
-                                else:
-                                    #old mode used prior to 2/29/2024, only do latentsim on same group
-                                    
-                                    #if encoder jenc is in the same group as encoder ienc, then compute latentsim loss
-                                    loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc > jenc 
-                                            and intergroup_inputgroup_list[ienc]==intergroup_inputgroup_list[jenc]])*2
-                            else:
-                                #loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc != jenc])
-                                loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc > jenc])*2 #changed 2/12/2024
-                        #maybe also add some version of this that isn't sensitive to overall scale?
-                
-                    loss=loss*latentsim_loss_weight_torch
-                    loss.backward()
-                    optimizer.step()
-            else:
-                #if epoch % 10 == 0:
-                #    savemat("testB%05d.mat" % (epoch),{"allpath_train_enc":[x.numpy().copy() for x in allpath_train_enc]},format='5',do_compression=True)
-                
+                    
+                    if do_meantarget_latentsim:
+                        batchinput_train_encoded_mean+=conn_encoded
+                        batchinput_train_encoded_count+=1
+                    else:
+                        batchinput_train_encoded+=[conn_encoded]
+                if do_meantarget_latentsim:
+                    batchinput_train_encoded_mean=batchinput_train_encoded_mean/batchinput_train_encoded_count
+                    if latent_normalize:
+                        #renormalize mean to hypersphere shell
+                        batchinput_train_encoded_mean=nn.functional.normalize(batchinput_train_encoded_mean,p=2,dim=1)
+                    
                 net.train()
-                
                 optimizer.zero_grad(set_to_none=do_zerograd_none)
                 
                 loss=0
-                #for itp,trainpath in enumerate(trainpath_list):
-                for itp in trainpath_order:
-                    trainpath = trainpath_list[itp]
-                    encoder_index=trainpath['encoder_index']
-                    decoder_index=trainpath['decoder_index']
-
-                    trainloops=trainpath['trainloops']
-
-                    train_inputs=trainpath['train_inputs']
-                    train_outputs=trainpath['train_outputs']
-                    
+                for ienc, itp in enumerate(tpidx):
+                    train_inputs=trainpath_list[itp]['train_inputs'][batchsubjidx]
+                    encoder_index=trainpath_list[itp]['encoder_index']
                     encoder_index_torch=torchint(encoder_index)
-                    decoder_index_torch=torchint(decoder_index)
                     
-                    #assume this is done during trainpath generation
-                    #if torch.cuda.is_available():
-                    #    train_inputs = train_inputs.cuda()
-                
-                    #this was being called AFTER net(...) until the first mse_weight tests 3/27!   
-                    #I dont think there was a reason for this, and it shouldn't matter (confirmed no change)
-                    #but moving it before net(...) is what we do elsewhere
-                
-                    #use encoder-only mode!
                     conn_encoded = net(train_inputs,encoder_index_torch,neg1_index)
-             
-                
-                    tmploss=latentsim_loss_weight_torch*sum([criterion_latentsim(conn_encoded,x) for jtp,x in enumerate(allpath_train_enc) if itp != jtp])
                     
-                    loss+=tmploss
+                    #conn_encoded = numtrainsubj x latentsize
+                    #allinput_train_encoded = [num encoders] list of conn_encodeds
                     
+                    if do_meantarget_latentsim:
+                        loss+=criterion_latentsim(conn_encoded,batchinput_train_encoded_mean)
+                    else:
+                        if intergroup:
+                            do_latentsim_on_intergroup=True
+                            if do_latentsim_on_intergroup:
+                                #new mode starting 2/29/2024, do latentsim on all groups after transformation
+                                #this will translate each jenc to the same group as ienc and compute the latentsim loss
+                                loss+=sum([criterion_latentsim(conn_encoded,net.intergroup_transform_latent(x,jenc,ienc)) for jenc,x in enumerate(batchinput_train_encoded) if ienc != jenc])
+                            else:
+                                #old mode used prior to 2/29/2024, only do latentsim on same group
+                                
+                                #if encoder jenc is in the same group as encoder ienc, then compute latentsim loss
+                                loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc > jenc 
+                                        and intergroup_inputgroup_list[ienc]==intergroup_inputgroup_list[jenc]])*2
+                        else:
+                            #loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc != jenc])
+                            loss+=sum([criterion_latentsim(conn_encoded,x) for jenc,x in enumerate(batchinput_train_encoded) if ienc > jenc])*2 #changed 2/12/2024
+                    #maybe also add some version of this that isn't sensitive to overall scale?
+            
+                loss=loss*latentsim_loss_weight_torch
                 loss.backward()
                 optimizer.step()
             
