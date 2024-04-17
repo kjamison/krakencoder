@@ -797,7 +797,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         === Optimizer parameters ===
         training_params['optimizer_name']: string (default 'adam'), name of optimizer to use
         training_params['learningrate']: float, learning rate
-        training_params['separate_optimizer']: bool, use separate optimizers for each path
         training_params['zerograd_none']: bool (default=False), zero gradients for None values in the network
         training_params['init_type']: string (default=None->'kaiming'), type of initialization to use for network weights. (Options: 'xavier', 'kaiming')
         training_params['adam_decay']: float (default=None), weight decay for Adam optimizer
@@ -841,8 +840,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     nbepochs=training_params['nbepochs']
     skip_relu=training_params['skip_relu']
     hiddenlayers=training_params['hiddenlayers']
-    do_separate_optimizer=training_params['separate_optimizer']
-
     optimizer_name=training_params['optimizer_name'] if 'optimizer_name' in training_params else 'adam'
     do_zerograd_none=training_params['zerograd_none'] if 'zerograd_none' in training_params else False
     losstype=training_params['losstype'] if 'losstype' in training_params else 'mse'
@@ -943,9 +940,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     
     lrstr="lr%g" % (lr)
     optimstr=""
-    if not do_separate_optimizer:
-        optimstr="_1op"
-    
     optimname_str=""
     if optimizer_name != "adam":
         optimname_str="_%s" % (optimizer_name)
@@ -1091,14 +1085,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         else:
             train_string+="_roundtrip"
     
-    optimizer_list=[]
-
-    if do_separate_optimizer:
-        optimizer_list=[makeoptim(optimizer_name) for i in range(len(trainpath_list))]
-        optimizer_latentsim=makeoptim(optimizer_name) #make additional optimizer for just the latent similarity
-    else:
-        optimizer = makeoptim(optimizer_name)
-        optimizer_latentsim = None
+    optimizer = makeoptim(optimizer_name)
     ###############################
 
     epoch_timestamp = np.nan*np.zeros(nbepochs)
@@ -1245,7 +1232,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     trainrecord['train_string']=train_string
     trainrecord['nbepochs']=nbepochs
     trainrecord['learningrate']=lr
-    trainrecord['separate_optimizer']=do_separate_optimizer
     trainrecord['batchsize']=batchsize
     trainrecord['latentsim_batchsize']=latentsim_batchsize
     trainrecord['losstype']=losstype
@@ -1385,9 +1371,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         #for itp,trainpath in enumerate(trainpath_list):
         for itp in trainpath_order:
             trainpath=trainpath_list[itp]
-            
-            if optimizer_list:
-                optimizer=optimizer_list[itp]
             
             trainloader=trainpath['trainloader']
             valloader=trainpath['valloader']
@@ -1647,10 +1630,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                 
                 
                 loss=0
-                if optimizer_latentsim is not None:
-                    optimlat=optimizer_latentsim
-                else:
-                    optimlat=optimizer
                 
                 #compute the total inter-input encoding similarity loss
                 for batch_idx, batchsubjidx in enumerate(latentsimloss_subjidx_dataloader):
@@ -1716,18 +1695,14 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                 
                     loss=loss*latentsim_loss_weight_torch
                     loss.backward()
-                    optimlat.step()
+                    optimizer.step()
             else:
                 #if epoch % 10 == 0:
                 #    savemat("testB%05d.mat" % (epoch),{"allpath_train_enc":[x.numpy().copy() for x in allpath_train_enc]},format='5',do_compression=True)
                 
                 net.train()
                 
-                if optimizer_latentsim is not None:
-                    optimlat=optimizer_latentsim
-                else:
-                    optimlat=optimizer
-                optimlat.zero_grad(set_to_none=do_zerograd_none)
+                optimizer.zero_grad(set_to_none=do_zerograd_none)
                 
                 loss=0
                 #for itp,trainpath in enumerate(trainpath_list):
@@ -1740,9 +1715,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
 
                     train_inputs=trainpath['train_inputs']
                     train_outputs=trainpath['train_outputs']
-                
-                    #if optimizer_list:
-                    #    optimizer=optimizer_list[itp]
+                    
                     encoder_index_torch=torchint(encoder_index)
                     decoder_index_torch=torchint(decoder_index)
                     
@@ -1753,25 +1726,17 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                     #this was being called AFTER net(...) until the first mse_weight tests 3/27!   
                     #I dont think there was a reason for this, and it shouldn't matter (confirmed no change)
                     #but moving it before net(...) is what we do elsewhere
-                    #if optimizer_list:
-                    #    optimizer.zero_grad(set_to_none=do_zerograd_none)
                 
                     #use encoder-only mode!
                     conn_encoded = net(train_inputs,encoder_index_torch,neg1_index)
              
                 
                     tmploss=latentsim_loss_weight_torch*sum([criterion_latentsim(conn_encoded,x) for jtp,x in enumerate(allpath_train_enc) if itp != jtp])
-                    #if optimizer_list:
-                    #    tmploss.backward()
-                    #    optimizer.step()
-                
+                    
                     loss+=tmploss
                     
-                #if not optimizer_list:
-                #    loss.backward()
-                #    optimizer.step()
                 loss.backward()
-                optimlat.step()
+                optimizer.step()
             
             net.eval()
         ############################
@@ -1782,9 +1747,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             net.eval()
             for itp in trainpath_order:
                 trainpath=trainpath_list[itp]
-            
-                if optimizer_list:
-                    optimizer=optimizer_list[itp]
             
                 trainloader=trainpath['trainloader']
                 valloader=trainpath['valloader']
@@ -2186,10 +2148,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             
             if save_optimizer_params and (epoch == nbepochs-1 or exit_on_this_loop):
                 #include optimizer in final checkpoint (so we could resume training)
-                if optimizer_list:
-                    checkpoint['optimizer']=[opt.state_dict() for opt in optimizer_list]
-                else:
-                    checkpoint['optimizer']=optimizer.state_dict()
+                checkpoint['optimizer']=optimizer.state_dict()
             net.save_checkpoint(statefile, checkpoint)
             print("Ep %d) Saved %s" % (epoch, statefile))
             

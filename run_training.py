@@ -113,7 +113,6 @@ def argument_parse_runtraining(argv):
     train_arg_group.add_argument('--addmeanlatentepochs',action='store',dest='add_meanlatent_epochs', type=int, default=0, help='add meanlatent training paths AFTER normal training')
     train_arg_group.add_argument('--trainblocks',action='store',dest='trainblocks', type=int, default=1, help='How many total times perform normal training + (roundtrip or meanlatent) set? (optimizer resets each block)')
     train_arg_group.add_argument('--latentsimbatchsize',dest='latent_sim_batch_size',type=int,default=0,help='Batch size for latentsimloss. default=0 (no batch)')
-    train_arg_group.add_argument('--separateoptimizer',action='store_true',dest='separate_optimizer', help='Use separate optimizers across each path and latentsim')
     train_arg_group.add_argument('--adamdecay',action='store',dest='adam_decay',type=float, default=0.01, help='Adam weight decay')
     train_arg_group.add_argument('--learningrate',action='store',dest='learning_rate',type=float, default=1e-4, help='Learning rate')
 
@@ -191,7 +190,6 @@ def run_training_command(argv):
     input_leakyrelu=args.leakyrelu_negative_slope
     input_mse_weight=args.mseweight
     input_latent_inner_loss_weight=args.latent_inner_loss_weight
-    input_use_separate_optimizer=args.separate_optimizer
     input_batchsize=args.batch_size
     input_latentsimbatchsize=args.latent_sim_batch_size
     input_encodingfile=args.encoded_input_file
@@ -489,7 +487,6 @@ def run_training_command(argv):
     training_params_listdict['learningrate']=[input_learningrate]
     training_params_listdict['nbepochs']=[input_epochs]
     training_params_listdict['skip_relu']=[False]
-    training_params_listdict['separate_optimizer']=[input_use_separate_optimizer]
     training_params_listdict['optimizer_name']=["adamw"]
     training_params_listdict['zerograd_none']=[True]
     training_params_listdict['relu_tanh_alternate']=[False]
