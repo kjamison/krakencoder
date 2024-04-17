@@ -783,8 +783,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         training_params['dropout_final_layer']: float (default=None), separate dropout rate for the final DECODER layer only (eg: for the final reconstruction). None=use 'dropout'
         training_params['dropout_final_layer_list']: list of float (default=None), separate dropout rate for the final DECODER layer for each input type
         training_params['origscalecorr_epochs']: int (default=0=never), number of epochs between computing performance metrics for inverse-transformed 'origscale' data
-        training_params['skip_accurate_paths']: bool (default=False), skip training paths with val top1acc=1
-        training_params['accurate_paths_early_stopping']: bool (default=True), use early stopping if skip_accurate_paths=True and all paths have val top1acc=1
         training_params['trainpath_shuffle']: bool (default=False), shuffle training paths each epoch
         training_params['roundtrip']: bool (default=False), train encoder[i]->latent->decoder[j]->encoder[j]->latent->decoder[i], loss(meas_i, pred_i)
         training_params['latentsim_batchsize']: int (default=0=full training set), batch size for latent space intra-subject, inter-flavor similarity loss
@@ -843,8 +841,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     optimizer_name=training_params['optimizer_name'] if 'optimizer_name' in training_params else 'adam'
     do_zerograd_none=training_params['zerograd_none'] if 'zerograd_none' in training_params else False
     losstype=training_params['losstype'] if 'losstype' in training_params else 'mse'
-    do_skip_accurate_paths=training_params['skip_accurate_paths'] if 'skip_accurate_paths' in training_params else False
-    do_early_stopping_for_skipacc=training_params['accurate_paths_early_stopping'] if 'accurate_paths_early_stopping' in training_params else True
     latent_inner_loss_weight=training_params['latent_inner_loss_weight'] if 'latent_inner_loss_weight' in training_params else 1
     latentsim_loss_weight=training_params['latentsim_loss_weight'] if 'latentsim_loss_weight' in training_params else 0
     latentnorm_loss_weight=training_params['latentnorm_loss_weight'] if 'latentnorm_loss_weight' in training_params else 0
@@ -855,7 +851,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     leakyrelu_negative_slope=training_params['leakyrelu_negative_slope'] if 'leakyrelu_negative_slope' in training_params else 0
     mse_weight=training_params['mse_weight'] if 'mse_weight' in training_params else 0
     latent_activation=training_params['latent_activation'] if 'latent_activation' in training_params else 'none'
-    init_type=training_params['init_type'] if 'init_type' in training_params else None
     adam_decay=training_params['adam_decay'] if 'adam_decay' in training_params else None
     do_trainpath_shuffle=training_params['trainpath_shuffle'] if 'trainpath_shuffle' in training_params else False
     do_roundtrip=training_params['roundtrip'] if 'roundtrip' in training_params else False
@@ -890,11 +885,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     
     if dropout_schedule_list is None:
         dropout_schedule_list=[dropout,dropout]
-
-    if do_target_encoding:
-        #for 'target encoding' mode, do not skip accurate paths
-        do_skip_accurate_paths=False
-
+    
     if do_fixed_target_encoding:
         # for FIXED target encoding, do not use latentsim
         latentsim_loss_weight=0
@@ -906,7 +897,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     
 
     do_use_existing_net=net is not None
-    do_initialize_net=False
     if net is None:
         if intergroup:
             ############# intergroup
@@ -930,9 +920,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                 relu_tanh_alternate=relu_tanh_alternate, leakyrelu_negative_slope=leakyrelu_negative_slope,
                                 latent_activation=latent_activation, latent_normalize=latent_normalize,
                                 dropout_final_layer=dropout_final_layer, dropout_final_layer_list=dropout_final_layer_list)
-
-        
-        do_initialize_net=True
     
     network_string=net.prettystring()
     network_parameter_count=sum([p.numel() for p in net.parameters()]) #count total weights in model
@@ -947,13 +934,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         optimname_str+=".w%g" % (adam_decay)
     
     zgstr=""
-    skipaccstr=""
-    if do_skip_accurate_paths:
-        skipaccstr="_skipacc"
-        if not do_early_stopping_for_skipacc:
-            skipaccstr+="GO"
     
-
     timestamp=datetime.now()
     timestamp_suffix=timestamp.strftime("%Y%m%d_%H%M%S")
 
@@ -969,15 +950,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     if not torch.cuda.is_available():
         torch.set_num_threads(maxthreads)
     
-    initstr=""
-    if init_type == "xavier" and do_initialize_net:
-        #note: pytorch >1.0 uses kaiming by default now
-        #so probably dont need this option
-        def init_weights(m):
-            if isinstance(m,nn.Linear):
-                torch.nn.init.xavier_uniform(m.weight)
-        net.apply(init_weights)
-        initstr="_init.xav"
     
     def makeoptim(optname="adam"):
         if optname == "adam":
@@ -1006,8 +978,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     criterion=[]
     encoded_criterion=[]
     latentsim_criterion=None
-
-    skipacc_top1acc_function=corrtop1acc
 
     loss_default_dict=OrderedDict()
     if mse_weight > 0:
@@ -1041,10 +1011,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             criterion += [{"name":lt, "function":corrmatch, "weight": torchfloat(lt_w)}]
         elif lt == 'dist':
             criterion += [{"name":lt, "function":distance_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
-            skipacc_top1acc_function=disttop1acc
         elif lt == 'neidist':
             criterion += [{"name":lt, "function":distance_neighbor_loss, "pass_margins":True, "weight": torchfloat(lt_w)}]
-            skipacc_top1acc_function=disttop1acc
 
         elif lt == 'enceye':
             encoded_criterion += [{"name":lt, "function":correye, "weight": torchfloat(lt_w)}]
@@ -1078,7 +1046,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     elif do_target_encoding:
         loss_str+="+targlatent"
 
-    train_string="%depoch_%s%s%s%s%s%s%s" % (nbepochs,lrstr,loss_str,optimstr,optimname_str,zgstr,skipaccstr,initstr)
+    train_string="%depoch_%s%s%s%s%s" % (nbepochs,lrstr,loss_str,optimstr,optimname_str,zgstr)
     if do_roundtrip:
         if do_use_existing_net:
             train_string+="_addroundtrip"
@@ -1244,8 +1212,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     trainrecord['latent_normalize']=latent_normalize
     trainrecord['optimizer_name']=optimizer_name
     trainrecord['zerograd_none']=do_zerograd_none
-    trainrecord['skip_accurate_paths']=do_skip_accurate_paths
-    trainrecord['accurate_paths_early_stopping']=do_early_stopping_for_skipacc
     trainrecord['model_description']=network_description_string
     trainrecord['total_parameter_count']=network_parameter_count
     trainrecord['origscalecorr_epochs']=origscalecorr_epochs
@@ -1267,9 +1233,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         
     if data_origscale_list is not None:
         trainrecord['origscalecorr_inputtype']='original'
-    
-    if init_type:
-        trainrecord['initialization']=init_type
     
     if adam_decay is not None:
         trainrecord['adam_decay']=adam_decay
@@ -1415,35 +1378,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             if do_roundtrip:
                 transcoder_list=[decoder_index_torch]
                 decoder_index_torch=encoder_index_torch
-                
-            #for some of the paths, we might find perfect fit early, 
-            # so skip those (until we notice it starts to decline)
-            #but for training this is maybe true TOO often?
-            do_check_trainacc=False
-            if do_skip_accurate_paths and do_check_trainacc:
-                net.eval()
-                with torch.no_grad():
-                    conn_encoded, conn_predicted = net(train_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
-                acc=skipacc_top1acc_function(train_outputs, conn_predicted)
-                if acc == 1:
-                    #this is fitting all training data, so don't train on it for this epoch
-                    #print("Skipping %s due to train acc" % (trainpath_names_short[itp]))
-                    all_train_acc[itp]=True
-                    trainloops=0
-                    
-            #for some of the paths, we might find perfect fit early, 
-            # so skip those (until we notice it starts to decline)
-            do_check_valacc=True
-            if do_skip_accurate_paths and do_check_valacc:
-                net.eval()
-                with torch.no_grad():
-                    conn_encoded, conn_predicted = net(val_inputs, encoder_index_torch, decoder_index_torch, transcoder_index_list=transcoder_list)
-                acc=skipacc_top1acc_function(val_outputs,conn_predicted)
-                if acc == 1:
-                    #this is fitting all validation data, so don't train on it for this epoch
-                    #print("Skipping %s due to val acc" % (trainpath_names_short[itp]))
-                    all_val_acc[itp]=True
-                    trainloops=0
             
             if do_eval_only:
                 trainloops=0
@@ -1966,20 +1900,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
 
         if epoch in explicit_checkpoint_epoch_list:
             checkpoint_on_this_loop=True
-        
-        if do_skip_accurate_paths:
-            #if we skipped all paths because they were accurate (via correlation top1acc)
-            #then we can exit training early
-            #ALTHOUGH: do we want to keep training for latent MSE similarity?
-            if all(all_train_acc) or all(all_val_acc):
-                skipped_epoch_counter+=1
-                #print("epoch %s: All paths were skipped!" % (epoch))
-                if do_early_stopping_for_skipacc:
-                    print("Exiting now because early stopping was selected")
-                    exit_on_this_loop=True
-                    save_on_this_loop=True
-                    display_on_this_loop=True
-                    checkpoint_on_this_loop=checkpoint_epochs is not None and checkpoint_epochs>0
                 
                 
         if display_on_this_loop:

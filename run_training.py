@@ -105,8 +105,6 @@ def argument_parse_runtraining(argv):
     train_arg_group.add_argument('--dropout',action='append',dest='dropout',type=float,help='list of dropouts to try',nargs='*')
     train_arg_group.add_argument('--dropout_schedule',action='store',dest='dropout_schedule',type=float,help='pair of init, final dropout fractions',nargs='*')
     train_arg_group.add_argument('--dropout_final_layer',action='store',dest='dropout_final_layer',type=float,help='use different dropout for final decoder layer')
-    train_arg_group.add_argument('--skipacc',action='store_true',dest='skipacc', help='skip accurate paths during training')
-    train_arg_group.add_argument('--noearlystop',action='store_true',dest='noearlystop', help='do NOT stop early if skipacc (keep working latentsim)')
     train_arg_group.add_argument('--skipself',action='store_true',dest='skipself', help='Skip A->A paths during training')
     train_arg_group.add_argument('--roundtrip',action='store_true',dest='roundtrip', help='roundtrip training paths A->B->A')
     train_arg_group.add_argument('--addroundtripepochs',action='store',dest='add_roundtrip_epochs', type=int, default=0, help='add roundtrip training paths A->B->A AFTER normal training')
@@ -177,8 +175,6 @@ def run_training_command(argv):
     input_trainblocks=args.trainblocks
     checkpoint_epochs=args.checkpoint_epochs_every
     explicit_checkpoint_epoch_list=args.explicit_checkpoint_epochs
-    do_skipaccpath=args.skipacc
-    do_earlystop=not args.noearlystop #invert argument
     do_skipself=args.skipself
     latentsize=args.latentsize
     input_latentradweight = args.latentradweight
@@ -478,8 +474,6 @@ def run_training_command(argv):
     training_params_listdict['dropout']=input_dropout_list
     training_params_listdict['dropout_schedule_list']=[dropout_schedule_list]
     training_params_listdict['dropout_final_layer']=[dropout_final_layer]
-    training_params_listdict['skip_accurate_paths']=[do_skipaccpath]
-    training_params_listdict['accurate_paths_early_stopping']=[do_earlystop]
     training_params_listdict['batchsize']=[input_batchsize]
     training_params_listdict['latentsim_loss_weight']=input_latentsimweight_list
     training_params_listdict['adam_decay']=[input_adamdecay]
