@@ -105,14 +105,15 @@ def argument_parse_runtraining(argv):
     train_arg_group.add_argument('--dropout',action='append',dest='dropout',type=float,help='list of dropouts to try',nargs='*')
     train_arg_group.add_argument('--dropout_schedule',action='store',dest='dropout_schedule',type=float,help='pair of init, final dropout fractions',nargs='*')
     train_arg_group.add_argument('--dropout_final_layer',action='store',dest='dropout_final_layer',type=float,help='use different dropout for final decoder layer')
+    train_arg_group.add_argument('--adamdecay',action='store',dest='adam_decay',type=float, default=0.01, help='Adam weight decay')
+    train_arg_group.add_argument('--learningrate',action='store',dest='learning_rate',type=float, default=1e-4, help='Learning rate')
     train_arg_group.add_argument('--skipself',action='store_true',dest='skipself', help='Skip A->A paths during training')
     train_arg_group.add_argument('--roundtrip',action='store_true',dest='roundtrip', help='roundtrip training paths A->B->A')
     train_arg_group.add_argument('--addroundtripepochs',action='store',dest='add_roundtrip_epochs', type=int, default=0, help='add roundtrip training paths A->B->A AFTER normal training')
     train_arg_group.add_argument('--addmeanlatentepochs',action='store',dest='add_meanlatent_epochs', type=int, default=0, help='add meanlatent training paths AFTER normal training')
     train_arg_group.add_argument('--trainblocks',action='store',dest='trainblocks', type=int, default=1, help='How many total times perform normal training + (roundtrip or meanlatent) set? (optimizer resets each block)')
-    train_arg_group.add_argument('--adamdecay',action='store',dest='adam_decay',type=float, default=0.01, help='Adam weight decay')
-    train_arg_group.add_argument('--learningrate',action='store',dest='learning_rate',type=float, default=1e-4, help='Learning rate')
-
+    train_arg_group.add_argument('--randseed',action='store',dest='random_seed',type=int, default=0, help='Specify random seed for initialization')
+    
     fixed_arg_group=parser.add_argument_group('Target-encoding options (Train new data to match pre-trained latent representation)')
     fixed_arg_group.add_argument('--encodedinputfile',action='store',dest='encoded_input_file', help='.mat file containing latent space data')
     fixed_arg_group.add_argument('--targetencoding',action='store_true',dest='target_encoding', help='Train encoders/decoders while trying to match latent->target')
@@ -200,6 +201,7 @@ def run_training_command(argv):
     display_epochs=args.display_epochs
     optimizer_in_checkpoint=args.optimizer_in_checkpoint
     logfile=args.logfile
+    random_seed_val=args.random_seed
     do_domain_adaptation=args.domain_adaptation
     domain_adaptation_polynomial=args.domain_adaptation_polynomial
 
@@ -622,9 +624,10 @@ def run_training_command(argv):
             data_string+="_"+subj_str
 
             data_string=re.sub("^_+","",data_string)
-
-            set_random_seed(0)
-
+            
+            set_random_seed(random_seed_val)
+            print("Random seed: %d" % (random_seed_val))
+            
             #generate trainpath info each time so the dataloader batches are reproducible
             encoded_inputs=None
             if input_encodingfile:
