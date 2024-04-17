@@ -381,7 +381,6 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     valdata_origscale_list={}
     
     unames=list(set(flatlist(trainpath_pairs)))
-    #unames=[str(s) for s in np.unique(np.stack(trainpath_pairs).flatten())]
     for iconn,conn_name in enumerate(unames):
 
         if type(conn_name) != str:
@@ -473,7 +472,6 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
             print("")
 
         #compute min,mean,max of intersubject euclidean distances for this dataset
-        #traindist=torch.cdist(traindata_list[conn_name],traindata_list[conn_name],p=2.0)
         traindist=scipy_cdist(traindata_list[conn_name].cpu(),traindata_list[conn_name].cpu())
         traindist[np.eye(traindist.shape[0])>0]=np.nan
         #min/max are the MEAN of the nearest and farthest distances from each subject
@@ -1309,9 +1307,6 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         
     #######################
     for epoch in range(nbepochs):
-        
-        all_train_acc=[False]*len(trainpath_list)
-        all_val_acc=[False]*len(trainpath_list)
         
         allpath_train_enc=[None]*len(trainpath_list)
         allpath_val_enc=[None]*len(trainpath_list)

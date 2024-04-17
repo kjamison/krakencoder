@@ -1037,17 +1037,6 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         pca_input_mean=torchfloat(pca_input_mean)
         pca_components=torchfloat(pca_components)
         
-        #old version inverse_func was incorrect (pre 4/20/2023). Does not affect model training but DOES affect origspace outputs:
-        #BAD! transformer=FunctionTransformer(func=lambda x:normscale*(np.dot(x-pca_input_mean,pca_components.T)/data_normscale),
-        #                                inverse_func=lambda x:((np.dot(x,pca_components)+pca_input_mean)/normscale)*data_normscale)
-        
-        #transformer=FunctionTransformer(func=lambda x:normscale*(np.dot(x-pca_input_mean,pca_components.T)/data_normscale),
-        #                                inverse_func=lambda x:np.dot((x/normscale)*data_normscale,pca_components)+pca_input_mean)
-        
-        #try doing transform within pytorch instead of numpy for faster performance AND incorporating into a traininable outer model
-        #transformer=FunctionTransformer(func=lambda x:torchfloat(normscale)*(torch.mm(torchfloat(x)-torchfloat(pca_input_mean),torchfloat(pca_components.T))/torchfloat(data_normscale)),
-        #                                inverse_func=lambda x:torch.mm((torchfloat(x)/torchfloat(normscale))*torchfloat(data_normscale),torchfloat(pca_components))+torchfloat(pca_input_mean))
-        
         transformer=FunctionTransformer(func=lambda x:normscale*(torch.mm(torchfloat(x)-pca_input_mean,pca_components.T)/data_normscale),
                                         inverse_func=lambda x:torch.mm((torchfloat(x)/normscale)*data_normscale,pca_components)+pca_input_mean)
         transformer_info["type"]="pca"
@@ -1089,12 +1078,6 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         #use lambda with component data instead of TSVD.transform() to be certain training and evaluation are the same
         #Xtsvd = np.dot(X,tsvd_components.T)
         #Xnew = np.dot(Xtsvd,tsvd_components)
-        #transformer=FunctionTransformer(func=lambda x:normscale*(np.dot(x,tsvd_components.T)/data_normscale),
-        #                                inverse_func=lambda x:(np.dot(x,tsvd_components)/normscale)*data_normscale)
-        
-        #transformer=FunctionTransformer(func=lambda x:torchfloat(normscale)*(torch.mm(torchfloat(x),torchfloat(tsvd_components.T))/torchfloat(data_normscale)),
-        #                                inverse_func=lambda x:(torch.mm(torchfloat(x),torchfloat(tsvd_components))/torchfloat(normscale))*torchfloat(data_normscale))
-
         transformer=FunctionTransformer(func=lambda x:normscale*(torch.mm(torchfloat(x),tsvd_components.T)/data_normscale),
                                         inverse_func=lambda x:(torch.mm(torchfloat(x),tsvd_components)/normscale)*data_normscale)
         
@@ -1124,9 +1107,6 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         transformer=FunctionTransformer(func=lambda x:normscale*(torchfloat(x)/data_normscale),
                                         inverse_func=lambda x:(torchfloat(x)/normscale)*data_normscale)
         
-        #transformer=FunctionTransformer(func=lambda x:torchfloat(normscale)*(torchfloat(x)/torchfloat(data_normscale)),
-        #                                inverse_func=lambda x:(torchfloat(x)/torchfloat(normscale))*torchfloat(data_normscale))
-        
         transformer_info["type"]="norm"
         transformer_info["params"]={"input_normscale":data_normscale, 
                                     "output_normscale":normscale}
@@ -1142,8 +1122,6 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         data_var=torchfloat(data_var)
         transformer=FunctionTransformer(func=lambda x:torchfloat(x)/data_var,
                                         inverse_func=lambda x:torchfloat(x)*data_var)
-        #transformer=FunctionTransformer(func=lambda x:torchfloat(x)/torchfloat(data_var),
-        #                                inverse_func=lambda x:torchfloat(x)*torchfloat(data_var))
         
         transformer_info["type"]="varnorm"
         transformer_info["params"]={"input_variance":data_var}
@@ -1162,8 +1140,7 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         
         transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-data_mean)/data_stdev,
                                         inverse_func=lambda x:(torchfloat(x)*data_stdev)+data_mean)
-        #transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-torchfloat(data_mean))/torchfloat(data_stdev),
-        #                                inverse_func=lambda x:(torchfloat(x)*torchfloat(data_stdev))+torchfloat(data_mean))
+        
         transformer_info["type"]="zscore"
         transformer_info["params"]={"input_mean":data_mean, 
                                     "input_stdev":data_stdev}
@@ -1186,8 +1163,7 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         
         transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-data_mean)/data_stdev,
                                         inverse_func=lambda x:(torchfloat(x)*data_stdev)+data_mean)
-        #transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-torchfloat(data_mean))/torchfloat(data_stdev),
-        #                                inverse_func=lambda x:(torchfloat(x)*torchfloat(data_stdev))+torchfloat(data_mean))
+        
         transformer_info["type"]="zfeat"
         transformer_info["params"]={"input_mean":data_mean, 
                                     "input_stdev":data_stdev}
@@ -1206,8 +1182,6 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         data_mean=torchfloat(data_mean)
         transformer=FunctionTransformer(func=lambda x:torchfloat(x)-data_mean,
                                         inverse_func=lambda x:torchfloat(x)+data_mean)
-        #transformer=FunctionTransformer(func=lambda x:torchfloat(x)-torchfloat(data_mean),
-        #                                inverse_func=lambda x:torchfloat(x)+torchfloat(data_mean))
         
         transformer_info["type"]="cfeat"
         transformer_info["params"]={"input_mean":data_mean}
@@ -1231,9 +1205,7 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         
         transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-data_mean)/data_rownorm_mean,
                                         inverse_func=lambda x:torchfloat(x)*data_rownorm_mean+data_mean)
-        #transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-torchfloat(data_mean))/torchfloat(data_rownorm_mean),
-        #                                inverse_func=lambda x:torchfloat(x)*torchfloat(data_rownorm_mean)+torchfloat(data_mean))
-
+        
         transformer_info["type"]="cfeat+norm"
         transformer_info["params"]={"input_mean":data_mean,"input_rownorm_mean":data_rownorm_mean}
 
@@ -1254,8 +1226,7 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         
         transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-data_mean)/data_var,
                                         inverse_func=lambda x:torchfloat(x)*data_var+data_mean)
-        #transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-torchfloat(data_mean))/torchfloat(data_var),
-        #                                inverse_func=lambda x:torchfloat(x)*torchfloat(data_var)+torchfloat(data_mean))
+        
         transformer_info["type"]="cfeat+varnorm"
         transformer_info["params"]={"input_mean":data_mean,"input_variance":data_var}
     
@@ -1276,8 +1247,7 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         
         transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-data_mean)/(data_stdev*data_z_rownorm_mean),
                                         inverse_func=lambda x:(torchfloat(x)*data_stdev*data_z_rownorm_mean)+data_mean)
-        #transformer=FunctionTransformer(func=lambda x:(torchfloat(x)-torchfloat(data_mean))/(torchfloat(data_stdev)*torchfloat(data_z_rownorm_mean)),
-        #                                inverse_func=lambda x:(torchfloat(x)*torchfloat(data_stdev)*torchfloat(data_z_rownorm_mean))+torchfloat(data_mean))
+        
         transformer_info["type"]="zscore+rownorm"
         transformer_info["params"]={"input_mean":data_mean, 
                                     "input_stdev":data_stdev,
@@ -1312,14 +1282,9 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         logstd_new=torchfloat(logstd_new)
         data_rownorm_mean=torchfloat(data_rownorm_mean)
         
-        #lognorm_func = lambda x: (((np.log10(np.clip(x,min_nonzero,None))-logmean_nonzero)/logstd_nonzero)*logstd_new+logmean_new)*(x>=min_nonzero)/data_rownorm_mean
-        #lognorm_func = lambda x: (((torch.log10(torch.clip(torchfloat(x),torchfloat(min_nonzero),None))-torchfloat(logmean_nonzero))/torchfloat(logstd_nonzero))*torchfloat(logstd_new)+torchfloat(logmean_new))*(torchfloat(x)>=torchfloat(min_nonzero))/torchfloat(data_rownorm_mean)
-        
         lognorm_func = lambda x: (((torch.log10(torch.clip(torchfloat(x),min_nonzero,None))-logmean_nonzero)/logstd_nonzero)*logstd_new+logmean_new)*(torchfloat(x)>=min_nonzero)/data_rownorm_mean
         
         #for setting x<min_nonzero to 0... how?
-        #lognorm_inv_func = lambda y: np.clip(10**(((y*data_rownorm_mean-logmean_new)/logstd_new)*logstd_nonzero+logmean_nonzero),0,None)
-        #lognorm_inv_func = lambda y: torch.clip(10**(((torchfloat(y)*torchfloat(data_rownorm_mean)-torchfloat(logmean_new))/torchfloat(logstd_new))*torchfloat(logstd_nonzero)+torchfloat(logmean_nonzero)),0,None)
         lognorm_inv_func = lambda y: torch.clip(10**(((torchfloat(y)*data_rownorm_mean-logmean_new)/logstd_new)*logstd_nonzero+logmean_nonzero),0,None)
         
         transformer=FunctionTransformer(func=lognorm_func,

@@ -98,8 +98,6 @@ def argument_parse_newdata(argv):
     parser.add_argument('--fusionnorm',action='store_true',dest='fusionnorm',help='re-normalize latent vectors after averaging')
     parser.add_argument('--onlyfusioninputs',action='store_true',dest='only_fusion_inputs',help='Only predict outputs from fusion inputs (not from individual flavors)')
     
-    #parser.add_argument('--pathfinder',action='append',dest='pathfinder_list', help='pathfinder evaluation path names',nargs='*')
-    
     misc_group=parser.add_argument_group('Misc')
     misc_group.add_argument('--heatmap',action='store',dest='heatmap_file', help='Save heatmap image')
     misc_group.add_argument('--heatmapmetrics',action='store',dest='heatmap_metrictype_list', help='List of metric types for heatmap',nargs='*')
@@ -158,7 +156,7 @@ def search_flavors(searchstring_list,full_list):
             elif s_canonical is not None and s_canonical in full_list:
                 new_list+=[s_canonical]
             elif s.lower()=='sc':
-                new_list+=[intype for intype in full_list if "sdstream" in intype or "ifod2act" in intype]
+                new_list+=[intype for intype in full_list if intype.startswith("SC") or "sdstream" in intype or "ifod2act" in intype]
             elif s.lower()=='fc':
                 new_list+=[intype for intype in full_list if intype.startswith("FC")]
             else:
@@ -197,7 +195,6 @@ def run_model_on_new_data(argv):
     
     hack_cortex=args.hack_cortex
     if hack_cortex:
-        
         trimask86=np.triu_indices(86,1) 
         trimask439=np.triu_indices(439,1) 
         cortex86=np.ones((86,86),dtype=bool)
@@ -370,8 +367,6 @@ def run_model_on_new_data(argv):
     print("Output types (%d):" % (len(output_conntype_list)), output_conntype_list)
     
     if fusionmode:
-        #fusionmode_names=search_flavors(input_fusionmode_names, input_conntype_list)
-        #print("fusion input types (%d):" % (len(fusionmode_names)), fusionmode_names)
         fusionmode_names_dict={k:search_flavors(v, input_conntype_list) for k,v in input_fusionmode_names.items()}
         
         original_fusionmode_names_dict=fusionmode_names_dict.copy()
@@ -393,7 +388,6 @@ def run_model_on_new_data(argv):
             print("fusion mode '%s' input types (%d):" % (k,len(fusionmode_names_dict[k])), fusionmode_names_dict[k])
             
     else:
-        #fusionmode_names=[]
         fusionmode_names_dict={}
     
     #build a list of output files (either consolidated, per input/output or per input->output path)
@@ -443,6 +437,7 @@ def run_model_on_new_data(argv):
     output_subject_splits=input_subject_splits
 
     if len(input_file_list) > 0 and not input_file_list[0] in ['all','test','train','val','retest']:
+        #load data from files specified in command line
         conndata_alltypes={}
         for i,x in enumerate(input_conntype_list):
             
@@ -511,6 +506,7 @@ def run_model_on_new_data(argv):
 
             print(x,conndata_alltypes[x]['data'].shape)
     else:
+        #load hardcoded HCP data files
         input_file="all"
         if len(input_file_list) > 0:
             if any([x in input_file_list for x in ["train","val","test"]]) and input_subject_splits is None:
@@ -623,10 +619,7 @@ def run_model_on_new_data(argv):
             encoder_index_torch=torchint(encoder_index)
     
             inputdata_origscale=conndata_alltypes[intype]['data']
-
-            #reminder for sklearn PCA
-            #Xpc=np.dot(X-pca.mean_, pca.components_.T) [ / np.sqrt(pca.explained_variance_) # if whiten, which=False by default]
-            #X=np.dot(Xpc, pca.components_) + pca.mean_
+            
             inputdata=torchfloat(transformer_list[intype].transform(inputdata_origscale))
             
             if do_save_transformed_inputs:
@@ -647,7 +640,6 @@ def run_model_on_new_data(argv):
         for intype in encoded_alltypes.keys():
             if intype == fusiontype:
                 print("fusion type '%s' evaluation already computed in input" % (fusiontype))
-                #conn_encoded=encoded_alltypes[intype]
                 encoded_mean=encoded_alltypes[intype].copy()
                 encoded_inputtype_count=1
                 break
@@ -716,7 +708,7 @@ def run_model_on_new_data(argv):
             
             if net.intergroup:
                 #net.inputgroup_list has items, but no neames, but net.inputgroup_list should correspond to encoder_index and decoder_index
-                #conntype_group_dict=net.inputgroup_list]
+                #conntype_group_dict=net.inputgroup_list
                 conntype_encoder_index_dict={k:i for i,k in enumerate(conn_names)}
                 encoded_alltypes_thisgroup={}
                 for k_in in encoded_alltypes:
@@ -744,7 +736,7 @@ def run_model_on_new_data(argv):
                 noself_str=' (%d encoded inputs)' % (len(noself_intype))
                 
             elif intype in fusionmode_names_dict and ".noatlas" in intype:
-                #"noself" fusion mode has to compute a new average of all inputs except self
+                #"noatlas" fusion mode has to compute a new average of all inputs except its own atlas
                 out_atlas=atlas_from_flavors(outtype)
                 noself_intype=[k_in for k_in in fusionmode_names_dict[intype] if atlas_from_flavors(k_in) != out_atlas]
                 conn_encoded=np.add.reduce([encoded_alltypes_thisgroup[k_in] for k_in in noself_intype])/len(noself_intype)
@@ -838,7 +830,7 @@ def run_model_on_new_data(argv):
         newrecord['topN']=topN
 
         #using whatever subject list was provided as "val" for fake training record
-
+        
         if output_subject_splits:
             for tv in ['subjidx_train','subjidx_val','subj_test']:
                 if tv in output_subject_splits:
@@ -847,11 +839,7 @@ def run_model_on_new_data(argv):
             subjidx=np.arange(conndata_alltypes[input_conntype_list[0]]['data'].shape[0])
             newrecord['subjidx_val']=subjidx
             newrecord['numsubjects_val']=len(subjidx)
-
-                
         
-        #z=np.zeros((len(input_conntype_list)*len(output_conntype_list),1))
-        #z=np.zeros((len(predicted_alltypes.keys())*len(output_conntype_list),1))
         z=np.nan*np.ones((len(predicted_alltypes.keys())*len(output_conntype_list),1))
 
         metriclist=['corrloss','corrlossN','corrlossRank','avgcorr','explainedvar','avgcorr_resid']
@@ -869,13 +857,9 @@ def run_model_on_new_data(argv):
         for i_out,outfile in enumerate(outfile_list):
             intype=outfile_input_output_list[i_out]['intype']
             outtype=outfile_input_output_list[i_out]['outtype']
-
-            orig_intype=intype
+            
             if intype == 'all':
                 intype=eval_input_conntype_list
-            #elif intype == ['fusion']:
-            #    orig_intype='fusion'
-            #    intype=input_conntype_list
             
             if outtype == 'all':
                 outtype=output_conntype_list
@@ -956,11 +940,6 @@ def run_model_on_new_data(argv):
             do_single_epoch=True
             display_kraken_heatmap(newrecord,metrictype=heatmap_metrictype_list,origscale=True,single_epoch=do_single_epoch,
                                     outputimagefile={'file':heatmapfile,'dpi':200})
-
-    #from trainrecord, need:
-    # recordfile, current_epoch, nbepochs, [starting_point_epoch], [starting_point_file]
-    # trainpath_names, input_name_list, topN
-    # (corrloss|corrlossN|corrlossRank|avgcorr|explainedvar)[_OrigScale]_(train|val)
-        
+            
 if __name__ == "__main__":
     run_model_on_new_data(sys.argv[1:])

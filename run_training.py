@@ -158,7 +158,6 @@ def run_training_command(argv):
     args=argument_parse_runtraining(argv)
 
     ##################
-    
     trainthreads=args.max_threads
     input_epochs=args.epochs
     input_roundtrip=args.roundtrip
@@ -309,6 +308,7 @@ def run_training_command(argv):
 
     conndata_alltypes={}
     if input_data_file_list:
+        #load input data from files given as command-line arguments
         input_file_list=[]
         input_conntype_list=[]
         if not all(["=" in f for f in input_data_file_list]):
@@ -349,7 +349,7 @@ def run_training_command(argv):
         input_conntype_list=conndata_alltypes.keys()
         roilist_str="+".join(input_conntype_list)
     else:
-        #HCPTRAIN
+        #load hardcoded HCP data paths
         input_nsubj=args.subjectcount
 
         if subjects is None or len(subjects)==0:
@@ -535,7 +535,10 @@ def run_training_command(argv):
     ######################
 
     for training_params in training_params_list:
-
+        # if only a single set of training parameters was specified (no lists), this will only loop one time
+        # In general, it's probably better to do it one-at-a-time from a script so you can see each model's
+        # log separately
+        
         ###################
         #copy over some params each time through the loop in case they were
         #modified in the loop
@@ -690,8 +693,9 @@ def run_training_command(argv):
             create_data_loader=True
             if do_target_encoding or do_fixed_target_encoding:
                 ##################
-                # this mode means an existing latent-space was provided and we want to train all encoders to project to that, and all decoders to decode from that
-
+                # this mode means an existing latent-space was provided and we want to train all encoders to project to that, 
+                #   and all decoders to decode from that
+                
                 if encoded_inputs is None:
                     raise Exception("Must provide encoded inputs file")
                 
