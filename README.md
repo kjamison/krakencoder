@@ -12,16 +12,28 @@ The model presented in the manuscript uses a pre-computed 256-dimensional PCA to
 
 
 # Contents
-1. [Code organization](#Code-organization)
-2. [Examples](#examples)
+1. [Installation](#Installation)
+2. [Code organization](#Code-organization)
+3. [Examples](#examples)
     * [Jupyter example using pre-trained model on new data](#jupyter-example-using-pre-trained-model-on-new-data)
     * [Generating predicted connectomes from new data](#generating-predicted-connectomes-from-new-data)
     * [Generating latent space representations from new data](#generating-latent-space-representations-from-new-data)
     * [Training a model from scratch](#training-a-model-from-scratch)
     * [Reading output files](#reading-output-files)
-3. [Pretrained connectivity types](#pretrained-connectivity-types)
-4. [Requirements](#requirements)
-5. [Downloads](#downloads)
+4. [Pretrained connectivity types](#pretrained-connectivity-types)
+5. [Requirements](#requirements)
+6. [Downloads](#downloads)
+
+# Installation
+```bash
+#recommended: create a fresh environment using anaconda (https://docs.anaconda.com/)
+#conda create -n kraken python=3.8 -y && conda activate kraken
+
+git clone https://github.com/kjamison/krakencoder.git
+cd krakencoder
+pip install -r requirements_exact.txt
+pip install .
+```
 
 # Code organization
 ### Command-line scripts:

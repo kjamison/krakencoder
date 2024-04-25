@@ -166,7 +166,9 @@ def search_flavors(searchstring_list,full_list):
     #return unique elements in list, in their original order
     return [str(s) for s in np.array(new_list)[np.sort(np.unique(new_list,return_index=True)[1])]]
 
-def run_model_on_new_data(argv):
+def run_model_on_new_data(argv=None):
+    if argv is None:
+        argv=sys.argv[1:]
     #read in command-line inputs
     args=argument_parse_newdata(argv)
     

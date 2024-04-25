@@ -151,7 +151,9 @@ def argument_parse_runtraining(argv):
 #######################################################
 #### 
 
-def run_training_command(argv):
+def run_training_command(argv=None):
+    if argv is None:
+        argv=sys.argv[1:]
     #add this so we can redirect to "| tee" if necessary
     sys.stdout.reconfigure(line_buffering=True)
 
