@@ -33,6 +33,9 @@ git clone https://github.com/kjamison/krakencoder.git
 cd krakencoder
 pip install -r requirements_exact.txt
 pip install .
+
+#download pretrained model and transformations
+python krakencoder/fetch.py --fetch
 ```
 
 # Code organization
@@ -49,6 +52,7 @@ pip install .
 * [`adaptermodel.py`](krakencoder/adaptermodel.py): KrakenAdapter model class definition, helps wrap I/O transformations
 * [`plotfigures.py`](krakencoder/plotfigures.py): Functions for plotting loss curves and performance heatmaps
 * [`utils.py`](krakencoder/utils.py): Miscellaneous utility functions
+* [`fetch.py`](krakencoder/fetch.py): Download pretrained models and transformations
 
 # Examples
 
