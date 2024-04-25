@@ -1,0 +1,26 @@
+[
+    {"filename":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
+        "url":"https://osf.io/download/x2dq5/",
+        "hash":"680f6e527f8fa8fe692128e28bb82b31936d6a572aee5dded6b57b4b62abefbe",
+        "hashtype": "sha256"},
+
+    {"filename":"kraken_ioxfm_SCFC_fs86_pc256_710train.npy",
+        "url": "https://osf.io/download/8jxkm/",
+        "hash":"d8a2e1265539dba96ac0cb1c7405e37ac514f518322ffaeefc5f02c63ea755ca",
+        "hashtype": "sha256"},
+
+    {"filename":"kraken_ioxfm_SCFC_shen268_pc256_710train.npy",
+        "url": "https://osf.io/download/z2qpt/",
+        "hash":"f89a527199763a198c4be33a51b913258b4f5538e39b62eeba4700c890d2915e",
+        "hashtype": "sha256"},
+
+    {"filename":"kraken_ioxfm_SCFC_coco439_pc256_710train.npy",
+        "url": "https://osf.io/download/tu2mr/",
+        "hash":"afbe4d329f00cd99c0f2af5b4fbb095454744717bd4eb7241132f421f2cbef47",
+        "hashtype": "sha256"},
+
+    {"filename":"subject_splits_993subj_683train_79val_196test_retestInTest.mat",
+        "url":"https://osf.io/download/y67ep/",
+        "hash":"86fb6be66e2406a4350c6bb9e7221c0f2272287b61c90c76cf27a8e415977a36",
+        "hashtype": "sha256"}
+]

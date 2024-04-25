@@ -1,31 +1,30 @@
 """
 Functions to retrieve specific pretrained model files, and fetch files from the internet if they are not already present.
+Data are stored in the 'model_data' folder inside the package, unless the environment variable KRAKENCODER_DATA is set.
 """
 
 import sys
 import argparse
 import os
-import urllib.request
+import requests
 import hashlib
+import json
+from tqdm import tqdm
 
-
-def _file_hash(filename, hash_type='sha256'):
-    """
-    Compute the hash of a file using a specified hash function.
-    """
-    hash_func = hashlib.new(hash_type)
-    with open(filename, 'rb') as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_func.update(chunk)
-    return hash_func.hexdigest()
-
-def model_data_folder():
+def model_data_folder(data_folder=None, ignore_env=False):
     """
     Returns the folder where the model data is stored (inside package)
+    By default, the data is stored in the 'model_data' folder inside the package.
+    If the environment variable KRAKENCODER_DATA is set, the data is stored in that folder.
     """
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data'))
+    if data_folder is None:
+        data_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data'))
+    if os.environ.get('KRAKENCODER_DATA') and not ignore_env:
+        data_folder = os.environ.get('KRAKENCODER_DATA')
+    data_folder=os.path.expanduser(data_folder)
+    return data_folder
 
-def fetch_model_data(files_to_fetch=None, data_folder=None, verbose=False):
+def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False, verbose=False):
     """
     Fetches the model data files from the internet. If the files are already present, they are not downloaded again.
     When files are downloaded for the first time, check hash against stored value to ensure integrity.
@@ -33,6 +32,7 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, verbose=False):
     Parameters:
     files_to_fetch : str or list of str. List of filenames to fetch. If None, all files are fetched.
     data_folder : str (optional). Folder where the data files are stored. If None, the default folder is used.
+    force_download : bool (default=False). If True, download the files even if they already exist.
     verbose : bool (default=False). If True, print extra messages about the download status.
         
     Returns:
@@ -40,31 +40,13 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, verbose=False):
     """
     # Fetch data from the internet
     # First find the folder inside this package where data is stored:
-    if data_folder is None:
-        data_folder = model_data_folder()
+    data_folder = model_data_folder(data_folder)
     os.makedirs(data_folder, exist_ok=True)
     
-    data_urls = [
-                {'filename':'kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt',
-                 'url':'https://osf.io/download/x2dq5/',
-                 'sha256hash':'680f6e527f8fa8fe692128e28bb82b31936d6a572aee5dded6b57b4b62abefbe'},
-                   
-                {'filename':'kraken_ioxfm_SCFC_fs86_pc256_710train.npy',
-                 'url': 'https://osf.io/download/8jxkm/',
-                 'sha256hash':'d8a2e1265539dba96ac0cb1c7405e37ac514f518322ffaeefc5f02c63ea755ca'},
-                 
-                {'filename':'kraken_ioxfm_SCFC_shen268_pc256_710train.npy',
-                 'url': 'https://osf.io/download/z2qpt/',
-                 'sha256hash':'f89a527199763a198c4be33a51b913258b4f5538e39b62eeba4700c890d2915e'},
-                 
-                {'filename':'kraken_ioxfm_SCFC_coco439_pc256_710train.npy',
-                 'url': 'https://osf.io/download/tu2mr/',
-                 'sha256hash':'afbe4d329f00cd99c0f2af5b4fbb095454744717bd4eb7241132f421f2cbef47'},
-                 
-                {'filename':'subject_splits_993subj_683train_79val_196test_retestInTest.mat',
-                 'url':'https://osf.io/download/y67ep/',
-                 'sha256hash':'86fb6be66e2406a4350c6bb9e7221c0f2272287b61c90c76cf27a8e415977a36'}
-                ]
+    urlfile=os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data_urls.json'))
+    
+    with open(urlfile) as f:
+        data_urls=json.load(f)
     
     input_was_str=False
     
@@ -77,37 +59,49 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, verbose=False):
         
     data_file_list=[]
     
-    
     for data_file_tofind in files_to_fetch:
         data_info = [data_info for data_info in data_urls if data_info['filename']==data_file_tofind]
         if len(data_info) == 0:
             raise Exception(f"Could not find data file {data_file} in data_urls")
         data_info = data_info[0]
         data_file = data_info['filename']
-        url = data_info['url']
+        url_list = data_info['url']
+        if isinstance(url_list,str):
+            url_list=[url_list]
         hash_expected = None
-        if 'sha256hash' in data_info:
-            hash_expected=data_info['sha256hash']
+        if 'hash' in data_info:
+            hash_expected=data_info['hash']
+        hash_type = data_info['hashtype']
         
         data_file_path = os.path.join(data_folder, data_file)
         
         check_this_hash = False
-        if not os.path.exists(data_file_path):
+        hash_new = None
+        if force_download or not os.path.exists(data_file_path):
             # Now we can fetch the data from the internet
-            print(f"Downloading {data_file_path} from {url}")
-            urllib.request.urlretrieve(url, data_file_path)
-            check_this_hash=True
+            for url in url_list:
+                try:
+                    print(f"Downloading {data_file_path} from {url}")
+                    hash_new=download_url(url, data_file_path, show_progress=True, hash_type=hash_type)
+                    check_this_hash=True
+                    break
+                except Exception as e:
+                    print(f" ERROR! Failed to download {data_file_path} from {url}. {e}")
         else:
             if verbose:
                 print(f"{data_file_path} already exists. Skipping download.")
         
         if check_this_hash:
             # Check hash only if file was downloaded (not if it already existed)
-            hash_new=_file_hash(data_file_path, hash_type='sha256')
-            if hash_new != hash_expected:
-                print(f"Hash of {data_file_path} does not match expected hash")
-                print(" Expected hash: ", hash_expected)
-                print(" Computed hash: ", hash_new)
+            if hash_new is None:
+                #if we did not compute a hash during download, compute it now
+                hash_new=_file_hash(data_file_path, hash_type=hash_type)
+            if hash_new == hash_expected:
+                print(f" SUCCESS! Hash of {data_file_path} matches expected hash")
+            else:
+                print(f" ERROR! Hash of {data_file_path} does not match expected hash")
+                print("  Expected hash: ", hash_expected)
+                print("  Computed hash: ", hash_new)
                 #if has doesn't match, delete the file and raise an exception
                 os.remove(data_file_path)
                 raise Exception("Hash mismatch. Please download the file again.")
@@ -118,31 +112,78 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, verbose=False):
         data_file_list=data_file_list[0]
     return data_file_list
 
-def clear_model_data(data_folder=None, verbose=True):
+
+def download_url(url, filename, show_progress=False, hash_type=None):
     """
-    Delete all model data files from the specified folder.
+    Download a file from the internet with a progress bar.
+    Optionally compute the hash of the file as it is downloaded.
     
     Parameters:
-    data_folder : str (optional). Folder where the data files are stored. If None, the default folder is used.
+    url : str. URL of the file to download.
+    filename : str. Path to save the file.
+    show_progress : bool (default=False). If True, show a progress bar.
+    hash_type : str (default=None). Hash function to use (eg 'sha256'). If None, no hash is computed.
+    
+    Returns:
+    file_hash : str or None. Hash of the downloaded file. None if hash_type is None.
     """
-    if data_folder is None:
-        data_folder = model_data_folder()
-    for filename in os.listdir(data_folder):
-        file_path = os.path.join(data_folder, filename)
-        try:
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-                if verbose:
-                    print(f"Deleted {file_path}")
-        except Exception as e:
-            print(f"Error deleting {file_path}: {e}")
+    # Initialize the hash object
+    hasher = None
+    if hash_type:
+        hasher = hashlib.new(hash_type)
+    
+    # Make a request to get the content-length
+    response = requests.get(url, stream=True)
+    total_size = int(response.headers.get('content-length', 0))
+    
+    # Set up the tqdm progress bar
+    tqdm_bar = None
+    if show_progress:
+        tqdm_bar = tqdm(total=total_size, unit='B', unit_scale=True)
 
+    # Open the file for writing
+    with open(filename, 'wb') as file:
+        for data in response.iter_content(4096):  # Adjust chunk size as necessary
+            # Write data to file
+            file.write(data)
+            
+            if hasher is not None:
+                # Update the hash object with the chunk
+                hasher.update(data)
+            
+            if tqdm_bar is not None:
+                # Update the progress bar
+                tqdm_bar.update(len(data))
+    
+    if tqdm_bar is not None:
+        # Close the progress bar
+        tqdm_bar.close()
+    
+    if hasher is not None:
+        # Finalize the hash
+        file_hash = hasher.hexdigest()
+    else:
+        file_hash = None
+    
+    return file_hash
+
+def _file_hash(filename, hash_type='sha256'):
+    """
+    Compute the hash of a file using a specified hash function.
+    """
+    hash_func = hashlib.new(hash_type)
+    with open(filename, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_func.update(chunk)
+    return hash_func.hexdigest()
 
 def argument_parse_fetchdata(argv):    
-    parser=argparse.ArgumentParser(description='Fetch or clear model data files')
+    parser=argparse.ArgumentParser(description=f"""Fetch or clear model data files. 
+                                   Data are stored in {model_data_folder(ignore_env=True)}, 
+                                   unless environment variable KRAKENCODER_DATA is set.""")
     
-    parser.add_argument('--clear',action='store_true',dest='cleardata', help='Clear model data files')
     parser.add_argument('--fetch',action='store_true',dest='fetchdata', help='Fetch model data files')
+    parser.add_argument('--force',action='store_true',dest='forcedownload', help='Override existing files when fetching data')
     parser.add_argument('--display',action='store_true',dest='displaydata', help='Display model data files')
     
     args=parser.parse_args(argv)
@@ -154,10 +195,8 @@ if __name__ == '__main__':
         sys.exit(0)
         
     args=argument_parse_fetchdata(sys.argv[1:])
-    if args.cleardata:
-        clear_model_data(verbose=True)
-    elif args.fetchdata:
-        fetch_model_data(verbose=True)
+    if args.fetchdata:
+        fetch_model_data(force_download=args.forcedownload, verbose=True)
     
     if args.displaydata:
         data_folder = model_data_folder()
