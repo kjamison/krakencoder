@@ -8,3 +8,5 @@ scikit_learn==1.3.2
 scipy==1.7.2
 torch==1.13.1
 colorspacious==1.1.2
+requests==2.31.0
+tqdm==4.66.2
