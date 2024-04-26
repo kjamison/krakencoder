@@ -1,6 +1,7 @@
 """
 Functions to retrieve specific pretrained model files, and fetch files from the internet if they are not already present.
-Data are stored in the 'model_data' folder inside the package, unless the environment variable KRAKENCODER_DATA is set.
+Data are stored in the 'krakencoder/model_data' folder in the OS-defined cache location.
+If the environment variable KRAKENCODER_DATA is set, use that location instead.
 """
 
 import sys
@@ -9,19 +10,26 @@ import os
 import requests
 import hashlib
 import json
+import platformdirs
 from tqdm import tqdm
+
 
 def model_data_folder(data_folder=None, ignore_env=False):
     """
-    Returns the folder where the model data is stored (inside package)
-    By default, the data is stored in the 'model_data' folder inside the package.
+    Returns the folder where the model data is stored 
+    By default, the data is stored 'krakencoder/model_data' folder in an OS-defined cache location
     If the environment variable KRAKENCODER_DATA is set, the data is stored in that folder.
     """
     if data_folder is None:
-        data_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data'))
+        #scriptdir=os.path.dirname(__file__)
+        cachedir=platformdirs.user_cache_dir()
+        if 'google.colab' in sys.modules:
+            #special mode for google colab
+            cachedir='/content/cache'
+        data_folder = os.path.join(cachedir, 'krakencoder','model_data')
     if os.environ.get('KRAKENCODER_DATA') and not ignore_env:
         data_folder = os.environ.get('KRAKENCODER_DATA')
-    data_folder=os.path.expanduser(data_folder)
+    data_folder=os.path.abspath(os.path.expanduser(data_folder))
     return data_folder
 
 def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False, verbose=False):
@@ -39,7 +47,7 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False
     data_file_list : str or list of str. List of paths to the downloaded files. If input was a string, this is a string.
     """
     # Fetch data from the internet
-    # First find the folder inside this package where data is stored:
+    # First find the folder where data should be stored
     data_folder = model_data_folder(data_folder)
     os.makedirs(data_folder, exist_ok=True)
     
@@ -97,7 +105,8 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False
                 #if we did not compute a hash during download, compute it now
                 hash_new=_file_hash(data_file_path, hash_type=hash_type)
             if hash_new == hash_expected:
-                print(f" SUCCESS! Hash of {data_file_path} matches expected hash")
+                if verbose:
+                    print(f" SUCCESS! Hash of {data_file_path} matches expected hash")
             else:
                 print(f" ERROR! Hash of {data_file_path} does not match expected hash")
                 print("  Expected hash: ", hash_expected)
@@ -127,7 +136,6 @@ def download_url(url, filename, show_progress=False, hash_type=None):
     Returns:
     file_hash : str or None. Hash of the downloaded file. None if hash_type is None.
     """
-    # Initialize the hash object
     hasher = None
     if hash_type:
         hasher = hashlib.new(hash_type)
@@ -140,27 +148,22 @@ def download_url(url, filename, show_progress=False, hash_type=None):
     tqdm_bar = None
     if show_progress:
         tqdm_bar = tqdm(total=total_size, unit='B', unit_scale=True)
-
-    # Open the file for writing
+    
     with open(filename, 'wb') as file:
         for data in response.iter_content(4096):  # Adjust chunk size as necessary
             # Write data to file
             file.write(data)
             
             if hasher is not None:
-                # Update the hash object with the chunk
                 hasher.update(data)
             
             if tqdm_bar is not None:
-                # Update the progress bar
                 tqdm_bar.update(len(data))
     
     if tqdm_bar is not None:
-        # Close the progress bar
         tqdm_bar.close()
     
     if hasher is not None:
-        # Finalize the hash
         file_hash = hasher.hexdigest()
     else:
         file_hash = None
@@ -190,7 +193,7 @@ def argument_parse_fetchdata(argv):
     return args
 
 if __name__ == '__main__':
-    if len(sys.argv)==1:
+    if len(sys.argv)<=1:
         argument_parse_fetchdata(['-h'])
         sys.exit(0)
         
