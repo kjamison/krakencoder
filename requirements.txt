@@ -9,3 +9,4 @@ matplotlib>=3.5
 colorspacious>=1.1.2
 requests
 tqdm
+platformdirs

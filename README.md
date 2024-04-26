@@ -25,8 +25,9 @@ The model presented in the manuscript uses a pre-computed 256-dimensional PCA to
 6. [Downloads](#downloads)
 
 # Installation
+Installing dependencies and Krakencoder package should take < 5 minutes (depending on download speeds)
 ```bash
-#recommended: create a fresh environment using anaconda (https://docs.anaconda.com/)
+#recommended: create a fresh environment using anaconda (See https://docs.anaconda.com/)
 #conda create -n kraken python=3.8 -y && conda activate kraken
 
 git clone https://github.com/kjamison/krakencoder.git
@@ -34,7 +35,7 @@ cd krakencoder
 pip install -r requirements_exact.txt
 pip install .
 
-#download pretrained model and transformations
+#download pretrained model and transformations to cache folder (~1.3GB)
 python krakencoder/fetch.py --fetch
 ```
 
@@ -224,7 +225,7 @@ The current pre-trained model has been trained on the following 15 connectivity 
 * numpy >= 1.21.2
 * scipy >= 1.7.2
 * scikit_learn >= 0.23.2
-* ipython, matplotlib, cycler, colorspacious, tqdm, requests
+* ipython, matplotlib, cycler, colorspacious, tqdm, requests, platformdirs
 * *See [`requirements.txt`](requirements.txt) and [`requirements_exact.txt`](requirements_exact.txt)*
 
 # Downloads

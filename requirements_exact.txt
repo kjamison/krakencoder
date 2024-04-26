@@ -10,3 +10,4 @@ torch==1.13.1
 colorspacious==1.1.2
 requests==2.31.0
 tqdm==4.66.2
+platformdirs==4.2.1
