@@ -813,13 +813,14 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
     """
     Load input data from a file, with optional selection of a specific field to load
     Input field should contain a [subjects x region x region] array of square matrices for each subject
+    Input data CAN be an output from run_model with a 'predicted_alltypes' field, but only if there is a single input type and output type.
     Optional group name (eg: 'SC', 'FC') is useful if training regime treats intra-modal and inter-modal differently
     
     Parameters:
     inputfile: str, input file path (.mat file from matlab or scipy.io.savemat, with a field containing the data to load)
     group: str (optional), group name (default=None. Could be 'SC', 'FC', 'encoded')
     inputfield: str (optional), field name to load from the input file 
-        (default=None, will try to find field in []'FC','SC','C','encoded','volnorm'] if not provided)
+        (default=None, will try to find field in ['FC','SC','C','encoded','volnorm'] if not provided)
     keep_diagonal: bool (optional, default=False), if True, will keep the diagonal of the connectome matrices
     
 
@@ -836,7 +837,23 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
     inputfield_default_search=['data','encoded','FC','SC','C','volnorm'] #,'sift2volnorm','sift2','orig']
 
     Cdata=loadmat(inputfile,simplify_cells=True)
-
+    
+    if 'predicted_alltypes' in Cdata:
+        #If input file is an output from a model, it will have data stored in Cdata['predicted_alltypes'][intype][outtype].
+        #We can't handle multiple types in one file, but IF there is only one intype and only one outtype, we can handle it.
+        #If that outtype is 'encoded', create Cdata['encoded'] = ... Otherwise, Cdata['data'] = ...
+        predicted_alltypes_keys=list(Cdata['predicted_alltypes'].keys())
+        predicted_alltypes_keys0_keys=list(Cdata['predicted_alltypes'][predicted_alltypes_keys[0]].keys())
+        
+        if len(predicted_alltypes_keys)==1 and len(predicted_alltypes_keys0_keys)==1:
+            if predicted_alltypes_keys0_keys[0] == 'encoded':
+                connfield='encoded'
+            else:
+                connfield='data'
+            Cdata={connfield:Cdata['predicted_alltypes'][predicted_alltypes_keys[0]][predicted_alltypes_keys0_keys[0]]}
+        else:
+            raise Exception("Found multi-input or multi-output data in 'predicted_alltypes' for input file %s. Can only read single intype+output" % (inputfile))
+    
     if 'ismissing' in Cdata:
         subjmissing=Cdata['ismissing']>0
     else:
@@ -859,7 +876,7 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
         print("None of the following fields were found in the input file %s:" % (inputfile),inputfield_default_search)
         raise Exception("Input type not found")
     
-    if len(Cdata[connfield][0].shape)==0:
+    if len(Cdata[connfield][0].shape)<=1:
         #single matrix was in file
         Cmats=[Cdata[connfield]]
     else:

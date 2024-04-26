@@ -456,7 +456,10 @@ def run_model_on_new_data(argv=None):
             transformer_data_mean=None
             actual_data_mean=None
 
-            if "pca_input_mean" in transformer_info_list[x]['params']:
+            if x in ['encoded'] and not x in transformer_info_list:
+                #no transformers for 'encoded' data
+                pass
+            elif "pca_input_mean" in transformer_info_list[x]['params']:
                 transformer_data_mean=transformer_info_list[x]['params']['pca_input_mean']
             elif "input_mean" in transformer_info_list[x]['params']:
                 transformer_data_mean=transformer_info_list[x]['params']['input_mean']
