@@ -903,4 +903,7 @@ def run_training_command(argv=None):
                                                      extra_trainrecord_dict=extra_trainrecord_dict)
                     
 if __name__ == "__main__":
+    if len(sys.argv)<=1:
+        argument_parse_runtraining(['-h'])
+        sys.exit(0)
     run_training_command(sys.argv[1:])

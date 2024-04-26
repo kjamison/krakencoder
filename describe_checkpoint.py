@@ -34,7 +34,9 @@ def argument_parse_describecheckpoint(argv):
     
     return parser.parse_args(argv)
 
-def run_describe_checkpoint(argv):
+def run_describe_checkpoint(argv=None):
+    if argv is None:
+        argv=sys.argv[1:]
     #read in command-line inputs
     args=argument_parse_describecheckpoint(argv)
     
@@ -103,4 +105,7 @@ def run_describe_checkpoint(argv):
             print("%d) %s -> %s" % (i+1,x,y))
     
 if __name__ == "__main__":
+    if len(sys.argv)<=1:
+        argument_parse_describecheckpoint(['-h'])
+        sys.exit(0)
     run_describe_checkpoint(sys.argv[1:])

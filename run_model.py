@@ -944,4 +944,7 @@ def run_model_on_new_data(argv=None):
                                     outputimagefile={'file':heatmapfile,'dpi':200})
             
 if __name__ == "__main__":
+    if len(sys.argv)<=1:
+        argument_parse_newdata(['-h'])
+        sys.exit(0)
     run_model_on_new_data(sys.argv[1:])
