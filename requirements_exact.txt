@@ -11,3 +11,4 @@ colorspacious==1.1.2
 requests==2.31.0
 tqdm==4.66.2
 platformdirs==4.2.1
+seaborn==0.13.0

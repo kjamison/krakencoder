@@ -228,7 +228,7 @@ The current pre-trained model has been trained on the following 15 connectivity 
 * numpy >= 1.21.2
 * scipy >= 1.7.2
 * scikit_learn >= 0.23.2
-* ipython, matplotlib, cycler, colorspacious, tqdm, requests, platformdirs
+* ipython, matplotlib, cycler, colorspacious, tqdm, requests, platformdirs, seaborn
 * *See [`requirements.txt`](requirements.txt) and [`requirements_exact.txt`](requirements_exact.txt)*
 
 # Downloads
