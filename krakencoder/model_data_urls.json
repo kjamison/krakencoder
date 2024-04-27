@@ -22,5 +22,10 @@
     {"filename":"subject_splits_993subj_683train_79val_196test_retestInTest.mat",
         "url":"https://osf.io/download/y67ep/",
         "hash":"86fb6be66e2406a4350c6bb9e7221c0f2272287b61c90c76cf27a8e415977a36",
+        "hashtype": "sha256"},
+        
+    {"filename":"kraken_ioxfm_SCFC_fs86+shen268+coco439_cfeat_710train.npy",
+        "url":"https://osf.io/download/tncsm/",
+        "hash":"5495dab34ca62c3f7b4a9eb0eb3e5599fdebc44270e28b0e91950c649c60fc1e",
         "hashtype": "sha256"}
 ]
