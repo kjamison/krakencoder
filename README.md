@@ -35,6 +35,9 @@ cd krakencoder
 pip install -r requirements_exact.txt
 pip install .
 
+#test your environment using a pre-baked model with dummy inputs and outputs
+python -m unittest
+
 #download pretrained model and transformations to cache folder (~1.3GB)
 python krakencoder/fetch.py --fetch
 ```

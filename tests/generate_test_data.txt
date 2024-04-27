@@ -1,0 +1,5 @@
+#### 2 inputs -> fusion
+python run_model.py --checkpoint krakenTEST_chkpt_SC_fs86_cfeat_4paths_latent128_20240425_ep002000.pt --inputxform krakenTEST_ioxfm_SC_fs86_cfeat_710train.npy --inputdata exampledata_10subj_SCifod2act_fs86_volnorm.mat exampledata_10subj_SCsdstream_fs86_volnorm.mat --outputname encoded --fusion --onlyfusioninputs --output 'mydataSCTEST_20240425_ep002000_out.{output}.mat'
+
+#### fusion -> 2 outputs
+python run_model.py --checkpoint krakenTEST_chkpt_SC_fs86_cfeat_4paths_latent128_20240425_ep002000.pt --inputxform krakenTEST_ioxfm_SC_fs86_cfeat_710train.npy --inputdata encoded=mydataSCTEST_20240425_ep002000_out.encoded.mat --outputname all --output 'mydataSCTEST_20240425_ep002000_in.{input}_out.all.mat'
