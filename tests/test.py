@@ -9,7 +9,7 @@ import numpy as np
 from krakencoder.model import Krakencoder
 from krakencoder.adaptermodel import KrakenAdapter
 from krakencoder.utils import square2tri, numpyvar, torchfloat
-from krakencoder.data import load_transformers_from_file
+from krakencoder.data import load_transformers_from_file, generate_adapt_transformer
 
 from scipy.io import loadmat
 import os
@@ -39,8 +39,8 @@ class TestDummyEvaluationOutput(unittest.TestCase):
         
         #dummy input data and the expected outputs from a trusted run
         testfile_input=os.path.join(testdir,'dummydataSCTEST_inputs.mat')
-        testfile_output=os.path.join(testdir,'dummydataSCTEST_20240425_ep002000_out.encoded.mat')
-        testfile_output_predconn=os.path.join(testdir,'dummydataSCTEST_20240425_ep002000_in.encoded_out.all.mat')
+        testfile_output=os.path.join(testdir,'dummydataSCTEST_20240425_ep002000_adapt_out.encoded.mat')
+        testfile_output_predconn=os.path.join(testdir,'dummydataSCTEST_20240425_ep002000_adapt_in.encoded_out.all.mat')
         
         #load the checkpoint and the input transformers
         inner_net, checkpoint_info = Krakencoder.load_checkpoint(checkpoint_file, eval_mode=True)
@@ -66,6 +66,14 @@ class TestDummyEvaluationOutput(unittest.TestCase):
         for c in checkpoint_info['input_name_list']:
             conndata[c] = {'data': np.stack([square2tri(x) for x in conndata_squaremats[c]['data']])}
     
+        #do meanfit+meanshift adaptation on the dummy data
+        adxfm_dict={}
+        for c in conndata:
+            adxfm_dict[c]=generate_adapt_transformer(input_data=conndata[c]['data'],
+                                                target_data=transformer_info_list[c],
+                                                adapt_mode='meanfit+meanshift')
+            conndata[c]={'data':adxfm_dict[c].transform(conndata[c]['data'])}
+        
         #run dummy data through the ENCODERS
         encoded_data={}
         for encidx, c in enumerate(checkpoint_info['input_name_list']):
