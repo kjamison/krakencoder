@@ -929,13 +929,13 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
     #test if target_data is a dict with field 'params'
     if isinstance(target_data,dict):
         if 'params' in target_data and 'input_mean' in target_data['params']:
-            target_data=np.atleast_2d(target_data['params']['input_mean'])
+            target_data=np.atleast_2d(numpyvar(target_data['params']['input_mean']))
         elif 'params' in target_data and 'pca_input_mean' in target_data['params']:
-            target_data=np.atleast_2d(target_data['params']['pca_input_mean'])
+            target_data=np.atleast_2d(numpyvar(target_data['params']['pca_input_mean']))
         elif 'input_mean' in target_data:
-            target_data=np.atleast_2d(target_data['input_mean'])
+            target_data=np.atleast_2d(numpyvar(target_data['input_mean']))
         elif 'pca_input_mean' in target_data:
-            target_data=np.atleast_2d(target_data['pca_input_mean'])
+            target_data=np.atleast_2d(numpyvar(target_data['pca_input_mean']))
     
     if input_data_fitsubjmask is None:
         input_data_fitsubjmask=np.ones(input_data.shape[0])>0
