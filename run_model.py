@@ -133,38 +133,50 @@ def atlas_from_flavors(conntype_list):
         
     return atlas_list
 
-def search_flavors(searchstring_list,full_list):
+def search_flavors(searchstring_list,full_list, return_index=False):
     if isinstance(searchstring_list,str):
         searchstring_list=[searchstring_list]
     
     if len(searchstring_list)==0:
         new_list=full_list.copy()
+        new_list_index=[0]*len(full_list)
     else:
         new_list=[]
-        for s in searchstring_list:
+        new_list_index=[]
+        for i,s in enumerate(searchstring_list):
             try:
                 s_canonical=canonical_data_flavor(s)
             except:
                 s_canonical=None
             
+            s_new=[s]
             if s.lower() == 'all':
-                new_list+=full_list
+                s_new=full_list
             elif s.lower() in ['encoded','fusion','transformed']:
-                new_list+=[s.lower()]
+                s_new=[s.lower()]
             elif s in full_list:
-                new_list+=[s]
+                s_new=[s]
             elif s_canonical is not None and s_canonical in full_list:
-                new_list+=[s_canonical]
+                s_new=[s_canonical]
             elif s.lower()=='sc':
-                new_list+=[intype for intype in full_list if intype.startswith("SC") or "sdstream" in intype or "ifod2act" in intype]
+                s_new=[intype for intype in full_list if intype.startswith("SC") or "sdstream" in intype or "ifod2act" in intype]
             elif s.lower()=='fc':
-                new_list+=[intype for intype in full_list if intype.startswith("FC")]
+                s_new=[intype for intype in full_list if intype.startswith("FC")]
             else:
-                new_list+=[intype for intype in full_list if s in intype]
+                s_new=[intype for intype in full_list if s in intype]
                 
-    
+            new_list+=s_new
+            new_list_index+=[i]*len(s_new)
+                
     #return unique elements in list, in their original order
-    return [str(s) for s in np.array(new_list)[np.sort(np.unique(new_list,return_index=True)[1])]]
+    uidx=np.sort(np.unique(new_list,return_index=True)[1])
+    new_list=[str(new_list[i]) for i in uidx]
+    new_list_index=[new_list_index[i] for i in uidx]
+    
+    if return_index:
+        return new_list,new_list_index
+    else:
+        return new_list
 
 def run_model_on_new_data(argv=None):
     if argv is None:
@@ -209,6 +221,22 @@ def run_model_on_new_data(argv=None):
         
     if adapt_mode.lower()=='none':
         adapt_mode=None
+    
+    ##############
+    #load model checkpoint
+    warnings.filterwarnings("ignore", category=UserWarning, message="CUDA initialization")
+    
+    outerptfile=None
+    if innerptfile is not None:
+        outerptfile=ptfile
+        ptfile=innerptfile
+        print("Loading inner model from %s" % (ptfile))
+        
+    net, checkpoint=Krakencoder.load_checkpoint(ptfile)
+    conn_names=checkpoint['input_name_list']
+    trainpath_pairs = [[conn_names[i],conn_names[j]] for i,j in zip(checkpoint['trainpath_encoder_index_list'], checkpoint['trainpath_decoder_index_list'])]
+
+    #############
     
     #for fusion mode, check whether we are doing multiple fusion types
     if any(['=' in b for b in input_fusionmode_names]):
@@ -265,10 +293,10 @@ def run_model_on_new_data(argv=None):
         subjects_train=[s for i,s in enumerate(subjects) if i in input_subject_splits['subjidx_train']]
         subjects_val=[s for i,s in enumerate(subjects) if i in input_subject_splits['subjidx_val']]
         subjects_test=[s for i,s in enumerate(subjects) if i in input_subject_splits['subjidx_test']]
-
+    
     if len(input_file_list)>0:
-        
         if input_file_list[0] in ['all','test','train','val','retest']:
+            #use HCP data
             pass
         elif(all(["=" in x for x in input_file_list])):
             tmp_inputfiles=input_file_list
@@ -278,79 +306,30 @@ def run_model_on_new_data(argv=None):
                 input_conntype_list+=[x.split("=")[0]]
                 input_file_list+=[x.split("=")[-1]]
         else:
-            #reset conntype list so we infer from filenames
-            input_conntype_list=[]
-
-    if len(input_conntype_list)==0:
-        if not input_file_list[0] in ['all','test','train','val','retest']:
             #try to figure out conntypes from filenames
             print("--inputname not provided. Guessing input type from filenames:")
+            input_conntype_list=[]
             for x in input_file_list:
                 xc=canonical_data_flavor(justfilename(x))
                 input_conntype_list+=[xc]
-                print("%s = %s" % (xc,x))
-    
-    #handle some shortcuts for the input/output filenames
-    
-    do_save_output_data=True
-    if outfile is None:
-        do_save_output_data=False
-        outfile="dummy_{input}_{output}.mat"
-
-    outfile_template=outfile
-    if re.search("{.+}",outfile_template):
-        instrlist=["i","in","input","s","src","source"]
-        outstrlist=["o","out","output","t","trg","targ","target"]
-        for s in instrlist:
-            outfile_template=outfile_template.replace("{"+s+"}","{input}")
-        for s in outstrlist:
-            outfile_template=outfile_template.replace("{"+s+"}","{output}")
-
-    ##############
-    #load model and input transformers
-    warnings.filterwarnings("ignore", category=UserWarning, message="CUDA initialization")
-    
-    outerptfile=None
-    if innerptfile is not None:
-        outerptfile=ptfile
-        ptfile=innerptfile
-        print("Loading inner model from %s" % (ptfile))
-        
-    net, checkpoint=Krakencoder.load_checkpoint(ptfile)
-    conn_names=checkpoint['input_name_list']
-    trainpath_pairs = [[conn_names[i],conn_names[j]] for i,j in zip(checkpoint['trainpath_encoder_index_list'], checkpoint['trainpath_decoder_index_list'])]
-
-    if not input_transform_file_list and checkpoint['input_transformation_info'].upper()!='NONE':
-        print("Must provide input transform (ioxfm) file")
-        sys.exit(1)
-    
-    precomputed_transformer_info_list={}
-    if checkpoint['input_transformation_info']=='none':
-        for conntype in conn_names:
-            precomputed_transformer_info_list[conntype]={'type':'none'}
-    else:
-        for ioxfile in input_transform_file_list:
-            print("Loading precomputed input transformations: %s" % (ioxfile))
-            ioxtmp=np.load(ioxfile,allow_pickle=True).item()
-            for k in ioxtmp:
-                precomputed_transformer_info_list[k]=ioxtmp[k]
-        
-    transformer_list={}
-    transformer_info_list={}
-    for conntype in precomputed_transformer_info_list:
-        transformer, transformer_info = generate_transformer(traindata=None, 
-            transformer_type=precomputed_transformer_info_list[conntype]["type"], transformer_param_dict=None, 
-            precomputed_transformer_params=precomputed_transformer_info_list[conntype], return_components=True)
-        transformer_list[conntype]=transformer
-        transformer_info_list[conntype]=transformer_info
+                print("  %s = %s" % (xc,x))
     
     ######################
     # parse user-specified input data type
     #conn_names = full list of input names from model checkpoint
     #input_conntype_canonical=canonical_data_flavor(input_conntype)
     #input_conntype_list=[input_conntype_canonical]
-    input_conntype_list=search_flavors(input_conntype_list, conn_names)
-
+    input_conntype_list, input_conntype_idx =search_flavors(input_conntype_list, conn_names, return_index=True)
+    
+    if len(input_file_list) > 0 and not input_file_list[0] in ['all','test','train','val','retest']:
+        #if we provided multiple input files, the conntype list may have been reordered during search_flavors
+        # or only a subset were used (if the model checkpoint only accepts certain inputs),
+        # so reorder the input files
+        input_file_list = [input_file_list[i] for i in input_conntype_idx]
+        print("Final conntype = filename mapping:")
+        for xc,x in zip(input_conntype_list,input_file_list):
+            print("  %s = %s" % (xc,x))
+    
     do_self_only=False
     if "none" in [x.lower() for x in output_conntype_list]:
         output_conntype_list=[]
@@ -402,6 +381,21 @@ def run_model_on_new_data(argv=None):
     
     
     
+    #handle some shortcuts for the input/output filenames
+    do_save_output_data=True
+    if outfile is None:
+        do_save_output_data=False
+        outfile="dummy_{input}_{output}.mat"
+
+    outfile_template=outfile
+    if re.search("{.+}",outfile_template):
+        instrlist=["i","in","input","s","src","source"]
+        outstrlist=["o","out","output","t","trg","targ","target"]
+        for s in instrlist:
+            outfile_template=outfile_template.replace("{"+s+"}","{input}")
+        for s in outstrlist:
+            outfile_template=outfile_template.replace("{"+s+"}","{output}")
+            
     outfile_list=[]
     outfile_input_output_list=[]
     
@@ -433,6 +427,32 @@ def run_model_on_new_data(argv=None):
         outfile_list+=[outfile_template]
         outfile_input_output_list+=[{"intype":eval_input_conntype_list,"outtype":output_conntype_list}]
         
+    ##############
+    #load input transformers
+    if not input_transform_file_list and checkpoint['input_transformation_info'].upper()!='NONE':
+        print("Must provide input transform (ioxfm) file")
+        sys.exit(1)
+    
+    precomputed_transformer_info_list={}
+    if checkpoint['input_transformation_info']=='none':
+        for conntype in conn_names:
+            precomputed_transformer_info_list[conntype]={'type':'none'}
+    else:
+        for ioxfile in input_transform_file_list:
+            print("Loading precomputed input transformations: %s" % (ioxfile))
+            ioxtmp=np.load(ioxfile,allow_pickle=True).item()
+            for k in ioxtmp:
+                precomputed_transformer_info_list[k]=ioxtmp[k]
+        
+    transformer_list={}
+    transformer_info_list={}
+    for conntype in precomputed_transformer_info_list:
+        transformer, transformer_info = generate_transformer(traindata=None, 
+            transformer_type=precomputed_transformer_info_list[conntype]["type"], transformer_param_dict=None, 
+            precomputed_transformer_params=precomputed_transformer_info_list[conntype], return_components=True)
+        transformer_list[conntype]=transformer
+        transformer_info_list[conntype]=transformer_info
+    
     ######################
     #load input data
     
