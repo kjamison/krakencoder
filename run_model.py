@@ -615,7 +615,7 @@ def run_model_on_new_data(argv=None):
         if intype == "encoded" or intype.startswith("fusion"):
             encoded_name=intype
             conn_encoded=torchfloat(conndata_alltypes[intype]['data'])
-            encoded_alltypes[intype]=conn_encoded.numpy()
+            encoded_alltypes[intype]=numpyvar(conn_encoded)
         else:
             if not intype in conn_names:
                 raise Exception("Input type %s not found in model" % (intype))
@@ -632,8 +632,8 @@ def run_model_on_new_data(argv=None):
             else:
                 with torch.no_grad():
                     conn_encoded = net(inputdata, encoder_index_torch, neg1_torch)
-    
-            encoded_alltypes[intype]=conn_encoded.cpu().detach().numpy()
+            
+            encoded_alltypes[intype]=numpyvar(conn_encoded)
     
     #fusionmode averaging in encoding latent space
     for fusiontype, fusionmode_names in fusionmode_names_dict.items():
@@ -915,19 +915,26 @@ def run_model_on_new_data(argv=None):
                                 
                             for m in metriclist:
                                 metricfield='%s%s_%s' % (m,o,tv)
+                                metricfield2=None
+                                v=None
+                                v2=None
                                 if m == 'corrloss':
-                                    newrecord[metricfield][itp,:]=corrtop1acc(cc=cc)
+                                    v=corrtop1acc(cc=cc)
                                 elif m == 'corrlossN':
-                                    newrecord[metricfield][itp,:]=corrtopNacc(cc=cc,topn=topN)
+                                    v=corrtopNacc(cc=cc,topn=topN)
                                 elif m == 'corrlossRank':
-                                    newrecord[metricfield][itp,:]=corravgrank(cc=cc)
+                                    v=corravgrank(cc=cc)
                                 elif m == 'avgcorr':
                                     metricfield2='%s%s_other_%s' % (m,o,tv)
-                                    newrecord[metricfield][itp,:],newrecord[metricfield2][itp,:]=corr_ident_parts(cc=cc)
+                                    v,v2=corr_ident_parts(cc=cc)
                                 elif m == 'avgcorr_resid':
-                                    newrecord[metricfield][itp,:],_=corr_ident_parts(cc=cc_resid)
+                                    v,_=corr_ident_parts(cc=cc_resid)
                                 elif m == 'explainedvar':
-                                    newrecord[metricfield][itp,:]=explained_variance_ratio(x_true,x_pred,axis=0)
+                                    v=explained_variance_ratio(x_true,x_pred,axis=0)
+                                
+                                newrecord[metricfield][itp,:] = numpyvar(v)
+                                if metricfield2 is not None:
+                                    newrecord[metricfield2][itp,:] = numpyvar(v2)
                                 
         trainpath_count=len(newrecord_trainpath_list)
         for m in metriclist:
