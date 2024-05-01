@@ -593,7 +593,34 @@ def get_subjects_from_conndata(conndata, subjects=None, remove_subjects=None):
                 conndata_new[k]=conndata[k].copy()
     
     return conndata_new
-            
+
+def merge_conndata_subjects(conndata_list):
+    """
+    Merge a list of conndata dicts, each with the same 'subjects' field, into a single conndata dict with all subjects concatenated
+    
+    Parameters:
+    conndata_list: list of conndata dicts with 'subjects' and 'data' fields
+    
+    Returns:
+    conndata_new: dict, new conndata dict with all subjects concatenated
+    """
+    if not ('subjects' in conndata_list[0] and 'data' in conndata_list[0]):
+        #if provided a multi-flavor input, loop over the flavors
+        #(make deep copy)
+        conndata_new={}
+        for conntype in conndata_list[0].keys():
+            conndata_new[conntype]=merge_conndata_subjects([c[conntype] for c in conndata_list])
+        return conndata_new
+    
+    #make new deep copy of data
+    conndata_new={}
+    for k in conndata_list[0].keys():
+        if np.size(conndata_list[0][k])<=1:
+            conndata_new[k]=conndata_list[0][k]
+        else:
+            conndata_new[k]=np.concatenate([c[k] for c in conndata_list],axis=0)
+    return conndata_new
+
 def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False, keep_diagonal=False):
     """
     Load HCP data from a set of subjects and a list of data types, using hardcoded input paths
