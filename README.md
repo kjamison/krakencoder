@@ -1,10 +1,13 @@
 # krakencoder
+[![DOI](https://zenodo.org/badge/504601163.svg)](https://zenodo.org/doi/10.5281/zenodo.11106894)
+
 <img align="right" src="images/krakencoder_squid.png" alt="krakencoder cartoon" width=20%>
 
 The Krakencoder is a joint connectome mapping tool that simultaneously, bidirectionally translates between structural and functional connectivity, and across different atlases and processing choices via a common latent representation.
 
 ### Citation
 Keith W. Jamison, Zijin Gu, Qinxin Wang, Mert R. Sabuncu, Amy Kuceyeski, "Release the Krakencoder: A unified brain connectome translation and fusion tool". bioRxiv [doi:10.1101/2024.04.12.589274](https://www.biorxiv.org/content/10.1101/2024.04.12.589274) 
+
 
 <img src="images/krakencoder_overview.png" alt="krakencoder overview" width=75%>
 
