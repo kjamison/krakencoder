@@ -206,7 +206,7 @@ def flavor2color(conntype):
     conntype=conntype.lower()
     color=[0,0,0]
     if "fs86" in conntype:
-        if "fccov" or "fccorr" in conntype:
+        if "fccov" in conntype or "fccorr" in conntype:
             color=[1,0,0]
         elif "pcorr" in conntype:
             color=[.5,0,0]
@@ -216,7 +216,7 @@ def flavor2color(conntype):
             color=[0,.75,0]
 
     elif "shen268" in conntype:
-        if "fccov" or "fccorr" in conntype:
+        if "fccov" in conntype or "fccorr" in conntype:
             color=[0,0,1]
         elif "pcorr" in conntype:
             color=[0,0,.5]
@@ -226,7 +226,7 @@ def flavor2color(conntype):
             color=[.75,0,.75]
 
     elif "coco439" in conntype:
-        if "fccov" or "fccorr" in conntype:
+        if "fccov" in conntype or "fccorr" in conntype:
             color=[0,.5,.5]
         elif "pcorr" in conntype:
             color=[0,.25,.25]
@@ -234,7 +234,6 @@ def flavor2color(conntype):
             color=[.5,.25,0]
         elif "ifod2act" in conntype:
             color=[1,.5,0]
-
     return color
 
 #reorder by atlas and modality
