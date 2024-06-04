@@ -77,7 +77,8 @@ class TestDummyEvaluationOutput(unittest.TestCase):
         #run dummy data through the ENCODERS
         encoded_data={}
         for encidx, c in enumerate(checkpoint_info['input_name_list']):
-            encoded_data[c]=net(conndata[c]['data'],encoder_index=encidx, decoder_index=-1)
+            with torch.no_grad():
+                encoded_data[c]=net(conndata[c]['data'],encoder_index=encidx, decoder_index=-1)
 
         #average the latent vectors across flavors to get "fusion" vectors
         encoded_fusion=torch.mean(torch.stack([encoded_data[c] for c in encoded_data]),axis=0)
@@ -93,7 +94,8 @@ class TestDummyEvaluationOutput(unittest.TestCase):
         #run the fusion vectors through the DECODERS
         predconn={}
         for decidx, c in enumerate(checkpoint_info['input_name_list']):
-            _,predconn[c]=net(torchfloat(encoded_fusion), encoder_index=-1, decoder_index=decidx)
+            with torch.no_grad():
+                _,predconn[c]=net(torchfloat(encoded_fusion), encoder_index=-1, decoder_index=decidx)
             predconn[c]=numpyvar(predconn[c])
 
         #compute the RMS for predicted connectomes and expected outputs
