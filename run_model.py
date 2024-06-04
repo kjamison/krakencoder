@@ -472,63 +472,12 @@ def run_model_on_new_data(argv=None):
                 subjidx_adapt=np.array([i for i,s in enumerate(conndata_alltypes[x]['subjects']) if s in subjects_train])
             else:
                 subjidx_adapt=np.arange(conndata_alltypes[x]['data'].shape[0])
-
-            transformer_data_mean=None
-            actual_data_mean=None
-
-            if x in ['encoded'] and not x in transformer_info_list:
-                #no transformers for 'encoded' data
-                pass
-            elif "pca_input_mean" in transformer_info_list[x]['params']:
-                transformer_data_mean=transformer_info_list[x]['params']['pca_input_mean']
-            elif "input_mean" in transformer_info_list[x]['params']:
-                transformer_data_mean=transformer_info_list[x]['params']['input_mean']
-                
-            if transformer_data_mean is not None:
-                if torch.is_tensor(transformer_data_mean):
-                    transformer_data_mean=transformer_data_mean.detach().cpu().numpy()
-                transformer_data_mean=np.atleast_2d(transformer_data_mean)
-                
-            if transformer_data_mean is not None:
-                actual_data_mean=np.mean(conndata_alltypes[x]['data'][subjidx_adapt,:],axis=0,keepdims=True)
-                
-            if adapt_mode is None:
-                pass
-            elif adapt_mode.lower() == 'meanshift':
-                if transformer_data_mean is not None:
-                    print("\tShifting input data mean to transformer mean: %s" % (x))
-                    conndata_alltypes[x]['data']=conndata_alltypes[x]['data'] - actual_data_mean + transformer_data_mean
-            elif adapt_mode.lower() == 'meanfit+meanshift' or adapt_mode.lower() == 'meanfitshift':
-                if transformer_data_mean is not None:
-                    A=np.vstack((actual_data_mean,np.ones(actual_data_mean.shape)))
-                    beta=np.linalg.lstsq(A.T,transformer_data_mean.T,rcond=None)[0]
-                    print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
-                    print("\tShifting input data mean to transformer mean: %s" % (x))
-                    conndata_alltypes[x]['data']=conndata_alltypes[x]['data']*beta[0] - actual_data_mean*beta[0] + transformer_data_mean
-                    
-            elif adapt_mode.lower() == 'meanfit':
-                #use np.linalg.lstsq to least squares fit of actual_data_mean to transformer_data_mean
-                if transformer_data_mean is not None:
-                    A=np.vstack((actual_data_mean,np.ones(actual_data_mean.shape)))
-                    beta=np.linalg.lstsq(A.T,transformer_data_mean.T,rcond=None)[0]
-                    print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
-                    conndata_alltypes[x]['data'] = conndata_alltypes[x]['data']*beta[0] + beta[1]
-            else:
-                raise Exception("Unknown adapt_mode: %s" % (adapt_mode))
-                
-                
-                
-                #least squares fit of actual_data_mean to transformer_data_mean:
-                #  actual_data_mean = transformer_data_mean * A + b
-                #  A = (actual_data_mean - b) / transformer_data_mean
-                #  b = actual_data_mean - transformer_data_mean * A
-                if False and transformer_data_mean is not None:
-                    print("Fitting input data mean to transformer mean: %s" % (x))
-                    A=np.matmul((actual_data_mean-transformer_data_mean).T, np.linalg.inv(transformer_data_mean.T))
-                    b=actual_data_mean - np.matmul(transformer_data_mean,A)
-                    conndata_alltypes[x]['data']=np.matmul(conndata_alltypes[x]['data'],A) + b
-                
-
+            
+            adxfm=generate_adapt_transformer(input_data=conndata_alltypes[x]['data'],
+                                        target_data=transformer_info_list[x],
+                                        adapt_mode=adapt_mode,
+                                        input_data_fitsubjmask=subjidx_adapt)
+            conndata_alltypes[x]['data']=adxfm.transform(conndata_alltypes[x]['data'])
             print(x,conndata_alltypes[x]['data'].shape)
     else:
         #load hardcoded HCP data files

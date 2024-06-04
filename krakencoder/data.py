@@ -969,6 +969,13 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
     if target_data_fitsubjmask is None:
         target_data_fitsubjmask=np.ones(target_data.shape[0])>0
     
+    num_input_fitsubj=np.sum(input_data_fitsubjmask)
+    num_target_fitsubj=np.sum(target_data_fitsubjmask)
+    if np.any(input_data_fitsubjmask.astype(bool)!=input_data_fitsubjmask):
+        num_input_fitsubj=len(input_data_fitsubjmask)
+    if np.any(target_data_fitsubjmask.astype(bool)!=target_data_fitsubjmask):
+        num_target_fitsubj=len(target_data_fitsubjmask)
+        
     input_data_mean=np.atleast_2d(np.mean(input_data[input_data_fitsubjmask,:],axis=0,keepdims=True))
     target_data_mean=np.atleast_2d(np.mean(target_data[target_data_fitsubjmask,:],axis=0,keepdims=True))
     
@@ -978,18 +985,30 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
     elif adapt_mode.lower() == 'meanshift':
         transformer=FunctionTransformer(func=lambda x:torchfloat(x - input_data_mean + target_data_mean),
                                         inverse_func=lambda x:torchfloat(x - target_data_mean + input_data_mean))
+        adaptfit_cc=np.corrcoef(input_data_mean,target_data_mean)[0,1]
+        print("\tShifting input data mean to transformer mean")
+        print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
+        print("\tAdapted fit R2: %.3f" % (adaptfit_cc**2))
+        
     elif adapt_mode.lower() == 'meanfit+meanshift' or adapt_mode.lower() == 'meanfitshift':
         A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
         beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0]
+        adaptfit_cc=np.corrcoef(beta.T@A,target_data_mean)[0,1]
         print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
+        print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
+        print("\tAdapted fit R2: %.3f" % (adaptfit_cc**2))
         #print("\tShifting input data mean to transformer mean: %s" % (x))
         transformer=FunctionTransformer(func=lambda x:torchfloat(x*beta[0] - input_data_mean*beta[0] + target_data_mean),
                                         inverse_func=lambda x:torchfloat(x/beta[0] - target_data_mean/beta[0] + input_data_mean))
+        
     elif adapt_mode.lower() == 'meanfit':
         #use np.linalg.lstsq to least squares fit of actual_data_mean to transformer_data_mean
         A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
         beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0]
+        adaptfit_cc=np.corrcoef(beta.T@A,target_data_mean)[0,1]
         print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
+        print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
+        print("\tAdapted fit R2: %.3f" % (adaptfit_cc**2))
         transformer=FunctionTransformer(func=lambda x:torchfloat(x*beta[0] + beta[1]),
                                         inverse_func=lambda x:torchfloat(x/beta[0]-beta[1]/beta[0]))
     else:
