@@ -24,7 +24,7 @@ def clean_subject_list(subjects):
         newsubjects=[int(x) for x in subjects]
     except:
         newsubjects=[x for x in subjects]
-    newsubjects=np.array([str(x) for x in newsubjects])
+    newsubjects=np.array([str(x).strip() for x in newsubjects])
     return newsubjects
 
 def load_hcp_subject_list(numsubj=993):
