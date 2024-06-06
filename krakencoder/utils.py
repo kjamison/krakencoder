@@ -26,15 +26,15 @@ def numpyvar(x):
         return x
     return x.cpu().detach().numpy()
 
-def torchvar(x, astype=None):
+def torchvar(x, astype=None, requires_grad=False):
     """cast variable to torch (use cuda if available), with optional type conversion"""
     if torch.is_tensor(x):
         if astype is int:
-            return x.int()
+            return x.int().requires_grad_(requires_grad)
         elif astype is float:
-            return x.float()
+            return x.float().requires_grad_(requires_grad)
         else:
-            return x
+            return x.requires_grad_(requires_grad)
     
     try:
         _ = iter(x)
@@ -61,15 +61,15 @@ def torchvar(x, astype=None):
     
     
     if islist:
-        return torchfun(x)
+        return torchfun(x).requires_grad_(requires_grad)
     else:
-        return torchfun([x])
+        return torchfun([x]).requires_grad_(requires_grad)
 
-def torchfloat(x):
-    return torchvar(x,astype=float)
+def torchfloat(x,requires_grad=False):
+    return torchvar(x,astype=float,requires_grad=requires_grad)
 
-def torchint(x):
-    return torchvar(x,astype=int)
+def torchint(x,requires_grad=False):
+    return torchvar(x,astype=int,requires_grad=requires_grad)
 
 def explained_variance_ratio(x_true,x_predicted,axis=0, var_true=None):
     """
