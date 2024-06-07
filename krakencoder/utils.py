@@ -30,11 +30,11 @@ def torchvar(x, astype=None, requires_grad=False):
     """cast variable to torch (use cuda if available), with optional type conversion"""
     if torch.is_tensor(x):
         if astype is int:
-            return x.int().requires_grad_(requires_grad)
+            return x.clone().detach().int().requires_grad_(requires_grad)
         elif astype is float:
-            return x.float().requires_grad_(requires_grad)
+            return x.clone().detach().float().requires_grad_(requires_grad)
         else:
-            return x.requires_grad_(requires_grad)
+            return x.clone().detach().requires_grad_(requires_grad)
     
     try:
         _ = iter(x)
@@ -49,21 +49,21 @@ def torchvar(x, astype=None, requires_grad=False):
         astype=input_type
     
     if torch.cuda.is_available():
-        if astype is int:
-            torchfun=torch.cuda.IntTensor
-        else:
-            torchfun=torch.cuda.FloatTensor
+        device = torch.device("cuda")
     else:
-        if astype is int:
-            torchfun=torch.IntTensor
-        else:
-            torchfun=torch.FloatTensor
+        device = torch.device("cpu")
     
+    if np.issubdtype(astype,np.integer):
+        torchtype = torch.int
+        if np.issubdtype(input_type, np.unsignedinteger):
+            x=x.astype(int)
+    else:
+        torchtype = torch.float
     
     if islist:
-        return torchfun(x).requires_grad_(requires_grad)
+        return torch.tensor(x, dtype=torchtype, device=device, requires_grad=requires_grad)
     else:
-        return torchfun([x]).requires_grad_(requires_grad)
+        return torch.tensor([x], dtype=torchtype, device=device, requires_grad=requires_grad)
 
 def torchfloat(x,requires_grad=False):
     return torchvar(x,astype=float,requires_grad=requires_grad)
