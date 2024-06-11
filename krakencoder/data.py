@@ -840,6 +840,8 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
     """
     Load input data from a file, with optional selection of a specific field to load
     Input field should contain a [subjects x region x region] array of square matrices for each subject
+        * OR it can be [subjects x edges] if it also includes a 'trimask' field, which must be either a 
+            [region x region] mask or a tuple or [2 x edges] with (rowidxs,colidxs)
     Input data CAN be an output from run_model with a 'predicted_alltypes' field, but only if there is a single input type and output type.
     Optional group name (eg: 'SC', 'FC') is useful if training regime treats intra-modal and inter-modal differently
     
@@ -881,15 +883,21 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
         else:
             raise Exception("Found multi-input or multi-output data in 'predicted_alltypes' for input file %s. Can only read single intype+output" % (inputfile))
     
+    subjmissing=[]
+    subjects=[]
+    trimask=None
+    
     if 'ismissing' in Cdata:
         subjmissing=Cdata['ismissing']>0
-    else:
-        subjmissing=[]
+        
     if 'subject' in Cdata:
         subjects=Cdata['subject']
-    else:
-        subjects=[]
-
+    elif 'subjects' in Cdata:
+        subjects=Cdata['subjects']
+    
+    if 'trimask' in Cdata:
+        trimask=Cdata['trimask']
+    
     subjects=clean_subject_list(subjects)
 
     connfield=inputfield
@@ -914,6 +922,21 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
         npairs=Cmats[0].shape[1]
         Cdata=Cmats[0].copy()
         trimask=None
+        
+    elif trimask is not None:
+        Cdata=Cmats[0].copy()
+        if isinstance(trimask, tuple):
+            trimask=(trimask[0],trimask[1])
+        elif isinstance(trimask, np.ndarray) and trimask.shape[0]==trimask.shape[1]:
+            trimask=np.where(trimask>0)
+        elif len(trimask)==2:
+            trimask=(trimask[0],trimask[1])
+        else:
+            raise Exception("Invalid trimask input. Must be [roi x roi] mask, a tuple of (rowidxs,colidxs) or a [2 x edges] array of (rowidxs,colidxs).")
+        
+        nroi=max(max(trimask[0]),max(trimask[1]))+1
+        npairs=len(trimask[0])
+            
     else:
         nroi=Cmats[0].shape[0]
         if keep_diagonal:
