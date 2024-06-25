@@ -266,7 +266,7 @@ def flatlist(l):
 def triu_indices_torch(n,k=0):
     """pytorch triu_indices doesn't work the same way so use custom function that will"""
     ia,ib=torch.triu_indices(n,n,offset=k)
-    return [ia,ib]
+    return ia,ib
 
 def square2tri(C, tri_indices=None, k=1, return_indices=False):
     """
@@ -278,6 +278,10 @@ def square2tri(C, tri_indices=None, k=1, return_indices=False):
             tri_indices=triu_indices_torch(C.shape[0],k=k)
         else:
             tri_indices=np.triu_indices(C.shape[0],k=k)
+    else:
+        if not type(tri_indices) is tuple:
+            #convert to tuple, since it might have been converted to a 2xEdges numpy array
+            tri_indices=(tri_indices[0],tri_indices[1])
     if return_indices:
         return C[tri_indices], tri_indices
     else:
@@ -301,6 +305,9 @@ def tri2square(Ctri, tri_indices=None, numroi=None, k=1, diagval=0):
         else:
             tri_indices=np.triu_indices(numroi,k=k)
     else:
+        if not type(tri_indices) is tuple:
+            #convert to tuple, since it might have been converted to a 2xEdges numpy array
+            tri_indices=(tri_indices[0],tri_indices[1])
         numroi=np.array(max(max(tri_indices[0]),max(tri_indices[1])))+1
     if torch.is_tensor(Ctri):
         C=torch.zeros(numroi,numroi,dtype=Ctri.dtype,device=Ctri.device)+torch.tensor(diagval,dtype=Ctri.dtype,device=Ctri.device)
