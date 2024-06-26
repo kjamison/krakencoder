@@ -148,7 +148,8 @@ def naninterp(x,outliermat=None,axis=0,fill_value=0):
     
     return xnew
     
-def format_columns(column_data=[],column_headers=[],column_format_list=[],delimiter=", ",align="right", header_separator=None, print_result=False):
+def format_columns(column_data=[],column_headers=[],column_format_list=[],delimiter=", ",align="right", header_separator=None, print_result=False, 
+                   truncate_length=None, truncate_endlength=None, truncate_string="..."):
     """
     Format data into columns for nicer output printing with specified alignment and delimiter
     """
@@ -211,6 +212,22 @@ def format_columns(column_data=[],column_headers=[],column_format_list=[],delimi
     
     column_result=[formatstr % tuple(r) for r in column_data_str]
 
+
+    if truncate_length is not None:
+        column_result_new=[]
+        for i,r in enumerate(column_result):
+            if align=='left':
+                r=r.rstrip()
+            if len(r)<=truncate_length:
+                pass
+            else:
+                if truncate_endlength is None:
+                    r=r[:truncate_length-len(truncate_string)]+truncate_string
+                else:
+                    r=r[:truncate_length-truncate_endlength-len(truncate_string)]+truncate_string+r[-truncate_endlength:]
+            column_result_new+=[r]
+        column_result=column_result_new
+    
     if separator_row is not None:
         column_result[separator_row]=column_result[separator_row].replace(delimiter," "*len(delimiter))
     
