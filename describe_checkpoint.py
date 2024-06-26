@@ -4,7 +4,7 @@ Command-line script to print information about a saved Krakencoder checkpoint (.
 
 from krakencoder.model import *
 from krakencoder.plotfigures import display_kraken_heatmap
-from krakencoder.utils import get_version
+from krakencoder.utils import get_version, format_columns
 
 from collections.abc import Iterable
 import os
@@ -73,7 +73,7 @@ def run_describe_checkpoint(argv=None):
     conn_names=checkpoint['input_name_list']
     trainpath_pairs = [[conn_names[i],conn_names[j]] for i,j in zip(checkpoint['trainpath_encoder_index_list'], checkpoint['trainpath_decoder_index_list'])]
     
-    fields_to_skip=['trainpath_encoder_index_list','trainpath_decoder_index_list','optimizer','training_params']
+    fields_to_skip=['trainpath_encoder_index_list','trainpath_decoder_index_list','optimizer','training_params','merged_training_params_list','merged_checkpoint_info_list']
     
     print("Model information:")
     for k in checkpoint:
@@ -87,12 +87,23 @@ def run_describe_checkpoint(argv=None):
                 continue
             if isinstance(checkpoint['training_params'][k],Iterable):
                 continue
-            print("training_params[%s]:" % (k),checkpoint['training_params'][k])
+            print("training_params['%s']:" % (k),checkpoint['training_params'][k])
     
     print("")
     print("Input types (%d):" % (len(conn_names)))
+    output_info_columns=[]
+    output_column_format_list=['%s','%s','%s']
+    if 'merged_checkpointfile_list' in checkpoint:
+        output_column_format_list.append('%s')
+    
     for i,iname in enumerate(conn_names):
-        print("%d) %s (Sx%d)" % (i+1,iname,checkpoint['orig_input_size_list'][i]))
+        rowitem=['%d)' % (i+1), iname, '(Sx%d)' % (checkpoint['orig_input_size_list'][i])]
+        if 'merged_checkpointfile_list' in checkpoint:
+            rowitem.append('from: '+checkpoint['merged_checkpointfile_list'][checkpoint['merged_source_net_idx'][i]])
+        output_info_columns.append(rowitem)
+    
+    _=format_columns(column_data=output_info_columns, column_format_list=output_column_format_list,
+                     delimiter=" ",align="left", print_result=True, truncate_length=130, truncate_endlength=30)
     
     if args.print_model:
         print("")
