@@ -2,8 +2,8 @@
 Functions for merging multiple networks into a single network.
 For example, if you have trained one network on a set of input flavors, and then 
 trained a new network on a different set of input flavors with the same target
-latent space, you can use this function to merge the two networks into a single
-model that can translate between all input flavors.
+latent space, you can use this function to merge the encoders and decoders from
+both networks into a single model that can translate between all input flavors.
 """
 
 from krakencoder.model import *
@@ -12,21 +12,21 @@ import os
 
 def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False):
     """
-    Merge multiple networks into a single network.
+    Merge encoders+decoders from multiple networks into a single network.
     
-    Provide a list of dictionaries with like 
+    Provide a list of dictionaries with the following format: 
     [{'net': net1, 'checkpoint': checkpoint1_dict}, {'net': net2, 'checkpoint': checkpoint2_dict}]
     where net1 and net2 are Krakencoder objects, and checkpoint1_dict and checkpoint2_dict are the
-    corresponding checkpoint dictionaries stored in checkpoint files with additional parameters describing
+    corresponding checkpoint dictionaries stored in checkpoint files, with additional parameters describing
     each model.
     
     This function will create a single list of input names from all the networks (removing duplicates),
-    and then create a new model with the encoders and decoders from all the networks.
+    and then create a new model combining the encoders and decoders from all the networks.
     
     Parameters:
     net_and_checkpoint_dict_list : list of dict, each with 'net' and 'checkpoint'. See description above.
     canonicalize_input_names : bool (default False) whether to canonicalize the input names before merging.
-        This is useful if the input names are a mix of old and new flavor name formats
+        This is useful if the input names are a mix of old and new flavor name conventions
         
     Returns:
     net, checkpoint: Krakencoder object and checkpoint dictionary for the merged model
@@ -83,15 +83,10 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False):
                 
             elif len(v)==num_trainpaths_orig0:
                 #this field is a list of values for each of the original trainpaths.
-                #we need to merge and reorder it across all checkpoints to match the new input names
-                vnew=[]
-                for iconn, conn_name in enumerate(input_name_list):
-                    inet=input_name_list_source_net_idx[iconn]
-                    iinput=input_name_list_source_input_idx[iconn]
-                    chk_tmp=net_and_checkpoint_dict_list[inet]['checkpoint']
-                    vnew.append(chk_tmp[k][iinput])
-                print("Merging trainpath field checkpoint_info['%s']: %d items" % (k,len(vnew)))
-                checkpoint_info[k]=vnew
+                #we would need to merge and reorder it across all checkpoints to match the new trainpaths
+                #but it's quite a bit more complicated than that, so we'll just delete it for now
+                print("Removing trainpath field checkpoint_info['%s']" % (k))
+                del checkpoint_info[k]
         except:
             pass
     
@@ -124,7 +119,7 @@ def merge_model_files(checkpoint_filename_list, canonicalize_input_names=False):
     Parameters:
     checkpoint_filename_list : List of .pt files to merge
     canonicalize_input_names : bool (default False) whether to canonicalize the input names before merging.
-        This is useful if the input names are a mix of old and new flavor name formats
+        This is useful if the input names are a mix of old and new flavor name conventions
     
     Returns:
     net, checkpoint: Krakencoder object and checkpoint dictionary for the merged model

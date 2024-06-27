@@ -10,17 +10,14 @@ import argparse
 import warnings
 
 def argument_parse_mergemodel(argv):
-    parser=argparse.ArgumentParser(description='Merge multiple Krakencoder checkpoints into a single model',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser=argparse.ArgumentParser(description='Merge encoder+decoders from multiple Krakencoder checkpoints into a single model',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('--checkpointlist',action='store',dest='checkpoint_list', help='Checkpoint files (.pt) to merge', nargs='*', required=True)
     parser.add_argument('--output',action='store',dest='output', help='file to save merged model (.pt)', required=True)
-    
     parser.add_argument('--canonical',action='store_true',dest='canonical', help='Canonicalize all input flavors before merging')
-    
     parser.add_argument('--version', action='version',version='Krakencoder v{version}'.format(version=get_version(include_date=True)))
     
     args=parser.parse_args(argv)
-    
     
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)

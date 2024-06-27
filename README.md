@@ -49,7 +49,7 @@ python krakencoder/fetch.py --fetch
 ### Command-line scripts:
 * [`run_training.py`](run_training.py): Train a new model
 * [`run_model.py`](run_model.py): Run a saved checkpoint on new data
-* [`run_merge_models.py`](run_merge_models.py): Merge multiple checkpoints into a single model
+* [`merge_checkpoints.py`](merge_checkpoints.py): Merge encoders+decoders from multiple checkpoints into a single model
 * [`describe_checkpoint.py`](describe_checkpoint.py): Print information about a saved checkpoint
 
 ### Internal scripts:
