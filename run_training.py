@@ -349,7 +349,7 @@ def run_training_command(argv=None):
 
             print("%s@%s=%s" % (xc,groupname,input_file))
         input_conntype_list=conndata_alltypes.keys()
-        roilist_str="+".join(input_conntype_list)
+        roilist_str="%dflav" % (len(input_conntype_list)) #use a shorter string tro avoid filename issues
     else:
         #load hardcoded HCP data paths
         input_nsubj=args.subjectcount
