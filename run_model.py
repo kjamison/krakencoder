@@ -101,6 +101,7 @@ def argument_parse_newdata(argv):
     misc_group=parser.add_argument_group('Misc')
     misc_group.add_argument('--heatmap',action='store',dest='heatmap_file', help='Save heatmap image')
     misc_group.add_argument('--heatmapmetrics',action='store',dest='heatmap_metrictype_list', help='List of metric types for heatmap',nargs='*')
+    misc_group.add_argument('--heatmap_colormap',action='store',dest='heatmap_colormap', default='magma', help='Colormap name for heatmap')
     misc_group.add_argument('--newtrainrecord',action='store',dest='new_train_record_file', help='Save a "fake" trainrecord file')
     misc_group.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='.mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields (or "trainrecord" to use from training record)')
 
@@ -202,6 +203,7 @@ def run_model_on_new_data(argv=None):
     input_file_list=args.input_data_file
     heatmapfile=args.heatmap_file
     heatmap_metrictype_list=args.heatmap_metrictype_list
+    heatmap_colormap=args.heatmap_colormap
     new_train_recordfile=args.new_train_record_file
     input_subject_split_file=args.subject_split_file
     adapt_mode=args.adapt_mode
@@ -920,7 +922,8 @@ def run_model_on_new_data(argv=None):
         if heatmapfile:
             do_single_epoch=True
             display_kraken_heatmap(newrecord,metrictype=heatmap_metrictype_list,origscale=True,single_epoch=do_single_epoch,
-                                    outputimagefile={'file':heatmapfile,'dpi':200})
+                                   colormap=heatmap_colormap,
+                                   outputimagefile={'file':heatmapfile,'dpi':200})
             
 if __name__ == "__main__":
     if len(sys.argv)<=1:
