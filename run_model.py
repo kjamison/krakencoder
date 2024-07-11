@@ -238,6 +238,26 @@ def run_model_on_new_data(argv=None):
         print("Loading inner model from %s" % (ptfile))
         
     net, checkpoint=Krakencoder.load_checkpoint(ptfile)
+    
+    ##########
+    #handle special case for OLD checkpoints before we updated the connectivity flavors
+    #if the checkpoint uses the old style of flavor names, convert them to the new style
+    try:
+        all_old_names=all([canonical_data_flavor_OLD(x)==x for x in checkpoint['input_name_list']])
+    except:
+        all_old_names=False
+    
+    if all_old_names:
+        print("This checkpoint uses old style of flavor names")
+        checkpoint['input_name_list']=[canonical_data_flavor(x) for x in checkpoint['input_name_list']]
+        checkpoint['training_params']['trainpath_names']=['%s->%s' % 
+                                                        (canonical_data_flavor(x.split("->")[0]),canonical_data_flavor(x.split("->")[1])) 
+                                                        for x in checkpoint['training_params']['trainpath_names']]
+        checkpoint['training_params']['trainpath_names_short']=['%s->%s' % 
+                                                                (canonical_data_flavor(x.split("->")[0]),canonical_data_flavor(x.split("->")[1])) 
+                                                                for x in checkpoint['training_params']['trainpath_names_short']]
+    ########
+    
     conn_names=checkpoint['input_name_list']
     trainpath_pairs = [[conn_names[i],conn_names[j]] for i,j in zip(checkpoint['trainpath_encoder_index_list'], checkpoint['trainpath_decoder_index_list'])]
 
@@ -474,6 +494,20 @@ def run_model_on_new_data(argv=None):
             precomputed_transformer_params=precomputed_transformer_info_list[conntype], return_components=True)
         transformer_list[conntype]=transformer
         transformer_info_list[conntype]=transformer_info
+    
+    ##########
+    #handle special case for OLD saved transformers before we updated the connectivity flavors
+    #if the transformers use the old style of flavor names, convert them to the new style
+    try:
+        all_old_names=all([canonical_data_flavor_OLD(x)==x for x in transformer_list])
+    except:
+        all_old_names=False
+    
+    if all_old_names:
+        print("The transformers use old style of flavor names")
+        transformer_list={canonical_data_flavor(x):transformer_list[x] for x in transformer_list}
+        transformer_info_list={canonical_data_flavor(x):transformer_info_list[x] for x in transformer_info_list}
+    ########
     
     ######################
     #load input data
