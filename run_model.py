@@ -104,7 +104,8 @@ def argument_parse_newdata(argv):
     misc_group.add_argument('--heatmap_colormap',action='store',dest='heatmap_colormap', default='magma', help='Colormap name for heatmap')
     misc_group.add_argument('--newtrainrecord',action='store',dest='new_train_record_file', help='Save a "fake" trainrecord file')
     misc_group.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='.mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields (or "trainrecord" to use from training record)')
-
+    misc_group.add_argument('--subjectsplitname',action='store',dest='subject_split_name', help='Which data split to evaluate: "all", "train", "test", "val", "retest", etc... (overrides --inputdata for hardcoded HCP)')
+    
     testing_group=parser.add_argument_group('Testing options')
     testing_group.add_argument('--savetransformedinputs',action='store_true',dest='save_transformed_inputs', help='Transform inputs and save them as "encoded" values (for testing PCA/transformed space data)')
     testing_group.add_argument('--untransformedoutputs',action='store_true',dest='save_untransformed_outputs', help='Keep outputs in PCA/transformed space (for testing)')
@@ -206,6 +207,8 @@ def run_model_on_new_data(argv=None):
     heatmap_colormap=args.heatmap_colormap
     new_train_recordfile=args.new_train_record_file
     input_subject_split_file=args.subject_split_file
+    input_subject_split_name=args.subject_split_name
+    
     adapt_mode=args.adapt_mode
     save_ccmat_in_record=args.ccmat
     
@@ -282,7 +285,12 @@ def run_model_on_new_data(argv=None):
     subjects_val=None
     subjects_test=None
     
+    subjects_to_eval=None #this might end iup being subjects_test, subjects_val, etc...
+    
     if input_subject_split_file:
+        subjects_to_eval_splitname='all'
+        if input_subject_split_name:
+            subjects_to_eval_splitname=input_subject_split_name.lower()
         print("Loading subject splits from %s" % (input_subject_split_file))
         input_subject_splits=loadmat(input_subject_split_file,simplify_cells=True)
         for f in ["subjects", "subjidx_train", "subjidx_val", "subjidx_test"]:
@@ -296,6 +304,13 @@ def run_model_on_new_data(argv=None):
         subjects_val=[s for i,s in enumerate(subjects) if i in input_subject_splits['subjidx_val']]
         subjects_test=[s for i,s in enumerate(subjects) if i in input_subject_splits['subjidx_test']]
     
+        if subjects_to_eval_splitname == 'all':
+            subjects_to_eval=subjects
+        elif 'subjidx_' + subjects_to_eval_splitname in input_subject_splits:
+            subjects_to_eval=[subjects[i] for i in input_subject_splits['subjidx_' + subjects_to_eval_splitname]]
+        else:
+            raise Exception("Invalid subject split name: %s" % (subjects_to_eval_splitname))
+        
     if len(input_file_list)>0:
         if input_file_list[0] in ['all','test','train','val','retest']:
             #use HCP data
@@ -315,6 +330,11 @@ def run_model_on_new_data(argv=None):
                 xc=canonical_data_flavor(justfilename(x))
                 input_conntype_list+=[xc]
                 print("  %s = %s" % (xc,x))
+    
+    #if input "file list" is an HCP data split name, and we provided a subject split name argument, override the "file list" argument
+    if len(input_file_list) > 0 and input_file_list[0].lower() in ['all','test','train','val','retest']:
+        if input_subject_split_name in ['all','test','train','val','retest']:
+            input_file_list[0]=input_subject_split_name.lower()
     
     ######################
     # parse user-specified input data type
@@ -462,6 +482,10 @@ def run_model_on_new_data(argv=None):
 
     if len(input_file_list) > 0 and not input_file_list[0] in ['all','test','train','val','retest']:
         #load data from files specified in command line
+        
+        if subjects_to_eval is not None:
+            output_subject_splits=None
+        
         conndata_alltypes={}
         for i,x in enumerate(input_conntype_list):
             
@@ -480,6 +504,11 @@ def run_model_on_new_data(argv=None):
                                         adapt_mode=adapt_mode,
                                         input_data_fitsubjmask=subjidx_adapt)
             conndata_alltypes[x]['data']=adxfm.transform(conndata_alltypes[x]['data'])
+            
+            if subjects_to_eval is not None:
+                subjidx_for_eval=np.array([i for i,s in enumerate(conndata_alltypes[x]['subjects']) if s in subjects_to_eval])
+                conndata_alltypes[x]['data']=conndata_alltypes[x]['data'][subjidx_for_eval]
+                
             print(x,conndata_alltypes[x]['data'].shape)
     else:
         #load hardcoded HCP data files
