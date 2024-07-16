@@ -1015,7 +1015,7 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
         
     elif adapt_mode.lower() == 'meanfit+meanshift' or adapt_mode.lower() == 'meanfitshift':
         A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
-        beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0]
+        beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0].flatten()
         adaptfit_cc=np.corrcoef(beta.T@A,target_data_mean)[0,1]
         print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
         print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
@@ -1027,7 +1027,7 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
     elif adapt_mode.lower() == 'meanfit':
         #use np.linalg.lstsq to least squares fit of actual_data_mean to transformer_data_mean
         A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
-        beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0]
+        beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0].flatten()
         adaptfit_cc=np.corrcoef(beta.T@A,target_data_mean)[0,1]
         print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
         print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
