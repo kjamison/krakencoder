@@ -138,12 +138,12 @@ def canonical_data_flavor_OLD(conntype, only_if_brackets=False, return_groupname
     if only_if_brackets:
         #special mode that leaves inputs intact unless they are in the form "[name]", in which case
         #it will return the canonical version of "name"
-        if not re.match(".*\[.+\].*",conntype.lower()):
+        if not re.match(r".*\[.+\].*",conntype.lower()):
             if return_groupname:
                 return conntype, groupname
             else:
                 return conntype
-        conntype=re.sub("^.*\[(.+)\].*$",'\\1',conntype)
+        conntype=re.sub(r"^.*\[(.+)\].*$",r'\1',conntype)
     
     if conntype.lower() == "encoded":
         if return_groupname:
@@ -297,12 +297,12 @@ def canonical_data_flavor_OLD(conntype, only_if_brackets=False, return_groupname
     if only_if_brackets:
         #special mode that leaves inputs intact unless they are in the form "[name]", in which case
         #it will return the canonical version of "name"
-        if not re.match(".*\[.+\].*",conntype.lower()):
+        if not re.match(r".*\[.+\].*",conntype.lower()):
             if return_groupname:
                 return conntype, groupname
             else:
                 return conntype
-        conntype=re.sub("^.*\[(.+)\].*$",'\\1',conntype)
+        conntype=re.sub(r"^.*\[(.+)\].*$",r'\1',conntype)
     
     if conntype.lower() == "encoded":
         if return_groupname:
@@ -458,12 +458,12 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
     if only_if_brackets:
         #special mode that leaves inputs intact unless they are in the form "[name]", in which case
         #it will return the canonical version of "name"
-        if not re.match(".*\[.+\].*",conntype.lower()):
+        if not re.match(r".*\[.+\].*",conntype.lower()):
             if return_groupname:
                 return conntype, groupname
             else:
                 return conntype
-        conntype=re.sub("^.*\[(.+)\].*$",'\\1',conntype)
+        conntype=re.sub(r"^.*\[(.+)\].*$",r'\1',conntype)
     
     if conntype.lower() == "encoded":
         if return_groupname:

@@ -269,7 +269,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         elif re.search("^tsvd[0-9]+$",input_transformation_info):
             reduce_dimension=int(input_transformation_info.replace("tsvd",""))
             use_truncated_svd=True
-        elif re.search("^pc\+tsvd[0-9]+$",input_transformation_info):
+        elif re.search(r"^pc\+tsvd[0-9]+$",input_transformation_info):
             reduce_dimension=int(input_transformation_info.split("+")[-1].replace("pc","").replace("tsvd",""))
             use_truncated_svd=False
             use_truncated_svd_for_sc=True
@@ -1132,7 +1132,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
 
     if 'starting_point_file' in training_params and training_params['starting_point_file'] and nbepochs<=1:
         starting_point_base=os.path.join(os.path.split(output_file_prefix)[0],os.path.split(training_params['starting_point_file'])[1])
-        starting_point_base=re.sub("\.pt$","",starting_point_base)
+        starting_point_base=re.sub(r"\.pt$","",starting_point_base)
         recordfile=starting_point_base.replace("_chkpt_","_trainrecord_")+".mat"
         imgfile=starting_point_base.replace("_chkpt_","_loss_")+".png"
         imgfile_heatmap=starting_point_base.replace("_chkpt_","_heatmap_")+".png"

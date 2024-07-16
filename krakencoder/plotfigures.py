@@ -871,8 +871,8 @@ def display_kraken_heatmap(trainrecord,
                 if np.isnan(x):
                     continue
                 vstr="%.2f" % (x)
-                vstr=re.sub("\.0+$","",vstr)
-                vstr=re.sub("(-?)0+(\.)","\\1\\2",vstr)
+                vstr=re.sub(r"\.0+$","",vstr)
+                vstr=re.sub(r"(-?)0+(\.)",r"\1\2",vstr)
                 
                 txtcolor=color1
                 if clim[0]<0:

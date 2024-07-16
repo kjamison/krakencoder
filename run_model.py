@@ -285,12 +285,12 @@ def run_model_on_new_data(argv=None):
     if recordfile == "auto":
         recordfile=ptfile.replace("_checkpoint_","_trainrecord_")
         recordfile=recordfile.replace("_chkpt_","_trainrecord_")
-        recordfile=re.sub("_(epoch|ep)[0-9]+\.pt$",".mat",recordfile)
+        recordfile=re.sub(r"_(epoch|ep)[0-9]+\.pt$",".mat",recordfile)
 
     if len(input_transform_file_list)>0 and input_transform_file_list[0] == "auto":
         input_transform_file=ptfile.replace("_checkpoint_","_iox_")
         input_transform_file=input_transform_file.replace("_chkpt_","_ioxfm_")
-        input_transform_file=re.sub("_(epoch|ep)[0-9]+\.pt$",".npy",input_transform_file)
+        input_transform_file=re.sub(r"_(epoch|ep)[0-9]+\.pt$",".npy",input_transform_file)
         input_transform_file_list=[input_transform_file]
     
     if input_subject_split_file and input_subject_split_file.lower() == "trainrecord":
