@@ -37,6 +37,28 @@ def xycorr(x,y,axis=1):
         cc=np.matmul(cx,cy.T)
     return cc
 
+def xycosine(x,y,axis=1):
+    """
+    Compute cosine distance between all pairs of rows in x and y (or columns if axis=0)
+    
+    x: torch tensor or numpy array (Nsubj x M), generally the measured data for N subjects
+    y: torch tensor or numpy array (Nsubj x M), generally the predicted data for N subjects
+    axis: int (optional, default=1), 1 for row-wise, 0 for column-wise
+    
+    Returns: torch tensor or numpy array (Nsubj x Nsubj)
+    
+    SEE: xycorr() for notes on argument order
+    """
+    if torch.is_tensor(x):
+        cx=x/torch.sqrt(torch.sum(x ** 2,keepdims=True,axis=axis))
+        cy=y/torch.sqrt(torch.sum(y ** 2,keepdims=True,axis=axis))
+        cc=torch.matmul(cx,cy.t())
+    else:
+        cx=x/np.sqrt(np.sum(x ** 2,keepdims=True,axis=axis))
+        cy=y/np.sqrt(np.sum(y ** 2,keepdims=True,axis=axis))
+        cc=np.matmul(cx,cy.T)
+    return cc
+
 def corravgrank(x=None, y=None ,cc=None, sort_descending=True):
     """
     Compute average rank of each row in xycorr(x,y).
