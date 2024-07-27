@@ -620,6 +620,16 @@ def run_training_command(argv=None):
                         elif grouptype == 'FC2SC':
                             if xg == 'SC' and yg == 'FC':
                                 continue #skip SC->FC (keep SC<->SC, FC<->FC, FC->SC)
+                        elif grouptype == 'SC2FCX':
+                            if xg == 'FC' and yg == 'SC':
+                                continue #skip FC->SC (keep SC<->SC, FC<->FC, SC->FC)
+                            if xg == yg:
+                                continue #skip SC->SC, FC->FC
+                        elif grouptype == 'FC2SCX':
+                            if xg == 'SC' and yg == 'FC':
+                                continue #skip SC->FC (keep SC<->SC, FC<->FC, FC->SC)
+                            if xg == yg:
+                                continue #skip SC->SC, FC->FC
                         elif xg==grouptype and yg==grouptype:
                             pass
                         trainpath_pairs+=[[x,y]]

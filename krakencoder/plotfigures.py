@@ -966,7 +966,7 @@ def display_kraken_heatmap(trainrecord,
     
     textrelabel=lambda x: 'average' if x=='mean' else x
     [plt.text(-.5,yticks[i],textrelabel(ylabels_to_display[i])+" ",color=ylabel_colors[i],horizontalalignment='right',verticalalignment='center',**textbold(ylabels_to_display[i])) for i in range(len(yticks))]
-    [plt.text(xticks[i],max(yticks)+1-.5,textrelabel(xlabels_to_display[i])+" ",color=xlabel_colors[i],rotation=45,rotation_mode='anchor',horizontalalignment='right',verticalalignment='top',**textbold(ylabels_to_display[i])) for i in range(len(xticks))]
+    [plt.text(xticks[i],max(yticks)+1-.5,textrelabel(xlabels_to_display[i])+" ",color=xlabel_colors[i],rotation=45,rotation_mode='anchor',horizontalalignment='right',verticalalignment='top',**textbold(xlabels_to_display[i])) for i in range(len(xticks))]
 
     add_block_label_lines=True
     if add_block_label_lines:
