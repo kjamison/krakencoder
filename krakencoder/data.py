@@ -694,6 +694,7 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
         studyfolder='/home/ubuntu'
         datafolder='/home/ubuntu'
 
+    subjects_orig_input=subjects
     if subjects is None or len(subjects)==0:
         subjects,_=load_hcp_subject_list(numsubj=993)
 
@@ -780,11 +781,15 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
     connfile_info.append({'name':'FCcorr_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCcov_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCcorr_coco439_nofiltgsr','file':'%s/fc_cocommpsuit439_FCcov_nofilt_gsr_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
     connfile_info.append({'name':'FCpcorr_coco439_nofilt','file':'%s/fc_cocommpsuit439_FCpcorr_nofilt_993subj.mat' % (datafolder),'fieldname':'FC','group':datagroup})
-
+    
     if load_retest:
         for i in range(len(connfile_info)):
             connfile_info[i]['file']=connfile_info[i]['file'].replace("_993subj.mat","_retest42.mat")
-        subjects=None
+        if subjects_orig_input is None or len(subjects_orig_input)==0:
+            subjects=None
+        else:
+            subjects=[s+"_Retest" if not s.endswith("_Retest") else s for s in subjects]
+            
 
     conndata_alltypes={}
 
