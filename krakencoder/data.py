@@ -490,6 +490,8 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
     input_fcgsr=""
     input_scproc="volnorm"
     
+    is_unknown=False
+    
     input_conntype_lower=conntype.lower()
     if "fs86" in input_conntype_lower:
         input_atlasname="fs86"
@@ -498,6 +500,7 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
     elif "coco439" in input_conntype_lower or "cocommpsuit439" in input_conntype_lower:
         input_atlasname="coco439"
     else:
+        is_unknown=True
         if not accept_unknowns:
             raise Exception("Unknown atlas name for input type: %s" % (conntype))
     
@@ -513,6 +516,7 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
     elif "ifod2act" in input_conntype_lower:
         input_flavor="ifod2act"
     else:
+        is_unknown=True
         if not accept_unknowns:
             raise Exception("Unknown data flavor for input type: %s" % (conntype))
     
@@ -527,8 +531,22 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
         elif "nofilt" in input_conntype_lower:
             input_fcfilt="nofilt"
         else:
+            is_unknown=True
             if not accept_unknowns:
                 raise Exception("Unknown FC filter for input type: %s" % (conntype))
+    else:
+        if "sift2volnorm" in input_conntype_lower or "sift2_volnorm" in input_conntype_lower:
+            input_scproc="sift2volnorm"
+        elif "volnorm" in input_conntype_lower:
+            input_scproc="volnorm"
+        elif "sift2" in input_conntype_lower:
+            input_fcfilt="sift2"
+        elif "_count" in input_conntype_lower:
+            input_scproc="count"
+        else:
+            is_unknown=True
+            if not accept_unknowns:
+                raise Exception("Unknown SC processing type for input type: %s" % (conntype))
     
     if "FC" in input_flavor:
         groupname="FC"
@@ -537,6 +555,9 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
         groupname="SC"
         conntype_canonical="SC%s_%s_%s" % (input_flavor,input_atlasname,input_scproc) #new style with SC<algo>_<atlas>_volnorm
 
+    if is_unknown:
+        conntype_canonical=conntype
+        
     if return_groupname:
         return conntype_canonical, groupname
     else:
@@ -784,6 +805,10 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
             connfield="sift2volnorm"
             connsuffix="_sift2volnorm"
             cname=cname.replace("_sift2volnorm","")
+        elif cname.endswith("_count"):
+            connfield="orig"
+            connsuffix="_count"
+            cname=cname.replace("_count","")
         elif cname.endswith("_orig"):
             connfield="orig"
             connsuffix="_orig"

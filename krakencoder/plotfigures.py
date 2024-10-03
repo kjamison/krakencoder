@@ -148,13 +148,13 @@ def update_training_figure(loss_train, loss_val, corrloss_train, corrloss_val, c
     return trainfig
 
 ######################
-def shorten_names(namelist,extrashort=0,remove_common=True):
+def shorten_names(namelist,extrashort=0,remove_common=True,remove_strings=[]):
     if len(namelist)>1 and all([x==namelist[0] for x in namelist]):
         return namelist
     namelist=[re.sub("_FC$","",x) for x in namelist]
-    namelist=[re.sub("(FCcov|FCcorr|FCpcorr)_(fs86|shen268|coco439)_(.+)",r"\2_\1_\3",x) for x in namelist]
-    namelist=[re.sub("(fs86|shen268|coco439)_(sdstream|ifod2act)(_(volnorm?))",r"\1_SC\2",x) for x in namelist]
-    namelist=[re.sub("SC(sdstream|ifod2act)_(fs86|shen268|coco439)(_(volnorm?))",r"\2_SC\1",x) for x in namelist]
+    namelist=[re.sub("(FCcov|FCcorr|FCpcorr)_(fs86|shen268|coco439|[^_]+)_(.+)",r"\2_\1_\3",x) for x in namelist]
+    namelist=[re.sub("(fs86|shen268|coco439|[^_]+)_(sdstream|ifod2act)(_volnorm)?",r"\1_SC\2\3",x) for x in namelist]
+    namelist=[re.sub("SC(sdstream|ifod2act)_(fs86|shen268|coco439|[^_]+)(_volnorm)?",r"\2_SC\1\3",x) for x in namelist]
     
     if extrashort > 0:
         namelist=[re.sub("_(FCcov|FCcorr)_hpf$","_FC#hpf",x) for x in namelist]
@@ -168,30 +168,57 @@ def shorten_names(namelist,extrashort=0,remove_common=True):
         namelist=[re.sub("_(FCcov|FCcorr)_bpfgsr$","_FCgsr#bpf",x) for x in namelist]
         namelist=[re.sub("_FCpcorr_bpf$","_FCpc#bpf",x) for x in namelist]
         
-        namelist=[re.sub("_(FCcov|FCcorr)_nofilt$","_FC#nf",x) for x in namelist]
-        namelist=[re.sub("_(FCcov|FCcorr)_nofiltgsr$","_FCgsr#nf",x) for x in namelist]
-        namelist=[re.sub("_FCpcorr_nofilt$","_FCpc#nf",x) for x in namelist]
+        #namelist=[re.sub("_(FCcov|FCcorr)_nofilt$","_FC#nf",x) for x in namelist]
+        #namelist=[re.sub("_(FCcov|FCcorr)_nofiltgsr$","_FCgsr#nf",x) for x in namelist]
+        #namelist=[re.sub("_FCpcorr_nofilt$","_FCpc#nf",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_nofilt$","_FC#mpp",x) for x in namelist]
+        namelist=[re.sub("_(FCcov|FCcorr)_nofiltgsr$","_FCgsr#mpp",x) for x in namelist]
+        namelist=[re.sub("_FCpcorr_nofilt$","_FCpc#mpp",x) for x in namelist]
         
         namelist=[re.sub("_SCsdstream","_SCsd",x) for x in namelist]
         namelist=[re.sub("_SCifod2act","_SCifod",x) for x in namelist]
         
+        #namelist=[re.sub("_count",".cnt",x) for x in namelist]
+        #namelist=[re.sub("_sift2$",".sift2",x) for x in namelist]
+        #namelist=[re.sub("_sift2volnorm",".sift2vn",x) for x in namelist]
+        
+        namelist=[re.sub("^(.+)_volnorm_(SC[^_]+)$",r"\1_\2.vn",x) for x in namelist]
+        namelist=[re.sub("^(.+)_count_(SC[^_]+)$",r"\1_\2.cnt",x) for x in namelist]
+        namelist=[re.sub("^(.+)_sift2_(SC[^_]+)$",r"\1_\2.sift2",x) for x in namelist]
+        namelist=[re.sub("^(.+)_sift2volnorm_(SC[^_]+)$",r"\1_\2.sift2vn",x) for x in namelist]
+        
+        namelist=[re.sub("^(.+)_(SC[^_]+)_volnorm$",r"\1_\2.vn",x) for x in namelist]
+        namelist=[re.sub("^(.+)_(SC[^_]+)_count$",r"\1_\2.cnt",x) for x in namelist]
+        namelist=[re.sub("^(.+)_(SC[^_]+)_sift2$",r"\1_\2.sift2",x) for x in namelist]
+        namelist=[re.sub("^(.+)_(SC[^_]+)_sift2volnorm$",r"\1_\2.sift2vn",x) for x in namelist]
+        
+        #if all FC are hpf, remove hpf string from name
         if all(["#hpf" in x for x in namelist if "FC" in x and not ("fusion" in x or "burst" in x)]):
             namelist=[x.replace("#hpf","") for x in namelist]
         
+        #if all SC are volnorm, remove volnorm string from name
+        if all([".vn" in x for x in namelist if "SC" in x and not ("fusion" in x or "burst" in x)]):
+            namelist=[x.replace(".vn","") for x in namelist]
+            
         namelist=[re.sub("burst","fusion",x) for x in namelist]
         
     if extrashort == 2:
         namelist=[re.sub("shen268","sh268",x) for x in namelist]
         namelist=[re.sub("coco439","co439",x) for x in namelist]
+        namelist=[re.sub("cocoyeo","yeo",x) for x in namelist]
+        namelist=[re.sub("cocolaus","laus",x) for x in namelist]
         namelist=[re.sub("_SCsd","_SCdt",x) for x in namelist]
         namelist=[re.sub("_SCifod","_SCpr",x) for x in namelist]
         namelist=[re.sub(".noself","-1",x) for x in namelist]
         namelist=[re.sub(".noatlas","-parc",x) for x in namelist]
         namelist=[re.sub("burst","fusion",x) for x in namelist]
         namelist=["_".join(x.split("_")[::-1]) for x in namelist]
-        
+    
     namelist=[x.replace("#","_") for x in namelist]
     
+    for r in remove_strings:
+        namelist=[x.replace(r,"") for x in namelist]
+        
     pref=common_prefix(namelist)
     suff=common_suffix(namelist)
     
@@ -200,6 +227,7 @@ def shorten_names(namelist,extrashort=0,remove_common=True):
             namelist=[x[len(pref):] for x in namelist]
         if remove_common and len(suff)>0:
             namelist=[x[:-len(suff)] for x in namelist]
+    
     return namelist
 
 def flavor2color(conntype):
@@ -239,6 +267,7 @@ def flavor2color(conntype):
 #reorder by atlas and modality
 def flavor_reorder(conntypes, pcorr_at_end=True, sort_atlas_last=False):
     atlas_order=["fs86","shen268","coco439"]
+    atlas_order=["fs86","cocoyeo143","cocolaus157","cocoyeo243","cocolaus262","shen268","cocoyeo443","coco439","cocolaus491"]
     conntype_order_groups=[]
     if sort_atlas_last:
         conntype_order_groups.append([y[0] if len(y)>0 else len(atlas_order) for y in [np.where([a in x for a in atlas_order])[0] for x in conntypes]])
