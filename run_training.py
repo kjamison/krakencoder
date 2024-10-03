@@ -622,12 +622,12 @@ def run_training_command(argv=None):
                                 continue #skip SC->FC (keep SC<->SC, FC<->FC, FC->SC)
                         elif grouptype == 'SC2FCX':
                             if xg == 'FC' and yg == 'SC':
-                                continue #skip FC->SC (keep SC<->SC, FC<->FC, SC->FC)
+                                continue #skip FC->SC
                             if xg == yg:
                                 continue #skip SC->SC, FC->FC
                         elif grouptype == 'FC2SCX':
                             if xg == 'SC' and yg == 'FC':
-                                continue #skip SC->FC (keep SC<->SC, FC<->FC, FC->SC)
+                                continue #skip SC->FC
                             if xg == yg:
                                 continue #skip SC->SC, FC->FC
                         elif xg==grouptype and yg==grouptype:
