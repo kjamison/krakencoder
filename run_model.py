@@ -118,23 +118,6 @@ def argument_parse_newdata(argv):
     args=clean_args(args,arg_defaults)
     return args
 
-def atlas_from_flavors(conntype_list):
-    if isinstance(conntype_list,str):
-        return atlas_from_flavors([conntype_list])[0]
-    
-    atlas_list=[]
-    for k_in in conntype_list:
-        k_in_atlas=""
-        if "fs86" in k_in.lower():
-            k_in_atlas="fs86"
-        elif "shen268" in k_in.lower():
-            k_in_atlas="shen268"
-        elif "coco439" in k_in.lower() or "cocommpsuit439" in k_in.lower():
-            k_in_atlas="coco439"
-        atlas_list+=[k_in_atlas]
-        
-    return atlas_list
-
 def search_flavors(searchstring_list,full_list, return_index=False):
     if isinstance(searchstring_list,str):
         searchstring_list=[searchstring_list]

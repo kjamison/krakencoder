@@ -542,6 +542,26 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
     else:
         return conntype_canonical
 
+def atlas_from_flavors(conntype_list):
+    if isinstance(conntype_list,str):
+        return atlas_from_flavors([conntype_list])[0]
+    
+    atlas_list=[]
+    for k_in in conntype_list:
+        k_in_atlas="unknown"
+        if "fs86" in k_in.lower():
+            k_in_atlas="fs86"
+        elif "shen268" in k_in.lower():
+            k_in_atlas="shen268"
+        elif "coco439" in k_in.lower() or "cocommpsuit439" in k_in.lower():
+            k_in_atlas="coco439"
+        elif "coco" in k_in:
+            #for cocoyeo, cocolaus
+            k_in_atlas=re.sub(r"^.*(coco[^_]+).*$",r"\1",k_in)
+        atlas_list+=[k_in_atlas]
+        
+    return atlas_list
+
 def get_subjects_from_conndata(conndata, subjects=None, remove_subjects=None):
     """
     Returns a new conndata dict with only the subjects specified in the subjects list or with subjects removed as specified in the remove_subjects list.
