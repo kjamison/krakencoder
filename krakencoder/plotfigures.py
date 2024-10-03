@@ -317,6 +317,7 @@ def display_kraken_heatmap(trainrecord,
                            origscale=True, training=False, addmean=True, show_epoch=False, 
                            extra_short_names=0, pcorr_at_end=True, exclude_flavors=None, 
                            show_heatmap_value_text=True, heatmap_value_text_size=10,
+                           ticklabel_text_size=10,
                            colorbar=True, clim=None, colormap=None, invert_text_color=False,
                            ax=None, figsize=[18,12],
                            add_suptitle=True, add_epochtitle=True, bottomtext='<filename>',
@@ -412,7 +413,7 @@ def display_kraken_heatmap(trainrecord,
                                        single_epoch=single_epoch, epoch_spacing=epoch_spacing, explicit_epoch=explicit_epoch, epoch_filter_size=epoch_filter_size, best_epoch_fraction=best_epoch_fraction,
                                        origscale=origscale, training=training, addmean=addmean, show_epoch=show_epoch, extra_short_names=extra_short_names, 
                                        pcorr_at_end=pcorr_at_end,exclude_flavors=exclude_flavors,show_heatmap_value_text=show_heatmap_value_text,heatmap_value_text_size=heatmap_value_text_size,
-                                       colorbar=colorbar,clim=clim,colormap=colormap,invert_text_color=invert_text_color,ax=ax[i])
+                                       colorbar=colorbar,clim=clim,colormap=colormap,invert_text_color=invert_text_color,ax=ax[i], ticklabel_text_size=ticklabel_text_size)
                 ax_return.append(ax_ret)
             
             if all([x is None for x in ax_return]):
@@ -994,8 +995,11 @@ def display_kraken_heatmap(trainrecord,
     textbold=lambda x: {'style':'italic'} if x=='mean' else {}
     
     textrelabel=lambda x: 'average' if x=='mean' else x
-    [plt.text(-.5,yticks[i],textrelabel(ylabels_to_display[i])+" ",color=ylabel_colors[i],horizontalalignment='right',verticalalignment='center',**textbold(ylabels_to_display[i])) for i in range(len(yticks))]
-    [plt.text(xticks[i],max(yticks)+1-.5,textrelabel(xlabels_to_display[i])+" ",color=xlabel_colors[i],rotation=45,rotation_mode='anchor',horizontalalignment='right',verticalalignment='top',**textbold(xlabels_to_display[i])) for i in range(len(xticks))]
+    
+    tickfontsizeargs={}
+    tickfontsizeargs={'fontsize':ticklabel_text_size}
+    [plt.text(-.5,yticks[i],textrelabel(ylabels_to_display[i])+" ",color=ylabel_colors[i],horizontalalignment='right',verticalalignment='center',**tickfontsizeargs,**textbold(ylabels_to_display[i])) for i in range(len(yticks))]
+    [plt.text(xticks[i],max(yticks)+1-.5,textrelabel(xlabels_to_display[i])+" ",color=xlabel_colors[i],rotation=45,rotation_mode='anchor',horizontalalignment='right',verticalalignment='top',**tickfontsizeargs,**textbold(xlabels_to_display[i])) for i in range(len(xticks))]
 
     add_block_label_lines=True
     if add_block_label_lines:
