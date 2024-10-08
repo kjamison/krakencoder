@@ -539,8 +539,8 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
             input_scproc="sift2volnorm"
         elif "volnorm" in input_conntype_lower:
             input_scproc="volnorm"
-        elif "sift2" in input_conntype_lower:
-            input_fcfilt="sift2"
+        elif "sift2count" in input_conntype_lower or "sift2_count" in input_conntype_lower or input_conntype_lower.endswith("_sift2"):
+            input_fcfilt="sift2count"
         elif "_count" in input_conntype_lower:
             input_scproc="count"
         else:
@@ -804,7 +804,7 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
             cname=cname.replace("_volnorm","")
         elif cname.endswith("_sift2"):
             connfield="sift2"
-            connsuffix="_sift2"
+            connsuffix="_sift2count"
             cname=cname.replace("_sift2","")
         elif cname.endswith("_sift2volnorm"):
             connfield="sift2volnorm"
