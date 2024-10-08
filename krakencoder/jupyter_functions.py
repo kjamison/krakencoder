@@ -517,8 +517,8 @@ def parse_bids_string(bids_str):
                         flavor_suffix = "_hpf"
                     elif "bpf" in s_val_lower:
                         flavor_suffix = "_bpf"
-                    elif "dtf" in s_val_lower:
-                        flavor_suffix = "_dtf"
+                    elif s_val_lower.endswith("nf") or s_val_lower.endswith("nfgsr"):
+                        flavor_suffix = "_nofilt"
                     if "gsr" in s_val_lower:
                         flavor_suffix += "gsr"
                 elif flavor_prefix.startswith("SC"):
