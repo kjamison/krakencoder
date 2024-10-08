@@ -420,7 +420,7 @@ def save_data_zip(
                     subjid = subjid[4:]
                 conndata_filename = "sub-%s_%s%s_relmat.dense.tsv" % (
                     subjid,
-                    flavor_to_bids(conntype),
+                    flavor_to_bids_string(conntype),
                     desc_str,
                 )
                 if verbose:
@@ -428,7 +428,7 @@ def save_data_zip(
                 zip_ref.writestr(conndata_filename, outfile.getvalue())
 
 
-def flavor_to_bids(flavor):
+def flavor_to_bids_string(flavor):
     atlasname = ""
     participant_id = ""
     subject = ""
