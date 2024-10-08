@@ -468,13 +468,7 @@ def flavor_to_bids(flavor):
     elif "count" in flavor.lower():
         meas_str += "Count"
 
-    atlasnames = ["fs86", "shen268", "coco439"]
-    for a in atlasnames:
-        if a.lower() in flavor.lower():
-            atlasname = a
-            break
-    if atlasname == "":
-        raise Exception("Unknown atlas: %s" % (flavor))
+    atlasname=flavor.split("_")[1].lower()
     
     bids_str = "atlas-%s_meas-%s" % (atlasname, meas_str)
     if desc_str:
