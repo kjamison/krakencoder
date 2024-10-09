@@ -22,6 +22,7 @@ The model presented in the manuscript uses a pre-computed 256-dimensional PCA to
     * [Generating predicted connectomes from new data](#generating-predicted-connectomes-from-new-data)
     * [Generating latent space representations from new data](#generating-latent-space-representations-from-new-data)
     * [Training a model from scratch](#training-a-model-from-scratch)
+    * [Adding a new flavor to an existing model](#adding-a-new-flavor-to-an-existing-model)
     * [Reading output files](#reading-output-files)
 4. [Pretrained connectivity types](#pretrained-connectivity-types)
 5. [Requirements](#requirements)
@@ -169,7 +170,42 @@ python run_training.py \
 
 * A note on training times: The full 15 flavor model (225 paths) took 12 hours for 2000 epochs (23 sec/epoch) on an Nvidia A100 GPU. The training generally scales with the number of paths. A model with 5 inputs (25 paths) takes about 1 hour for 2000 epochs (1.8 sec/epoch).
 
+## Adding a new flavor to an existing model
+This example shows how to take a new connectome flavor, and a pre-computed fusion latent representation for those subjects, and train a new encoder/decode to map that new flavor to the existing latent vectors.
+Ideally, these would be training subjects. After training, we run [merge_checkpoints.py](merge_checkpoints.py) to combine this new autoencoder with an existing model.
 
+In this example, we are adding a new atlas (`cc200`), and SC estimated as raw, non-normalized streamline counts (`_count`, rather than `_volnorm`), and training it to the `fusion` representation averaged from all 15 original data flavors for the same training subjects as the original model. We then merge that autoencoder with the original 15-flavor model to create a new 16-flavor model `kraken_chkpt_20240413_ep002000_cc200count.fus_ep000500.pt`
+
+```bash
+#Step 1. Train autoencoder
+python run_training.py \
+    --inputdata 'SCifod2act_cc200_count=mydata_cc200_ifod2act_count.mat' \
+    --encodedinputfile 'mydata_20240413_ep002000_out.encoded.mat' \
+    --targetencoding --targetencodingname fusion --onlyselfpathtargetencoding \
+    --subjectfile 'subject_splits_20240413.mat' \
+    --latentsize 128 --latentunit --transformation pca256 \
+    --dropout .5 --losstype correye+enceye.w10+neidist+encdist.w10+mse.w1000+latentsimloss.w10000 \
+    --outputprefix kraken_cc200count.fus \
+    --epochs 500 --checkpointepochsevery 500 --displayepochs 100
+
+#Step 2. merge autoencoder with 15-flavor model
+python merge_checkpoints.py \
+    --checkpointlist 'kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt' \
+                     'kraken_cc200count.fus_chkpt_pc256_ep000500.pt' \
+    --output 'kraken_chkpt_20240413_ep002000_cc200count.fus_ep000500.pt'
+    
+```
+For Step 1, the input arguments to [run_training.py](run_training.py) are:
+* input data is specified as `'newflavor=datafile.mat'`
+* `--encodedinputfile mydata_20240413_ep002000_out.encoded.mat` uses pre-computed latent vectors in this file as the target
+* `--targetencoding --targetencodingname fusion --onlyselfpathtargetencoding` only train autoencoder for each input flavor, which maps input data to the pre-computed `fusion` representation contained in `--encodedinputfile`
+* `--subjectfile subject_splits_20240413.mat` use the train/test/val split generated in previous training run, so the same splits can be used for testing the combined model
+    * File should contain a field `subjects` with one subject ID per subject in the input data, `subjidx_train`, `subjidx_val`, and `subjidx_test` lists of indices in the range `0 - Nsubj-1`.
+* `--epochs 500` only 500 epochs are needed for single-path training to pre-computed latent
+* `--outputprefix kraken_cc200count.fus` outputs will be `kraken_cc200count.fus_*`
+    * `kraken_cc200count.fus_chkpt_*_ep000500.pt` is the final model checkpoint
+    * `kraken_cc200count.fus_*.npy` is the new 256-dimensional PCA transform computed for this flavor
+    
 ## Reading output files
 ```python
 import numpy as np
