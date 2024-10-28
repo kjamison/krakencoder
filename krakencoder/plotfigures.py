@@ -154,7 +154,7 @@ def shorten_names(namelist,extrashort=0,remove_common=True,remove_strings=[]):
     namelist=[re.sub("_FC$","",x) for x in namelist]
     namelist=[re.sub("(FCcov|FCcorr|FCpcorr)_(fs86|shen268|coco439|[^_]+)_(.+)",r"\2_\1_\3",x) for x in namelist]
     namelist=[re.sub("(fs86|shen268|coco439|[^_]+)_(sdstream|ifod2act)(_volnorm)?",r"\1_SC\2\3",x) for x in namelist]
-    namelist=[re.sub("SC(sdstream|ifod2act)_(fs86|shen268|coco439|[^_]+)(_volnorm)?",r"\2_SC\1\3",x) for x in namelist]
+    namelist=[re.sub("SC(sdstream|ifod2act|[^_]+)_(fs86|shen268|coco439|[^_]+)(_volnorm)?",r"\2_SC\1\3",x) for x in namelist]
     
     if extrashort > 0:
         namelist=[re.sub("_(FCcov|FCcorr)_hpf$","_FC#hpf",x) for x in namelist]
@@ -276,7 +276,7 @@ def flavor_reorder(conntypes, pcorr_at_end=True, sort_atlas_last=False):
     conntype_order_groups.append([re.match("^(fusion|burst).*noself",x) is not None for x in conntypes])
     conntype_order_groups.append([x=='gap' for x in conntypes])
     conntype_order_groups.append([x=='mean' for x in conntypes])
-    conntype_order_groups.append([re.match(".*(sdstream|ifod2).*",x) is not None for x in conntypes])
+    conntype_order_groups.append([re.match(".*(sdstream|ifod2|SC).*",x) is not None for x in conntypes])
     if pcorr_at_end:
         conntype_order_groups.append([re.match(".*pcorr.*",x) is not None for x in conntypes])
     conntype_order_groups.append([y[0] if len(y)>0 else len(atlas_order) for y in [np.where([a in x for a in atlas_order])[0] for x in conntypes]])

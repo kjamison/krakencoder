@@ -6,7 +6,6 @@ import os
 import sys
 import io
 
-import torch
 import zipfile
 import numpy as np
 from scipy.io import loadmat, savemat
@@ -677,13 +676,14 @@ def humanize_filesize(size, binary=False):
 def data_shape_string(data):
     if isinstance(data, np.ndarray):
         return "x".join(["%d" % (d) for d in data.shape])
-    elif isinstance(data, torch.Tensor):
-        return "torch[%s]" % ("x".join(["%d" % (d) for d in data.shape]))
     elif isinstance(data, list):
         return "%dx[%s]" % (len(data), data_shape_string(data[0]))
     else:
-        raise Exception("Unknown data type")
-
+        import torch
+        if isinstance(data, torch.Tensor):
+            return "torch[%s]" % ("x".join(["%d" % (d) for d in data.shape]))
+        else:
+            raise Exception("Unknown data type")
 
 def callback_load_and_process_data(
     filename,
