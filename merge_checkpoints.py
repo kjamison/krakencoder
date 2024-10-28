@@ -3,8 +3,8 @@ Command-line script to merge a list of Krakencoder checkpoints (.pt files) into 
 """
 
 from krakencoder.model import *
-from krakencoder.merge import merge_model_files
-from krakencoder.utils import format_columns, get_version
+from krakencoder.merge import merge_model_files, print_merged_model
+from krakencoder.utils import get_version
 import sys
 import argparse
 import warnings
@@ -35,21 +35,8 @@ def run_merge_models(argv):
 
     net, checkpoint_info=merge_model_files(checkpoint_filename_list=checkpointfile_list, canonicalize_input_names=canonicalize_input_names)
     
-    #######
-    # print info about merged model
     print("Merged model info:")
-    
-    output_info_columns=[]
-    for i, conn_name in enumerate(checkpoint_info['input_name_list']):
-        output_info_columns.append(['%d)' % (i+1), 
-                                    conn_name, 
-                                    '(Sx%d)' % (checkpoint_info['orig_input_size_list'][i]), 
-                                    ' from: '+checkpoint_info['merged_checkpointfile_list'][checkpoint_info['merged_source_net_idx'][i]]])
-        
-    _=format_columns(column_data=output_info_columns, column_format_list=['%s','%s','%s','%s'],
-                     delimiter=" ",align="left", print_result=True, truncate_length=130, truncate_endlength=30)
-    
-    print("Total: %d inputs. %d paths" % (len(checkpoint_info['input_name_list']), len(checkpoint_info['trainpath_encoder_index_list'])))
+    print_merged_model(checkpoint_info)
     
     # save merged model
     net.save_checkpoint(outputcheckpointfile, checkpoint_info)

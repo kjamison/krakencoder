@@ -58,6 +58,7 @@ from krakencoder.model import *
 from krakencoder.train import *
 from krakencoder.data import *
 from krakencoder.utils import *
+from krakencoder.merge import *
 
 from scipy.io import loadmat, savemat
 import re
@@ -79,7 +80,7 @@ def argument_parse_newdata(argv):
     
     parser=argparse.ArgumentParser(description='Evaluate krakencoder checkpoint',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
-    parser.add_argument('--checkpoint',action='store',dest='checkpoint', help='Checkpoint file (.pt)')
+    parser.add_argument('--checkpoint',action='store',dest='checkpoint', help='Checkpoint file (.pt)', nargs='*')
     parser.add_argument('--innercheckpoint',action='store',dest='innercheckpoint', help='Inner checkpoint file (.pt): eg: if checkpoint is an adaptation layer')
     parser.add_argument('--trainrecord',action='store',dest='trainrecord', default='auto', help='trainrecord.mat file')
     parser.add_argument('--inputxform',action='append',dest='input_transform_file', help='Precomputed transformer file (.npy)',nargs='*')
@@ -220,7 +221,16 @@ def run_model_on_new_data(argv=None):
         ptfile=innerptfile
         print("Loading inner model from %s" % (ptfile))
         
-    net, checkpoint=Krakencoder.load_checkpoint(ptfile)
+    
+    ptfile_list=[p for p in ptfile]
+    if len(ptfile)==1:
+        ptfile=ptfile[0]
+        net, checkpoint=Krakencoder.load_checkpoint(ptfile)
+    else:
+        net, checkpoint=merge_model_files(checkpoint_filename_list=ptfile, canonicalize_input_names=False)
+        print("Merged model info:")
+        print_merged_model(checkpoint)
+        ptfile='merged:'+ ','.join(ptfile)
     
     ##########
     #handle special case for OLD checkpoints before we updated the connectivity flavors
@@ -266,12 +276,12 @@ def run_model_on_new_data(argv=None):
     #big per-epoch loss values (ie: we have networkinfo[], make traininfo[] with those params)
     #note: we might use this to get training/testing/val subject info
     if recordfile == "auto":
-        recordfile=ptfile.replace("_checkpoint_","_trainrecord_")
+        recordfile=ptfile_list[0].replace("_checkpoint_","_trainrecord_")
         recordfile=recordfile.replace("_chkpt_","_trainrecord_")
         recordfile=re.sub(r"_(epoch|ep)[0-9]+\.pt$",".mat",recordfile)
 
     if len(input_transform_file_list)>0 and input_transform_file_list[0] == "auto":
-        input_transform_file=ptfile.replace("_checkpoint_","_iox_")
+        input_transform_file=ptfile_list[0].replace("_checkpoint_","_iox_")
         input_transform_file=input_transform_file.replace("_chkpt_","_ioxfm_")
         input_transform_file=re.sub(r"_(epoch|ep)[0-9]+\.pt$",".npy",input_transform_file)
         input_transform_file_list=[input_transform_file]
