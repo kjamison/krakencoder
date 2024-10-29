@@ -1129,21 +1129,43 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     tmp_latent_batchsize=numsubjects_train
     
     latentsimloss_subjidx_dataloader=data_utils.DataLoader(np.arange(numsubjects_train), batch_size=tmp_latent_batchsize, shuffle=True, drop_last=True)
-
-    if 'starting_point_file' in training_params and training_params['starting_point_file'] and nbepochs<=1:
-        starting_point_base=os.path.join(os.path.split(output_file_prefix)[0],os.path.split(training_params['starting_point_file'])[1])
-        starting_point_base=re.sub(r"\.pt$","",starting_point_base)
-        recordfile=starting_point_base.replace("_chkpt_","_trainrecord_")+".mat"
-        imgfile=starting_point_base.replace("_chkpt_","_loss_")+".png"
-        imgfile_heatmap=starting_point_base.replace("_chkpt_","_heatmap_")+".png"
-        #keep checkpoint_filebase so we don't overwrite anything. shouldn't be saved in the nbepochs=0 case anyway
-        checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
-        
-    else:
-        recordfile="%s_trainrecord_%s_%s_%s_%s.mat" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
-        imgfile="%s_loss_%s_%s_%s_%s.png" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
-        imgfile_heatmap="%s_heatmap_%s_%s_%s_%s.png" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
-        checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
+    
+    #we might end up with filenames > 255 char, so do a quick loop to check and shorten if needed
+    data_string_filename=data_string
+    network_string_filename=network_string
+    train_string_filename=train_string
+    
+    for filename_length_loop in range(2):
+        if 'starting_point_file' in training_params and training_params['starting_point_file'] and nbepochs<=1:
+            starting_point_base=os.path.join(os.path.split(output_file_prefix)[0],os.path.split(training_params['starting_point_file'])[1])
+            starting_point_base=re.sub(r"\.pt$","",starting_point_base)
+            recordfile=starting_point_base.replace("_chkpt_","_trainrecord_")+".mat"
+            imgfile=starting_point_base.replace("_chkpt_","_loss_")+".png"
+            imgfile_heatmap=starting_point_base.replace("_chkpt_","_heatmap_")+".png"
+            #keep checkpoint_filebase so we don't overwrite anything. shouldn't be saved in the nbepochs=0 case anyway
+            checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
+        else:
+            recordfile="%s_trainrecord_%s_%s_%s_%s.mat" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
+            imgfile="%s_loss_%s_%s_%s_%s.png" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
+            imgfile_heatmap="%s_heatmap_%s_%s_%s_%s.png" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
+            checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
+            
+        #need to check if we have created filenames that cant be saved
+        #if so, we need to truncate using some hackish heuristic about 
+        #what info is least important
+        checkpoint_ep0_filename=checkpoint_filebase+"_ep%06d.pt" % (0)
+        if len(checkpoint_ep0_filename)>255 or len(recordfile)>255:
+            network_string_filename=network_string_filename.replace('_0layer','')
+            train_string_filename="%dep_%s%s%s%s%s" % (nbepochs,'',loss_str,optimstr,'','')
+            if do_roundtrip:
+                if do_use_existing_net:
+                    train_string_filename+="_addrndtrp"
+                else:
+                    train_string_filename+="_rndtrp"
+            network_string_filename=network_string_filename.replace("__","_")
+            train_string_filename=train_string_filename.replace("__","_")
+        else:
+            break
     
     if logger is not None:
         if logger.is_auto():
