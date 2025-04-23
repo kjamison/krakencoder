@@ -963,7 +963,7 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
     
     if len(Cdata[connfield][0].shape)<=1:
         #single matrix was in file
-        Cmats=[Cdata[connfield]]
+        Cmats=[np.atleast_2d(Cdata[connfield])]
     else:
         Cmats=Cdata[connfield]
     
@@ -972,7 +972,6 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
         npairs=Cmats[0].shape[1]
         Cdata=Cmats[0].copy()
         trimask=None
-        
     elif trimask is not None:
         Cdata=Cmats[0].copy()
         if isinstance(trimask, tuple):
@@ -983,10 +982,16 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
             trimask=(trimask[0],trimask[1])
         else:
             raise Exception("Invalid trimask input. Must be [roi x roi] mask, a tuple of (rowidxs,colidxs) or a [2 x edges] array of (rowidxs,colidxs).")
-        
         nroi=max(max(trimask[0]),max(trimask[1]))+1
         npairs=len(trimask[0])
-            
+    elif Cmats[0].shape[0] != Cmats[0].shape[1]:
+        if Cmats[0].shape[1] == len(subjects):
+            Cdata=Cmats[0].T
+        else:
+            Cdata=Cmats[0].copy()
+        nroi=1
+        npairs=Cdata.shape[1]
+        trimask=None
     else:
         nroi=Cmats[0].shape[0]
         if keep_diagonal:

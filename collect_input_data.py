@@ -25,9 +25,13 @@ def argument_parse_collectdata(argv):
     
     return parser.parse_args(argv)
 
-def data_to_cell_array(data):
-    data_new=np.empty(len(data),dtype=object)
-    data_new[:]=[C for C in data]
+def data_to_cell_array(data, as2d=False):
+    if as2d:
+        data_new=np.empty([len(data),1],dtype=object)
+        data_new[:,0]=[C for C in data]
+    else:
+        data_new=np.empty(len(data),dtype=object)
+        data_new[:]=[C for C in data]
     return data_new
 
 def load_single_connectome_from_file(filename, datafields=[]):
@@ -153,15 +157,15 @@ def run_collectdata(argv=None):
         kjf.save_data_zip(outputfile, conndata_alltypes, participants_info, bids_desc=bids_desc_str, verbose=False)
         print("Saved data to %s (%s)" % (outputfile,kjf.humanize_filesize(os.path.getsize(outputfile),binary=True)))
     elif outputfile.lower().endswith(".mat"):
-        
-        #raise NotImplementedError("Saving to .mat not yet implemented")
         for conntype in conndata_alltypes:
             outfile_thistype=re.sub('\{(t|f|type|flav|flavor)\}','{FLAVOR}',outputfile,flags=re.IGNORECASE)
             if '{FLAVOR}' in outfile_thistype:
                 outfile_thistype=outfile_thistype.format(FLAVOR=conntype)
             else:
-                outfile_thistype=outfile_thistype.replace(".mat","_%s.mat" % (conntype))
-            savemat(outfile_thistype,{'subjects':subjects, 'C':data_to_cell_array(conndata_alltypes[conntype])},format='5',do_compression=True)
+                if len(conndata_alltypes)>1 and conntype != 'unknown':
+                    outfile_thistype=outfile_thistype.replace(".mat","_%s.mat" % (conntype))
+            savemat(outfile_thistype,{'subjects':data_to_cell_array(subjects, True),
+                                      'C':data_to_cell_array(conndata_alltypes[conntype],True)},format='5',do_compression=True)
             print("Saved data to %s (%s)" % (outfile_thistype,kjf.humanize_filesize(os.path.getsize(outfile_thistype),binary=True)))
 
 if __name__ == "__main__":

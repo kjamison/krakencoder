@@ -757,6 +757,7 @@ def callback_saveoutput(
             },
             format="5",
             do_compression=True,
+            long_field_names=True
         )
     elif filename.lower().endswith(".zip"):
         save_data_zip(
