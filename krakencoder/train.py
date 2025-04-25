@@ -1992,13 +1992,16 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             trainrecord['current_epoch']=epoch
             trainrecord['seconds_per_epoch']=trainduration/(epoch+1)
 
-            savemat(recordfile,trainrecord,format='5',do_compression=True)
+            savemat(recordfile,trainrecord,format='5',do_compression=True, long_field_names=True)
             print("Ep %d) Saved %s" % (epoch, recordfile))
 
-            display_kraken_heatmap(trainrecord,metrictype=['top1acc','topNacc','avgrank','avgcorr_resid'],origscale=True,single_epoch=True,
-                                    colormap='magma2',outputimagefile={'file':imgfile_heatmap,'dpi':200})
-            
-            print("Ep %d) Saved %s" % (epoch, imgfile_heatmap))
+            try:
+                #sometimes this gives an error, but it's not critical
+                display_kraken_heatmap(trainrecord,metrictype=['top1acc','topNacc','avgrank','avgcorr_resid'],origscale=True,single_epoch=True,
+                                        colormap='magma2',outputimagefile={'file':imgfile_heatmap,'dpi':200})
+                print("Ep %d) Saved %s" % (epoch, imgfile_heatmap))
+            except:
+                pass
             
         if checkpoint_on_this_loop:
             if update_single_checkpoint:
@@ -2094,13 +2097,16 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     trainrecord['current_epoch']=epoch
     trainrecord['seconds_per_epoch']=trainduration/(epoch+1)
     
-    savemat(recordfile,trainrecord,format='5',do_compression=True)
+    savemat(recordfile,trainrecord,format='5',do_compression=True, long_field_names=True)
     print("Saved %s" % (recordfile))
 
-    display_kraken_heatmap(trainrecord,metrictype=['top1acc','topNacc','avgrank','avgcorr_resid'],origscale=True,single_epoch=True,
-                            colormap='magma2',outputimagefile={'file':imgfile_heatmap,'dpi':200})
-    
-    print("Ep %d) Saved %s" % (epoch, imgfile_heatmap))
+    try:
+        #sometimes this gives an error, but it's not critical
+        display_kraken_heatmap(trainrecord,metrictype=['top1acc','topNacc','avgrank','avgcorr_resid'],origscale=True,single_epoch=True,
+                                colormap='magma2',outputimagefile={'file':imgfile_heatmap,'dpi':200})
+        print("Ep %d) Saved %s" % (epoch, imgfile_heatmap))
+    except:
+        pass
     
     return net, trainrecord
 
