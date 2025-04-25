@@ -834,6 +834,19 @@ def run_training_command(argv=None):
                     
             training_params['trainpath_prediction_type']=trainpath_prediction_type
             
+            ########## adversarial
+            # if any weight is given as <0, this indicates adversarial
+            # so flip the sign and mark it to use a gradient reversal layer in the model
+            
+            conn_names_index_dict={x:i for i,x in enumerate(conn_names)}
+            
+            input_is_adversarial=[]
+            for i,x in enumerate(conn_names):
+                is_adv=x in output_conntype_weights and output_conntype_weights[x] < 0
+                if is_adv:
+                    output_conntype_weights[x]=abs(output_conntype_weights[x])
+                input_is_adversarial.append(is_adv)
+            ##########
             
             trainpath_weights=[]
             for itp,(x,y) in enumerate(trainpath_pairs):    
@@ -971,7 +984,8 @@ def run_training_command(argv=None):
                                                 use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                 input_transformation_info=transformation_type_string,
                                                 prediction_type_dict=output_conntype_predictiontype,
-                                                precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader)
+                                                precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader,
+                                                input_is_adversarial=input_is_adversarial)
             
             else:
                 ##################
@@ -986,7 +1000,8 @@ def run_training_command(argv=None):
                                                     use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                     input_transformation_info=transformation_type_string,
                                                     prediction_type_dict=output_conntype_predictiontype,
-                                                    precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader)
+                                                    precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader,
+                                                    input_is_adversarial=input_is_adversarial)
             
             
             #dont save input transforms if we are using precomputed ones
@@ -1057,7 +1072,8 @@ def run_training_command(argv=None):
                                                         reduce_dimension=None,use_pretrained_encoder=False, keep_origscale_data=keep_origscale_data,           
                                                         precomputed_transformer_info_list=new_outer_transformer_info_list, 
                                                         prediction_type_dict=output_conntype_predictiontype,
-                                                        create_data_loader=create_data_loader)
+                                                        create_data_loader=create_data_loader,
+                                                        input_is_adversarial=input_is_adversarial)
                             
                 else:
                     net, checkpoint=Krakencoder.load_checkpoint(starting_point_file, checkpoint_override=checkpoint_override)

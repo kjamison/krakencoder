@@ -182,6 +182,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
                             reduce_dimension=None, leave_data_alone=False, use_pretrained_encoder=False, keep_origscale_data=False, quiet=False,
                             use_lognorm_for_sc=False, use_truncated_svd=False, use_truncated_svd_for_sc=False, input_transformation_info=None, 
                             prediction_type_dict={},
+                            input_is_adversarial=[],
                             precomputed_transformer_info_list={}, create_data_loader=True):
     """
     Generate data structures for all training paths, including data transformers, data loaders
@@ -251,6 +252,8 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         data_origscale_list['traindata_origscale_mean'][conn_name]: torch tensor with pop. mean of original training data for each connectivity type (1 x Npairs)
     data_transformer_info_list: dictionary with information about the transformers used for each connectivity type
     """
+    if len(input_is_adversarial)==0:
+        input_is_adversarial=[False]*len(conn_names)
     
     if not data_string:
         data_string=common_prefix(conn_names)+common_suffix(conn_names)
@@ -496,7 +499,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     data_optimscale_list={}
     data_optimscale_list['traindata']={k:torchfloat(v) for k,v in traindata_list.items()}
     data_optimscale_list['valdata']={k:torchfloat(v) for k,v in valdata_list.items()}
-
+    
     #now loop through the input/output pairs list
     trainpath_list=[]
     for c1,c2 in trainpath_pairs:
@@ -672,6 +675,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         if not input_transformation_info:
             trainpath_tmp['input_transformation_info']=False #avoid saving None type
         
+        trainpath_tmp['adversarial_boolean_list']=input_is_adversarial
         trainpath_list.append(trainpath_tmp)
 
     data_origscale_list=None
@@ -681,6 +685,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         data_origscale_list['traindata_origscale_mean']={x: traindata_origscale_list[x].mean(axis=0,keepdims=True) for x in conn_names}
         data_origscale_list['traindata_origscale']=traindata_origscale_list
         data_origscale_list['valdata_origscale']=valdata_origscale_list
+    
     return trainpath_list, data_optimscale_list, data_origscale_list, data_transformer_info_list
 
 ##############################
@@ -908,6 +913,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     
     trainpath_prediction_type=training_params['trainpath_prediction_type'] if 'trainpath_prediction_type' in training_params else ["loss"]*len(trainpath_list)
     
+    adversarial_boolean_list=trainpath_list[0]['adversarial_boolean_list']
+    
     ############# intergroup
     intergroup=training_params['intergroup'] if 'intergroup' in training_params else False
     intergroup_hiddenlayers=training_params['intergroup_extra_layer_count'] if 'intergroup_extra_layer_count' in training_params else 0
@@ -946,7 +953,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                 latent_activation=latent_activation, latent_normalize=latent_normalize,
                                 intergroup=True, intergroup_layers=intergroup_layers, intergroup_inputgroup_list=intergroup_inputgroup_list, 
                                 intergroup_relu=intergroup_relu,intergroup_dropout=intergroup_dropout,
-                                dropout_final_layer=dropout_final_layer, dropout_final_layer_list=dropout_final_layer_list)
+                                dropout_final_layer=dropout_final_layer, dropout_final_layer_list=dropout_final_layer_list,
+                                adversarial_boolean_list=adversarial_boolean_list)
             ############# end intregroup
         else:
             net = Krakencoder(coencoder_size_list, latentsize=latentsize, 
@@ -954,7 +962,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                 dropout_schedule_list=dropout_schedule_list,
                                 relu_tanh_alternate=relu_tanh_alternate, leakyrelu_negative_slope=leakyrelu_negative_slope,
                                 latent_activation=latent_activation, latent_normalize=latent_normalize,
-                                dropout_final_layer=dropout_final_layer, dropout_final_layer_list=dropout_final_layer_list)
+                                dropout_final_layer=dropout_final_layer, dropout_final_layer_list=dropout_final_layer_list,
+                                adversarial_boolean_list=adversarial_boolean_list)
     
     network_string=net.prettystring()
     network_parameter_count=sum([p.numel() for p in net.parameters()]) #count total weights in model

@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from torch.autograd import Function
+
 from .utils import get_version
 
 #####################################
@@ -13,7 +15,8 @@ class Krakencoder(nn.Module):
                  leakyrelu_negative_slope=0, relu_tanh_alternate=False, latent_activation=None, latent_normalize=False, 
                  linear_include_bias=True, no_bias_for_outer_layers=False, dropout_schedule_list=None,
                  dropout_final_layer=None, dropout_final_layer_list=None,
-                 intergroup=False, intergroup_layers=[], intergroup_inputgroup_list=[],intergroup_transform_index_dict={}, intergroup_relu=True, intergroup_dropout=None):
+                 intergroup=False, intergroup_layers=[], intergroup_inputgroup_list=[],intergroup_transform_index_dict={}, intergroup_relu=True, intergroup_dropout=None,
+                 adversarial_boolean_list=[]):
         """
         Initialize the model with the specified hyperparameters
         
@@ -70,7 +73,15 @@ class Krakencoder(nn.Module):
         
         self.dropout_final_layer=dropout_final_layer
         self.dropout_final_layer_list=dropout_final_layer_list
-            
+        
+        ############### adversarial
+        self.decoder_gradientreversal_list=nn.ModuleList()
+        if len(adversarial_boolean_list) == 0:
+            adversarial_boolean_list=[False]*len(inputsize_list)
+        if len(adversarial_boolean_list) != len(inputsize_list):
+            raise ValueError("adversarial_boolean_list must be same length as inputsize_list")
+        self.adversarial_boolean_list=adversarial_boolean_list
+        
         ############### intergroup 
         self.intergroup=intergroup
         self.intergroup_layers=intergroup_layers
@@ -196,8 +207,17 @@ class Krakencoder(nn.Module):
                     else:
                         dec_layer_list+=[relu]
             
+            ####### adversarial
+            if self.adversarial_boolean_list[i_input]:
+                dec_grl=GradientReversalLayer()
+            else:
+                dec_grl=nn.Identity()
+            self.decoder_gradientreversal_list.append(dec_grl)
+            ####### end adversarial
+            
             self.encoder_list.append(nn.Sequential(*enc_layer_list))
             self.decoder_list.append(nn.Sequential(*dec_layer_list))
+            
             
     def forward(self, x, encoder_index, decoder_index, transcoder_index_list=None):
         """
@@ -225,6 +245,14 @@ class Krakencoder(nn.Module):
                 x_dec=self.decoder_list[i](x_enc)
                 x_enc=self.encoder_list[i](x_dec)
         
+        is_adversarial=self.adversarial_boolean_list[decoder_index]
+        x_enc_orig=x_enc
+        if is_adversarial:
+            #note: this creates a new tensor object with gradients disconnected from 
+            # x_enc_orig that we return. So the GRL is ONLY used for generating
+            # the decoded output
+            x_enc=self.decoder_gradientreversal_list[decoder_index](x_enc)
+        
         ############### intergroup 
         if self.intergroup_transform_list is not None and encoder_index >= 0 and decoder_index >= 0:
             ijstr='%s->%s' % (self.inputgroup_list[encoder_index],self.inputgroup_list[decoder_index])
@@ -240,7 +268,15 @@ class Krakencoder(nn.Module):
         ############### end intergroup 
                 
         #x_dec = self.decoder_list[decoder_index](x_enc)
-        return x_enc, x_dec
+        return x_enc_orig, x_dec
+    
+    def apply_gradient_reversal(self, x_enc, decoder_index):
+        """
+        Apply gradient reversal to a latent vector
+        """
+        if self.adversarial_boolean_list[decoder_index]:
+            x_enc = self.decoder_gradientreversal_list[decoder_index](x_enc)
+        return x_enc
     
     def intergroup_transform_latent(self, x_enc, encoder_index, decoder_index, intergroup_transform_name=None):
         """
@@ -443,6 +479,9 @@ class Krakencoder(nn.Module):
         checkpoint['intergroup_dropout']=self.intergroup_dropout
         ############### end intergroup
         
+        ############### adversarial 
+        checkpoint['adversarial_boolean_list']=self.adversarial_boolean_list
+        ############### end adversarial
         if extra_dict is not None:
             for k in extra_dict:
                 checkpoint[k]=extra_dict[k]
@@ -507,7 +546,11 @@ class Krakencoder(nn.Module):
             checkpoint['intergroup_relu']=True
         if not 'intergroup_dropout' in checkpoint:
             checkpoint['intergroup_dropout']=None
-            
+        
+        ################ adversarial
+        if not 'adversarial_boolean_list' in checkpoint:
+            checkpoint['adversarial_boolean_list']=[]
+        
         if checkpoint_override is not None:
             for k in checkpoint_override:
                 checkpoint[k]=checkpoint_override[k]
@@ -520,7 +563,8 @@ class Krakencoder(nn.Module):
             intergroup=checkpoint['intergroup'], intergroup_layers=checkpoint['intergroup_layers'], 
             intergroup_inputgroup_list=checkpoint['intergroup_inputgroup_list'], 
             intergroup_transform_index_dict=checkpoint['intergroup_transform_index_dict'],intergroup_relu=checkpoint['intergroup_relu'],
-            intergroup_dropout=checkpoint['intergroup_dropout'])
+            intergroup_dropout=checkpoint['intergroup_dropout'],
+            adversarial_boolean_list=checkpoint['adversarial_boolean_list'])
         ############### end intergroup 
         
         net.load_state_dict(checkpoint['state_dict'])
@@ -546,3 +590,21 @@ class Normalize(nn.Module):
 
     def forward(self, x):
         return nn.functional.normalize(x,p=self.p,dim=1)
+
+class GradientReversalFunction(Function):
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return -ctx.lambda_ * grad_output, None  # Flip gradient sign
+
+class GradientReversalLayer(nn.Module):
+    def __init__(self, lambda_=1.0):
+        super().__init__()
+        self.lambda_ = lambda_
+
+    def forward(self, x):
+        return GradientReversalFunction.apply(x, self.lambda_)
