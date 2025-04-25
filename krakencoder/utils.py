@@ -279,6 +279,12 @@ def flatlist(l):
     #return [x for y in l for x in y]
     return lnew
 
+def unique_preserve_order(seq):
+    """
+    Return a list of unique elements in the same order as the input list
+    """
+    u,idx=np.unique(seq, return_index=True)
+    return u[np.argsort(idx)]
 
 def triu_indices_torch(n,k=0):
     """pytorch triu_indices doesn't work the same way so use custom function that will"""

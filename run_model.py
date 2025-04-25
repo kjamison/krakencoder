@@ -59,6 +59,7 @@ from krakencoder.train import *
 from krakencoder.data import *
 from krakencoder.utils import *
 from krakencoder.merge import *
+from krakencoder.fetch import *
 
 from scipy.io import loadmat, savemat
 import re
@@ -77,6 +78,7 @@ def argument_parse_newdata(argv):
     arg_defaults['input_data_file']=[]
     arg_defaults['input_transform_file']=["auto"]
     arg_defaults['heatmap_metrictype_list']=['top1acc','topNacc','avgrank','avgcorr_resid']
+    arg_defaults['input_json_load_types']=['all']
     
     parser=argparse.ArgumentParser(description='Evaluate krakencoder checkpoint',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
@@ -98,6 +100,11 @@ def argument_parse_newdata(argv):
     parser.add_argument('--fusionnoatlas','--fusion.noatlas',action ='store_true',dest='fusion_noatlas',help='Add .noatlas version to fusion outputs (excludes latent from same atlas)')
     parser.add_argument('--fusionnorm',action='store_true',dest='fusionnorm',help='re-normalize latent vectors after averaging')
     parser.add_argument('--onlyfusioninputs',action='store_true',dest='only_fusion_inputs',help='Only predict outputs from fusion inputs (not from individual flavors)')
+    
+    parser.add_argument('--inputjson',action='store',dest='input_json', help='.json file containing filenames for checkpoints, xforms, and input data for each flavor',nargs='*')
+    parser.add_argument('--inputjson_search_directories',action='store',dest='input_json_search_directories', help='List of directories to search for data files from input json',nargs='*')
+    parser.add_argument('--inputjson_fetch_files',action='store_true',dest='input_json_fetch_files', help='Fetch files from input json listing if possible')
+    parser.add_argument('--inputjson_load_types',action='store',dest='input_json_load_types', help='Data to load from json. (["checkpoint","xform","data"])',nargs='*')
     
     misc_group=parser.add_argument_group('Misc')
     misc_group.add_argument('--heatmap',action='store',dest='heatmap_file', help='Save heatmap image')
@@ -199,6 +206,10 @@ def run_model_on_new_data(argv=None):
     metric_include_extra_resid=False
     metric_include_allsubj=args.metric_include_allsubj
     
+    input_json=args.input_json
+    input_json_search_directories=args.input_json_search_directories
+    input_json_fetch_files=args.input_json_fetch_files
+    input_json_load_types=args.input_json_load_types
     
     adapt_mode=args.adapt_mode
     save_ccmat_in_record=args.ccmat
@@ -217,6 +228,105 @@ def run_model_on_new_data(argv=None):
         
     if adapt_mode.lower()=='none':
         adapt_mode=None
+    
+    ##############
+    #check for json option, and override checkpoints, xforms, inputfiles, etc...
+    if input_json:
+        if 'all' in input_json_load_types:
+            input_json_load_types=["checkpoint","xform","data"]
+            
+        if len(input_conntype_list)==0:
+            raise Exception("Must specify input flavors with --inputname when using --inputjson")
+        
+        print("Parsing options for input flavors from json file(s):",input_json)
+        
+        json_directory_search_list=[model_data_folder()]
+        
+        if input_json_search_directories is not None:
+            json_directory_search_list+=[d for d in input_json_search_directories]
+        flavor_input_info={}
+        for j in input_json:
+            tmpinfo=load_flavor_input_json(j, directory_search_list=json_directory_search_list, override_abs_path=True)
+            for k in tmpinfo:
+                flavor_input_info[k]=tmpinfo[k]
+    
+        if ptfile is None:
+            ptfile=[]
+        #absolute paths for files that exist, otherwise just use the filename
+        ptfile=[os.path.abspath(x) if os.path.exists(os.path.abspath(x)) else x for x in ptfile]
+    
+        if input_transform_file_list is None or all([x=='auto' for x in input_transform_file_list]):
+            input_transform_file_list=[]
+        input_transform_file_list=[os.path.abspath(x) if os.path.exists(os.path.abspath(x)) else x for x in input_transform_file_list]
+        
+        if input_conntype_list[0].lower() == 'all':
+            input_conntype_list=list(flavor_input_info.keys())
+        elif input_conntype_list[0].lower() == 'sc':
+            input_conntype_list=[x for x in list(flavor_input_info.keys()) if x.startswith("SC")]
+        elif input_conntype_list[0].lower() == 'fc':
+            input_conntype_list=[x for x in list(flavor_input_info.keys()) if x.startswith("FC")]
+        
+        if output_conntype_list[0].lower() == 'all':
+            output_conntype_list=list(flavor_input_info.keys())
+        elif output_conntype_list[0].lower() == 'sc':
+            output_conntype_list=[x for x in list(flavor_input_info.keys()) if x.startswith("SC")]
+        elif output_conntype_list[0].lower() == 'fc':
+            output_conntype_list=[x for x in list(flavor_input_info.keys()) if x.startswith("FC")]
+        
+        conntypes_to_find=unique_preserve_order(np.concatenate([input_conntype_list,output_conntype_list]))
+        
+        flavors_with_missing_files=[]
+        for conntype in conntypes_to_find:
+            if not conntype in flavor_input_info:
+                print("%s: No info for flavor in json file:" % (conntype),input_json)
+                continue
+            tmp_found=[]
+            tmp_chkpt=None
+            tmp_xform=None
+            tmp_datafile=None
+            tmp_all_exist=True
+            for f in input_json_load_types:
+                tmp_f=None
+                if flavor_input_info[conntype][f'{f}_exists']:
+                    tmp_f=flavor_input_info[conntype][f]
+                    tmp_found.append(f'- {f}: '+tmp_f)
+                elif input_json_fetch_files and flavor_input_info[conntype][f'{f}_fetchable']:
+                    tmp_f=fetch_model_data(files_to_fetch=flavor_input_info[conntype][f],force_download=False)
+                    tmp_found.append(f'- {f}: '+tmp_f)
+                elif flavor_input_info[conntype][f'{f}_fetchable']:
+                    tmp_found.append(f'x (fetchable) {f}: '+flavor_input_info[conntype][f])
+                else:
+                    tmp_found.append(f'x missing {f}: '+flavor_input_info[conntype][f])
+                
+                if tmp_f is None:
+                    tmp_all_exist=False
+                
+                if f == 'checkpoint':
+                    tmp_chkpt=tmp_f
+                elif f == 'xform':
+                    tmp_xform=tmp_f
+                elif f == 'data':
+                    tmp_datafile=tmp_f
+            if tmp_all_exist:
+                tmp_data=f'{conntype}={tmp_datafile}'
+                if tmp_chkpt not in ptfile:
+                    ptfile.append(tmp_chkpt)
+                if tmp_xform not in input_transform_file_list:
+                    input_transform_file_list.append(tmp_xform)
+                if tmp_data not in input_file_list and tmp_datafile not in input_file_list:
+                    input_file_list.append(tmp_data)
+                print("\n%s: Found all files for flavor in json file:\n" % (conntype),"\n".join(["\t"+x for x in tmp_found]))
+            else:
+                print("\n%s: Necessary files not found for flavor in json file:\n" % (conntype),"\n".join(["\t"+x for x in tmp_found]))
+                flavors_with_missing_files.append(conntype)
+                
+        if len(flavors_with_missing_files)>0:
+            raise FileNotFoundError("Necessary files not found for flavors in json file: ", flavors_with_missing_files)
+
+        if not 'checkpoint' in input_json_load_types:
+            ptfile=args.checkpoint
+        if not 'xform' in input_json_load_types:
+            input_transform_file_list=args.input_transform_file
     
     ##############
     #load model checkpoint
@@ -361,6 +471,8 @@ def run_model_on_new_data(argv=None):
     #conn_names = full list of input names from model checkpoint
     #input_conntype_canonical=canonical_data_flavor(input_conntype)
     #input_conntype_list=[input_conntype_canonical]
+    input_group_dict={x.split('@')[0]:x.split('@')[1] for x in input_conntype_list if '@' in x}
+    input_conntype_list=[x.split('@')[0] for x in input_conntype_list]
     input_conntype_list, input_conntype_idx =search_flavors(input_conntype_list, conn_names, return_index=True)
     
     if len(input_file_list) > 0 and not input_file_list[0] in ['all','test','train','val','retest']:

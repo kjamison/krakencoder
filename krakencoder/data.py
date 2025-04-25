@@ -5,14 +5,16 @@ Includes some hard-coded paths to HCP data files, which may need to be updated f
 """
 
 from .utils import *
-
+from .fetch import get_fetchable_data_list
 from scipy.io import loadmat
 from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.preprocessing import FunctionTransformer
 
 import os
 import re
+import json
 from copy import deepcopy
+
 
 
 def clean_subject_list(subjects):
@@ -661,6 +663,76 @@ def merge_conndata_subjects(conndata_list):
         else:
             conndata_new[k]=np.concatenate([c[k] for c in conndata_list],axis=0)
     return conndata_new
+
+def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[], override_abs_path=False):
+    """
+    Load a json file with flavor information, including the following fields:
+    flavorinfo[conntype]['atlas']: str, atlas name
+    flavorinfo[conntype]['checkpoint']: str, "*.pt" checkpoint filename trained on this flavor (could include multiple flavors)
+    flavorinfo[conntype]['xform']: str, "*.npy" filename for the pre-computed transformer for this flavor (Eg: PCA)
+    flavorinfo[conntype]['data']: str, filename of the input data for this flavor
+    
+    flavorinfo[conntype]['<field>_exists']: bool, True if a given file has been found (absolute path)
+    flavorinfo[conntype]['<field>_fetchable']: bool, True if a given file can be fetched from the uploaded database
+    
+    Filenames stored in json can be relative names without paths. This function will search for the files in the directory_search_list
+     
+    If override_abs_path=True, even if input json had an absolute path, search for the filename in the directory list anyway
+
+    Return a dict with only the flavors specified in the conntype_list (or all flavors if conntype_list is None)
+    """
+    if isinstance(conntype_list,str):
+        conntype_list=[conntype_list]
+    if isinstance(directory_search_list,str):
+        directory_search_list=[directory_search_list]
+    
+    with open(jsonfile,'r') as f:
+        flavor_input_info=json.load(f)
+
+    if conntype_list is not None:
+        flavor_input_info={k:flavor_input_info[k] for k in conntype_list}
+    
+    fetchable_urls=get_fetchable_data_list()
+    fetchable_files=[u['filename'] for u in fetchable_urls]
+    
+    filename_fields=['checkpoint','xform','data']
+    
+
+    
+    for k in flavor_input_info:
+        all_exist=True
+        all_fetchable=True
+        all_exists_or_fetchable=True
+        for f in filename_fields:
+            is_fetchable=flavor_input_info[k][f] in fetchable_files
+            found_absolute=False
+            if os.path.exists(flavor_input_info[k][f]):
+                found_absolute=True
+            elif os.path.exists(os.path.abspath(os.path.expanduser(flavor_input_info[k][f]))):
+                flavor_input_info[k][f]=os.path.abspath(os.path.expanduser(flavor_input_info[k][f]))
+                found_absolute=True
+            else:
+                fname=flavor_input_info[k][f]
+                for d in directory_search_list:
+                    d=os.path.abspath(os.path.expanduser(d))
+                    if os.path.exists(os.path.join(d,fname)):
+                        found_absolute=True
+                        flavor_input_info[k][f]=os.path.join(d,fname)
+                        break
+                    elif override_abs_path and os.path.exists(os.path.join(d, os.path.split(fname)[-1])):
+                        found_absolute=True
+                        flavor_input_info[k][f]=os.path.join(d,os.path.split(fname)[-1])
+                        break
+            flavor_input_info[k][f'{f}_exists']=found_absolute
+            flavor_input_info[k][f'{f}_fetchable']=is_fetchable
+            all_exist=all_exist and found_absolute
+            all_fetchable=all_fetchable and is_fetchable
+            all_exists_or_fetchable=all_exists_or_fetchable and (found_absolute or is_fetchable)
+        flavor_input_info[k]['all_exists']=all_exist
+        flavor_input_info[k]['all_fetchable']=all_fetchable
+        flavor_input_info[k]['all_exists_or_fetchable']=all_exists_or_fetchable
+    
+    return flavor_input_info
 
 def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False, keep_diagonal=False):
     """

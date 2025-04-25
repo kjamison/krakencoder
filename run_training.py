@@ -38,6 +38,7 @@ from krakencoder.model import *
 from krakencoder.train import *
 from krakencoder.utils import *
 from krakencoder.data import *
+from krakencoder.fetch import *
 from krakencoder.log import Logger
 
 import re
@@ -70,7 +71,12 @@ def argument_parse_runtraining(argv):
     input_arg_group.add_argument('--trainvalsplitfrac',action='store',dest='trainval_split_frac',type=float, default=0.8, help='Fraction of subjects for training+val')
     input_arg_group.add_argument('--valsplitfrac',action='store',dest='val_split_frac',type=float, default=0.1, help='Fraction *OF TRAIN+VAL* subjects for validation')
     input_arg_group.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='OVERRIDE trainsplit,valsplit: .mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields')
-
+    
+    json_arg_group=parser.add_argument_group('Options for input data from json file')
+    json_arg_group.add_argument('--inputjson',action='store',dest='input_json', help='.json file containing filenames for checkpoints, xforms, and input data for each flavor',nargs='*')
+    json_arg_group.add_argument('--inputjson_search_directories',action='store',dest='input_json_search_directories', help='List of directories to search for data files from input json',nargs='*')
+    json_arg_group.add_argument('--inputjson_fetch_files',action='store_true',dest='input_json_fetch_files', help='Fetch files from input json listing if possible')
+    
     #data transformation options
     xfm_arg_group=parser.add_argument_group('Input transformation options')
     xfm_arg_group.add_argument('--pcadim',action='store',dest='pcadim', type=int, default=256, help='pca dimensionality reduction (default=256. 0=No PCA)')
@@ -210,6 +216,10 @@ def run_training_command(argv=None):
     
     transformation_type_dict={}
     
+    input_json=args.input_json
+    input_json_search_directories=args.input_json_search_directories
+    input_json_fetch_files=args.input_json_fetch_files
+    
     if do_domain_adaptation and starting_point_file is None:
         raise Exception("Must specify starting point file to use domain adaptation")
     
@@ -289,6 +299,98 @@ def run_training_command(argv=None):
     input_data_file_list=args.input_data_file
     input_subject_split_file=args.subject_split_file
 
+    ##############
+    #check for json option, and override checkpoints, xforms, inputfiles, etc...
+    if input_json:
+        input_conntype_list=[x.split('@')[0] for x in args.dataflavors]
+        input_group_dict={x.split('@')[0]:x.split('@')[1] for x in args.dataflavors if '@' in x}
+        
+        if len(input_conntype_list)==0:
+            raise Exception("Must specify input flavors with --inputname when using --inputjson")
+        
+        print("Parsing options for input flavors from json file(s):",input_json)
+        
+        json_directory_search_list=[model_data_folder()]
+        
+        if input_json_search_directories is not None:
+            json_directory_search_list+=[d for d in input_json_search_directories]
+        flavor_input_info={}
+        for j in input_json:
+            tmpinfo=load_flavor_input_json(j, directory_search_list=json_directory_search_list, override_abs_path=True)
+            for k in tmpinfo:
+                flavor_input_info[k]=tmpinfo[k]
+        
+        if input_transform_file_list is None or all([x=='auto' for x in input_transform_file_list]):
+            input_transform_file_list=[]
+        
+        #absolute paths for files that exist, otherwise just use the filename
+        input_transform_file_list=[os.path.abspath(x) if os.path.exists(os.path.abspath(x)) else x for x in input_transform_file_list]
+        
+        if input_data_file_list is None:
+            input_data_file_list=[]
+        
+        if input_conntype_list[0].lower() == 'all':
+            input_conntype_list=list(flavor_input_info.keys())
+        elif input_conntype_list[0].lower() == 'sc':
+            input_conntype_list=[x for x in list(flavor_input_info.keys()) if x.startswith("SC")]
+        elif input_conntype_list[0].lower() == 'fc':
+            input_conntype_list=[x for x in list(flavor_input_info.keys()) if x.startswith("FC")]
+        
+        flavors_with_missing_files=[]
+        for conntype in input_conntype_list:
+            if not conntype in flavor_input_info:
+                print("%s: No info for flavor in json file:" % (conntype),input_json)
+                continue
+            tmp_found=[]
+            tmp_chkpt=None
+            tmp_xform=None
+            tmp_datafile=None
+            tmp_all_exist=True
+            for f in ['xform','data']:
+                tmp_f=None
+                if flavor_input_info[conntype][f'{f}_exists']:
+                    tmp_f=flavor_input_info[conntype][f]
+                    tmp_found.append(f'- {f}: '+tmp_f)
+                elif input_json_fetch_files and flavor_input_info[conntype][f'{f}_fetchable']:
+                    tmp_f=fetch_model_data(files_to_fetch=flavor_input_info[conntype][f],force_download=False)
+                    tmp_found.append(f'- {f}: '+tmp_f)
+                elif flavor_input_info[conntype][f'{f}_fetchable']:
+                    tmp_found.append(f'x (fetchable) {f}: '+flavor_input_info[conntype][f])
+                else:
+                    tmp_found.append(f'x missing {f}: '+flavor_input_info[conntype][f])
+                
+                if tmp_f is None:
+                    tmp_all_exist=False
+                
+                if f == 'checkpoint':
+                    tmp_chkpt=tmp_f
+                elif f == 'xform':
+                    tmp_xform=tmp_f
+                elif f == 'data':
+                    tmp_datafile=tmp_f
+            if tmp_all_exist:
+                tmp_group=None
+                if 'group' in flavor_input_info[conntype]:
+                    tmp_group=flavor_input_info[conntype]['group']
+                if conntype in input_group_dict:
+                    tmp_group=input_group_dict[conntype]
+                if tmp_group is not None:
+                    tmp_data=f'{conntype}@{tmp_group}={tmp_datafile}'
+                else:
+                    tmp_data=f'{conntype}={tmp_datafile}'
+                if tmp_xform not in input_transform_file_list:
+                    input_transform_file_list.append(tmp_xform)
+                if tmp_data not in input_data_file_list and tmp_datafile not in input_data_file_list:
+                    input_data_file_list.append(tmp_data)
+                print("\n%s: Found all files for flavor in json file:\n" % (conntype),"\n".join(["\t"+x for x in tmp_found]))
+            else:
+                print("\n%s: Necessary files not found for flavor in json file:\n" % (conntype),"\n".join(["\t"+x for x in tmp_found]))
+                flavors_with_missing_files.append(conntype)
+                
+        if len(flavors_with_missing_files)>0:
+            raise FileNotFoundError("Necessary files not found for flavors in json file: ", flavors_with_missing_files)
+    ##################
+    
     input_subject_splits=None
     subjects=None
     familyidx=None #only used when computing test/train splits (and not used if subject_split_file provided)
@@ -344,16 +446,16 @@ def run_training_command(argv=None):
                 pass
             elif groupname is not None:
                 xc_in_pathgroups=any(groupname in x for x in args.pathgroups)
+                xc_in_pathgroups=xc_in_pathgroups or any("all" in x for x in args.pathgroups)
                 if not xc_in_pathgroups:
                     print("Skipping input %s: Group %s for not found in pathgroup input %s: %s" % (xc,groupname,args.pathgroups, f))
                     #dont load this input file
                     continue
-            
-            conndata_alltypes[xc]=load_input_data(input_file,group=groupname)
+            conndata_alltypes[xc]=load_input_data(os.path.expanduser(input_file),group=groupname)
 
             print("%s@%s=%s" % (xc,groupname,input_file))
         input_conntype_list=conndata_alltypes.keys()
-        roilist_str="%dflav" % (len(input_conntype_list)) #use a shorter string tro avoid filename issues
+        roilist_str="%dflav" % (len(input_conntype_list)) #use a shorter string to avoid filename issues
     else:
         #load hardcoded HCP data paths
         input_nsubj=args.subjectcount

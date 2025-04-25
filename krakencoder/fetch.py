@@ -32,6 +32,20 @@ def model_data_folder(data_folder=None, ignore_env=False):
     data_folder=os.path.abspath(os.path.expanduser(data_folder))
     return data_folder
 
+def get_fetchable_data_list():
+    """
+    Returns a list of model data files that can be fetched from the internet.
+    """
+    urlfile=os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data_urls.json'))
+    
+    try:
+        with open(urlfile) as f:
+            data_urls=json.load(f)
+    except:
+        data_urls=[]
+    
+    return data_urls
+
 def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False, verbose=False):
     """
     Fetches the model data files from the internet. If the files are already present, they are not downloaded again.
@@ -51,10 +65,7 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False
     data_folder = model_data_folder(data_folder)
     os.makedirs(data_folder, exist_ok=True)
     
-    urlfile=os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data_urls.json'))
-    
-    with open(urlfile) as f:
-        data_urls=json.load(f)
+    data_urls=get_fetchable_data_list()
     
     input_was_str=False
     
