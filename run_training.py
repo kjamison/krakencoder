@@ -206,6 +206,10 @@ def run_training_command(argv=None):
     do_domain_adaptation=args.domain_adaptation
     domain_adaptation_polynomial=args.domain_adaptation_polynomial
 
+    transformation_type_string_argument=transformation_type_string
+    
+    transformation_type_dict={}
+    
     if do_domain_adaptation and starting_point_file is None:
         raise Exception("Must specify starting point file to use domain adaptation")
     
@@ -463,6 +467,7 @@ def run_training_command(argv=None):
             for k in ioxtmp:
                 precomputed_transformer_info_list[k]=ioxtmp[k]
                 precomputed_transformer_info_list[k]['filename']=ioxfile.split(os.sep)[-1]
+                precomputed_transformer_info_list[k]['fromfile']=True
 
 
     if input_latentunit:

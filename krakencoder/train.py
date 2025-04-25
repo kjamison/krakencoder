@@ -259,7 +259,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     
     default_transformation_type="zscore+rownorm"
     
-    if len(precomputed_transformer_info_list) > 0:
+    if len(precomputed_transformer_info_list) > 0 and all([k in precomputed_transformer_info_list for k in conn_names]):
         #when calling generate_training_paths with precomputed transformers, pull "type" from first one
         default_transformation_type=[v['type'] for k,v in precomputed_transformer_info_list.items()][0]
     elif input_transformation_info is not None and input_transformation_info is not False:
@@ -410,13 +410,17 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         
         precomputed_transformer_params=None
         precomputed_transformer_string=""
-        if precomputed_transformer_info_list:
-            if not conn_name in precomputed_transformer_info_list:
-                raise Exception("'%s' not found in precomputed transformer file" % (conn_name))
+        if precomputed_transformer_info_list and conn_name in precomputed_transformer_info_list:
+            #if not conn_name in precomputed_transformer_info_list:
+                #raise Exception("'%s' not found in precomputed transformer file" % (conn_name))
             precomputed_transformer_params=precomputed_transformer_info_list[conn_name]
             precomputed_transformer_string=" (from file)"
+            xtype=precomputed_transformer_params['type']
+            data_transformer_list[conn_name], data_transformer_dict = generate_transformer(traindata,transformer_type=xtype,
+                        precomputed_transformer_params=precomputed_transformer_params)
+            data_transformer_dict['fromfile']=True
         
-        if use_pretrained_encoder and conndata_alltypes[conn_name]['transformer_file'] is not None:
+        elif use_pretrained_encoder and conndata_alltypes[conn_name]['transformer_file'] is not None:
             data_transformer_list[conn_name], data_transformer_dict = generate_transformer(traindata, transformer_type="torchfile", 
                 transformer_param_dict={'transformer_file':conndata_alltypes[conn_name]['transformer_file']},
                 precomputed_transformer_params=precomputed_transformer_params)
@@ -445,6 +449,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
                     precomputed_transformer_params=precomputed_transformer_params)
             
                 data_transformer_dict["pca_params"]=data_transformer_list[conn_name].get_params()
+
         else:
             #normalize each SC matrix by the total L2 norm of the [trainsubj x pairs] for that type
             #data_transformer_list[conn_name], data_transformer_dict = generate_transformer(traindata,transformer_type="norm")
@@ -454,8 +459,11 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
                 #xtype="zscore+rownorm"
                 xtype=default_transformation_type
             #xtype="zscore+rownorm"
+            #if precomputed_transformer_params is not None and 'type' in precomputed_transformer_params:
+            #    xtype=precomputed_transformer_params['type']
+                
             data_transformer_list[conn_name], data_transformer_dict = generate_transformer(traindata,transformer_type=xtype,
-                    precomputed_transformer_params=precomputed_transformer_params)
+                        precomputed_transformer_params=precomputed_transformer_params)
     
         if not quiet:
             print(" using %s%s" % (data_transformer_dict['type'],precomputed_transformer_string), end="")
@@ -1180,6 +1188,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         input_transformer_file="%s_ioxfm_%s_%s_%s_%s.npy" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
         transformer_params_to_save={}
         for k_iox in precomputed_transformer_info_list.keys():
+            if 'fromfile' in precomputed_transformer_info_list[k_iox] and precomputed_transformer_info_list[k_iox]['fromfile']:
+                #don't save these, since they are already saved to a file we loaded
+                continue
             transformer_params_to_save[k_iox]=precomputed_transformer_info_list[k_iox]["params"]
             for kk,kv in precomputed_transformer_info_list[k_iox]["params"].items():
                 if torch.is_tensor(kv):
