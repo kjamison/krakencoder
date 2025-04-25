@@ -829,7 +829,7 @@ def run_model_on_new_data(argv=None):
                     for k_in in outdict['inputtypes']:
                         outdict['predicted_alltypes'][k_in]={encout:encoded_alltypes[k_in]}
             
-            savemat(outfile,outdict,format='5',do_compression=True)
+            savemat(outfile,outdict,format='5',do_compression=True, long_field_names=True)
             print("Saved %d/%d: %s" % (i_out+1,len(outfile_list),outfile))
             for k_in in outdict['predicted_alltypes'].keys():
                 for k_out in outdict['predicted_alltypes'][k_in].keys():
@@ -971,10 +971,10 @@ def run_model_on_new_data(argv=None):
                 for o in ['','_OrigScale']:
                     metricfield='%s%s_%s' % (m,o,tv)
                     newrecord[metricfield]=newrecord[metricfield][:trainpath_count,:]
-
+        
         newrecord['trainpath_names']=newrecord_trainpath_list
         if new_train_recordfile:
-            savemat(new_train_recordfile,newrecord,format='5',do_compression=True)
+            savemat(new_train_recordfile,newrecord,format='5',do_compression=True, long_field_names=True)
             print("Saved %s" % (new_train_recordfile))
 
         if heatmapfile:
