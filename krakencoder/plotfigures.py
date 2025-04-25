@@ -321,7 +321,7 @@ def display_kraken_heatmap(trainrecord,
                            colorbar=True, clim=None, colormap=None, invert_text_color=False,
                            ax=None, figsize=[18,12],
                            add_suptitle=True, add_epochtitle=True, bottomtext='<filename>',
-                           outputimagefile=None):
+                           outputimagefile=None, outputcsvfile=None, outputcsvfile_append=False):
     """
     Display a heatmap of the Kraken training record.
 
@@ -407,13 +407,19 @@ def display_kraken_heatmap(trainrecord,
             fig=plt.figure(figsize=figsize,facecolor=saveparams['facecolor'])
             ax=fig.subplots(int(axrows),int(axcols)).flatten()
             ax_return=[]
+            if outputcsvfile is not None and not outputcsvfile_append:
+                #if writing csv file and NOT in append mode, clear the file here
+                #then each metric will be appended to this clean file
+                with open(outputcsvfile,'w') as f:
+                    pass
             for i,m in enumerate(metrictype):
                 ax_ret=display_kraken_heatmap(trainrecord, 
                                        metrictype=m, 
                                        single_epoch=single_epoch, epoch_spacing=epoch_spacing, explicit_epoch=explicit_epoch, epoch_filter_size=epoch_filter_size, best_epoch_fraction=best_epoch_fraction,
                                        origscale=origscale, training=training, addmean=addmean, show_epoch=show_epoch, extra_short_names=extra_short_names, 
                                        pcorr_at_end=pcorr_at_end,exclude_flavors=exclude_flavors,show_heatmap_value_text=show_heatmap_value_text,heatmap_value_text_size=heatmap_value_text_size,
-                                       colorbar=colorbar,clim=clim,colormap=colormap,invert_text_color=invert_text_color,ax=ax[i], ticklabel_text_size=ticklabel_text_size)
+                                       colorbar=colorbar,clim=clim,colormap=colormap,invert_text_color=invert_text_color,ax=ax[i], ticklabel_text_size=ticklabel_text_size,
+                                       outputcsvfile=outputcsvfile,outputcsvfile_append=True)
                 ax_return.append(ax_ret)
             
             if all([x is None for x in ax_return]):
@@ -862,9 +868,11 @@ def display_kraken_heatmap(trainrecord,
     
     if extra_short_names > 0:
         #need to do extra shortening AFTER flavor2color
-        xlabels_to_display=shorten_names(xlabels_to_display,extrashort=extra_short_names)
-        ylabels_to_display=shorten_names(ylabels_to_display,extrashort=extra_short_names)
-    
+        #xlabels_to_display=shorten_names(xlabels_to_display,extrashort=extra_short_names)
+        #ylabels_to_display=shorten_names(ylabels_to_display,extrashort=extra_short_names)
+        xlabels_to_display=shorten_names(xlabels_to_display,extrashort=extra_short_names,remove_strings=['_hpf','.vn'])
+        ylabels_to_display=shorten_names(ylabels_to_display,extrashort=extra_short_names,remove_strings=['_hpf','.vn'])
+        
     if ax is None:
         plt.figure(figsize=figsize)
         ax=plt.gca()
@@ -882,6 +890,33 @@ def display_kraken_heatmap(trainrecord,
     if vmat_todisplay.size == 0:
         print("WARNING: no data to display")
         return None
+    
+    do_print_csv=outputcsvfile is not None
+    if do_print_csv:
+        if outputcsvfile_append:
+            csvmode='a'
+        else:
+            csvmode='w'
+        with open(outputcsvfile,csvmode) as fcsv:
+            fcsv.write(metrictitle+"\n")
+            for icol in range(vmat_todisplay.shape[1]):
+                if xlabels_to_display[icol] == 'mean':
+                    fcsv.write(',"average"')
+                else:
+                    fcsv.write(',"target:%s"' % (xlabels_to_display[icol]))
+            print("\n",end="")
+            for irow in range(vmat_todisplay.shape[0]):
+                if ylabels_to_display[irow]=='':
+                    continue
+                for icol in range(vmat_todisplay.shape[1]):
+                    if icol==0:
+                        if ylabels_to_display[irow]=='mean':
+                            fcsv.write('"average"')
+                        else:
+                            fcsv.write('"source:%s"' % (ylabels_to_display[irow]))
+                    fcsv.write(",%f" % (vmat_todisplay[irow,icol]))
+                #print("\n",end="")
+                fcsv.write("\n")
     
     him=plt.imshow(vmat_todisplay,cmap=colormap,vmin=clim[0],vmax=clim[1],aspect=image_aspect,alpha=vmat_alpha)
 

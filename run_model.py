@@ -103,6 +103,7 @@ def argument_parse_newdata(argv):
     misc_group.add_argument('--heatmap',action='store',dest='heatmap_file', help='Save heatmap image')
     misc_group.add_argument('--heatmapmetrics',action='store',dest='heatmap_metrictype_list', help='List of metric types for heatmap',nargs='*')
     misc_group.add_argument('--heatmap_colormap',action='store',dest='heatmap_colormap', default='magma', help='Colormap name for heatmap')
+    misc_group.add_argument('--heatmapcsv',action='store',dest='heatmap_csv_file', help='Save heatmap csv file')
     misc_group.add_argument('--newtrainrecord',action='store',dest='new_train_record_file', help='Save a "fake" trainrecord file')
     misc_group.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='.mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields (or "trainrecord" to use from training record)')
     misc_group.add_argument('--subjectsplitname',action='store',dest='subject_split_name', help='Which data split to evaluate: "all", "train", "test", "val", "retest", etc... (overrides --inputdata for hardcoded HCP)')
@@ -189,6 +190,7 @@ def run_model_on_new_data(argv=None):
     heatmapfile=args.heatmap_file
     heatmap_metrictype_list=args.heatmap_metrictype_list
     heatmap_colormap=args.heatmap_colormap
+    heatmap_csv_file=args.heatmap_csv_file
     new_train_recordfile=args.new_train_record_file
     input_subject_split_file=args.subject_split_file
     input_subject_split_name=args.subject_split_name
@@ -979,7 +981,10 @@ def run_model_on_new_data(argv=None):
             do_single_epoch=True
             display_kraken_heatmap(newrecord,metrictype=heatmap_metrictype_list,origscale=True,single_epoch=do_single_epoch,
                                    colormap=heatmap_colormap,
-                                   outputimagefile={'file':heatmapfile,'dpi':200})
+                                   outputimagefile={'file':heatmapfile,'dpi':200}, outputcsvfile=heatmap_csv_file)
+            #display_kraken_heatmap prints its own save message for the image file
+            if heatmap_csv_file is not None:
+                print("Saved %s" % (heatmap_csv_file))
             
 if __name__ == "__main__":
     if len(sys.argv)<=1:
