@@ -71,6 +71,9 @@ def argument_parse_runtraining(argv):
     input_arg_group.add_argument('--trainvalsplitfrac',action='store',dest='trainval_split_frac',type=float, default=0.8, help='Fraction of subjects for training+val')
     input_arg_group.add_argument('--valsplitfrac',action='store',dest='val_split_frac',type=float, default=0.1, help='Fraction *OF TRAIN+VAL* subjects for validation')
     input_arg_group.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='OVERRIDE trainsplit,valsplit: .mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields')
+    input_arg_group.add_argument('--groupweights',action='store',dest='group_weights', help='Explicit name=val group weights for training (default=uniform)',nargs='*')
+    input_arg_group.add_argument('--flavorweights',action='store',dest='flavor_weights', help='Explicit name=val flavor weights for training (default=uniform)',nargs='*')
+    input_arg_group.add_argument('--flavorpredicttype',action='store',dest='flavor_predict_type', help='Specify name=type for predicting specific demographic values\n(default="loss" for full loss function. Other="mse","category","binary")',nargs='*')
     
     json_arg_group=parser.add_argument_group('Options for input data from json file')
     json_arg_group.add_argument('--inputjson',action='store',dest='input_json', help='.json file containing filenames for checkpoints, xforms, and input data for each flavor',nargs='*')
@@ -214,7 +217,47 @@ def run_training_command(argv=None):
 
     transformation_type_string_argument=transformation_type_string
     
+    ##### parsing flavor/group weighting options
+    output_group_weights={}
+    output_conntype_weights={}
+    output_conntype_predictiontype={}
+    
     transformation_type_dict={}
+    
+    do_balance_group_weight=False
+    if args.group_weights is not None:
+        for wstr in args.group_weights:
+            if not "=" in wstr:
+                raise Exception("Invalid group weight input: %s" % (wstr))
+            gname,gval=wstr.split("=")
+            try:
+                output_group_weights[gname]=float(gval)
+            except:
+                raise ValueError("Invalid group weight input. Must be name=value: %s" % (wstr))
+            
+    if args.flavor_weights is not None:
+        for wstr in args.flavor_weights:
+            if not "=" in wstr:
+               raise ValueError("Invalid flavor weight input. Must be name=value: %s" % (wstr))
+            gname,gval=wstr.split("=")
+            try:
+                output_conntype_weights[gname]=float(gval)
+            except:
+                raise ValueError("Invalid flavor weight input. Value must be numeric: %s" % (wstr))
+    
+    if args.flavor_predict_type is not None:
+        prediction_type_options=["mse","category","binary"]
+        for wstr in args.flavor_predict_type:
+            if not "=" in wstr:
+               raise ValueError("Invalid flavor prediction type input. Must be name=type: %s" % (wstr))
+            gname,gval=wstr.split("=")
+            if gval.lower().startswith("cat"):
+                gval="category"
+            elif gval.lower().startswith("bin"):
+                gval="binary"
+            if gval.lower() not in prediction_type_options:
+                raise ValueError("Invalid flavor prediction type input '%s'. Must be one of: %s: %s" % (wstr,prediction_type_options))
+            output_conntype_predictiontype[gname]=gval.lower()
     
     input_json=args.input_json
     input_json_search_directories=args.input_json_search_directories
@@ -742,6 +785,87 @@ def run_training_command(argv=None):
                         trainpath_pairs+=[[x,y]]
                 data_string=grouptype
             
+            ########
+            # initiate group and conntype weights
+            
+            #create an optional set of weights that numerically balance the paths by output group
+            trainpath_output_group=[]
+            for itp,(x,y) in enumerate(trainpath_pairs):
+                trainpath_output_group.append(conndata_alltypes[y]['group'])
+            unique_groups=list(set(trainpath_output_group))
+            group_path_count={x:trainpath_output_group.count(x) for x in unique_groups}
+            group_path_count_total=sum([group_path_count[x] for x in group_path_count])
+            group_path_balanced_weight={x:group_path_count_total/group_path_count[x] for x in group_path_count}
+            wmin=min([group_path_balanced_weight[x] for x in group_path_count])
+            group_path_balanced_weight={x:group_path_balanced_weight[x]/wmin for x in group_path_count}
+            
+            #trainpath_mse_only=[]
+            #for itp,(x,y) in enumerate(trainpath_pairs):    
+                #tp_mse_only=False
+                #if conndata_alltypes[y]['numpairs'] == 1:
+                #    tp_mse_only=True
+                #trainpath_mse_only.append(tp_mse_only)
+            #training_params['trainpath_mse_only']=trainpath_mse_only
+            
+            trainpath_prediction_type=[]
+            for itp,(x,y) in enumerate(trainpath_pairs):    
+                tp_predtype='loss'
+                if y in output_conntype_predictiontype:
+                    tp_predtype=output_conntype_predictiontype[y]
+                trainpath_prediction_type.append(tp_predtype)
+                
+                if tp_predtype != 'loss':
+                    #if we have a starting checkpoint and precomputed xforms, but we are adding data that uses a different transformation type, 
+                    # then reset this string to the CLI-supplied option
+                    transformation_type_string=transformation_type_string_argument
+                
+                if tp_predtype in ['category','binary']:
+                    pass
+                    #tf,tfinfo=generate_transformer(traindata=conndata_alltypes[y]['data'],transformer_type="none")
+                    #if not y in precomputed_transformer_info_list:
+                    #    precomputed_transformer_info_list[y]=tfinfo['params']
+                    #    print("Adding empty transformer for %s variable %s" % (tp_predtype,y))
+                elif tp_predtype == 'mse':
+                    pass
+                    #tf,tfinfo=generate_transformer(traindata=conndata_alltypes[y]['data'],transformer_type=transformation_type_string_argument)
+                    #if not y in precomputed_transformer_info_list:
+                    #    precomputed_transformer_info_list[y]=tfinfo['params']
+                    #    print("Adding %s transformer for %s variable %s" % (transformation_type_string_argument,tp_predtype,y))
+                    
+            training_params['trainpath_prediction_type']=trainpath_prediction_type
+            
+            
+            trainpath_weights=[]
+            for itp,(x,y) in enumerate(trainpath_pairs):    
+                xg=conndata_alltypes[x]['group']
+                yg=conndata_alltypes[y]['group']
+                if do_balance_group_weight:
+                    tpweight=group_path_balanced_weight[yg]
+                else:
+                    tpweight=1
+                if y in output_conntype_weights:
+                    tpweight*=output_conntype_weights[y]
+                elif yg in output_group_weights:
+                    tpweight*=output_group_weights[yg]
+                trainpath_weights.append(tpweight)
+            
+            training_params['trainpath_weights']=trainpath_weights
+            
+            latentsim_conntype_weights=[]
+            for i,x in enumerate(conn_names):
+                xg=conndata_alltypes[x]['group']
+                if do_balance_group_weight:
+                    tpweight=group_path_balanced_weight[xg]
+                else:
+                    tpweight=1
+                if x in output_conntype_weights:
+                    tpweight*=output_conntype_weights[x]
+                elif xg in output_group_weights:
+                    tpweight*=output_group_weights[xg]
+                latentsim_conntype_weights.append(tpweight)
+            training_params['latentsim_conntype_weights']=latentsim_conntype_weights
+            
+            ########
             data_string+="_"+roilist_str
             data_string+="_"+subj_str
 
@@ -847,11 +971,12 @@ def run_training_command(argv=None):
                                                 use_truncated_svd=use_truncated_svd, 
                                                 use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                 input_transformation_info=transformation_type_string,
+                                                prediction_type_dict=output_conntype_predictiontype,
                                                 precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader)
             
             else:
                 ##################
-                # this is the normal training mode             
+                # this is the normal training mode         
                 trainpath_list, data_optimscale, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
                                                     trainpath_pairs=trainpath_pairs, 
                                                     trainpath_group_pairs=trainpath_group_pairs, data_string=data_string, 
@@ -861,6 +986,7 @@ def run_training_command(argv=None):
                                                     use_truncated_svd=use_truncated_svd, 
                                                     use_truncated_svd_for_sc=do_use_tsvd_for_sc,
                                                     input_transformation_info=transformation_type_string,
+                                                    prediction_type_dict=output_conntype_predictiontype,
                                                     precomputed_transformer_info_list=precomputed_transformer_info_list, create_data_loader=create_data_loader)
             
             
@@ -931,6 +1057,7 @@ def run_training_command(argv=None):
                                                         batch_size=batchsize, skip_selfs=do_skipself, crosstrain_repeats=crosstrain_repeats,
                                                         reduce_dimension=None,use_pretrained_encoder=False, keep_origscale_data=keep_origscale_data,           
                                                         precomputed_transformer_info_list=new_outer_transformer_info_list, 
+                                                        prediction_type_dict=output_conntype_predictiontype,
                                                         create_data_loader=create_data_loader)
                             
                 else:
