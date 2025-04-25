@@ -6,3 +6,4 @@ notebooks/
 .ipynb_checkpoints/
 __pycache__/
 *.asv
+.vscode/
