@@ -778,6 +778,9 @@ def run_model_on_new_data(argv=None):
             
     net.eval()
     
+    #keep track of outputs where we converted category inputs to one-hot
+    conntype_output_is_onehot={c:False for c in input_conntype_list}
+    
     #encode all inputs to latent space
     for intype in input_conntype_list:
         if intype == "encoded" or intype.startswith("fusion"):
@@ -798,6 +801,12 @@ def run_model_on_new_data(argv=None):
             if do_save_transformed_inputs:
                 conn_encoded=inputdata
             else:
+                if inputdata.shape[1] == 1 and net.inputsize_list[encoder_index] > 1:
+                    #this is a categorical variable
+                    #expand to the number of input features
+                    num_categories=net.inputsize_list[encoder_index]
+                    inputdata=torch.nn.functional.one_hot(inputdata[:,0].to(int),num_classes=num_categories).float()
+                    conntype_output_is_onehot[intype]=True
                 with torch.no_grad():
                     conn_encoded = net(inputdata, encoder_index_torch, neg1_torch)
             
