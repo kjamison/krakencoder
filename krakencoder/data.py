@@ -1087,7 +1087,7 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
 
 #################################
 #################################
-def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+meanshift',input_data_fitsubjmask=None, target_data_fitsubjmask=None):
+def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+meanshift',input_data_fitsubjmask=None, target_data_fitsubjmask=None, return_fit_info=False):
     """
     Generate a transformer to adapt input data domain to match training data
     
@@ -1103,31 +1103,40 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
     Returns:
     transformer: transformer object (with .fit() and .fit_transform() methods, etc...)   
     """
-    #test if target_data is a dict with field 'params'
-    if isinstance(target_data,dict):
-        if 'params' in target_data and 'input_mean' in target_data['params']:
-            target_data=np.atleast_2d(numpyvar(target_data['params']['input_mean']))
-        elif 'params' in target_data and 'pca_input_mean' in target_data['params']:
-            target_data=np.atleast_2d(numpyvar(target_data['params']['pca_input_mean']))
-        elif 'input_mean' in target_data:
-            target_data=np.atleast_2d(numpyvar(target_data['input_mean']))
-        elif 'pca_input_mean' in target_data:
-            target_data=np.atleast_2d(numpyvar(target_data['pca_input_mean']))
     
-    if input_data_fitsubjmask is None:
-        input_data_fitsubjmask=np.ones(input_data.shape[0])>0
-    if target_data_fitsubjmask is None:
-        target_data_fitsubjmask=np.ones(target_data.shape[0])>0
+    adaptfit_cc=None
+    beta=None
+    input_data_fitsubjmask=None
+    target_data_fitsubjmask=None
+    num_input_fitsubj=None
+    num_target_fitsubj=None
     
-    num_input_fitsubj=np.sum(input_data_fitsubjmask)
-    num_target_fitsubj=np.sum(target_data_fitsubjmask)
-    if np.any(input_data_fitsubjmask.astype(bool)!=input_data_fitsubjmask):
-        num_input_fitsubj=len(input_data_fitsubjmask)
-    if np.any(target_data_fitsubjmask.astype(bool)!=target_data_fitsubjmask):
-        num_target_fitsubj=len(target_data_fitsubjmask)
+    if adapt_mode is not None:
+        #test if target_data is a dict with field 'params'
+        if isinstance(target_data,dict):
+            if 'params' in target_data and 'input_mean' in target_data['params']:
+                target_data=np.atleast_2d(numpyvar(target_data['params']['input_mean']))
+            elif 'params' in target_data and 'pca_input_mean' in target_data['params']:
+                target_data=np.atleast_2d(numpyvar(target_data['params']['pca_input_mean']))
+            elif 'input_mean' in target_data:
+                target_data=np.atleast_2d(numpyvar(target_data['input_mean']))
+            elif 'pca_input_mean' in target_data:
+                target_data=np.atleast_2d(numpyvar(target_data['pca_input_mean']))
         
-    input_data_mean=np.atleast_2d(np.mean(input_data[input_data_fitsubjmask,:],axis=0,keepdims=True))
-    target_data_mean=np.atleast_2d(np.mean(target_data[target_data_fitsubjmask,:],axis=0,keepdims=True))
+        if input_data_fitsubjmask is None:
+            input_data_fitsubjmask=np.ones(input_data.shape[0])>0
+        if target_data_fitsubjmask is None:
+            target_data_fitsubjmask=np.ones(target_data.shape[0])>0
+        
+        num_input_fitsubj=np.sum(input_data_fitsubjmask)
+        num_target_fitsubj=np.sum(target_data_fitsubjmask)
+        if np.any(input_data_fitsubjmask.astype(bool)!=input_data_fitsubjmask):
+            num_input_fitsubj=len(input_data_fitsubjmask)
+        if np.any(target_data_fitsubjmask.astype(bool)!=target_data_fitsubjmask):
+            num_target_fitsubj=len(target_data_fitsubjmask)
+        
+        input_data_mean=np.atleast_2d(np.mean(input_data[input_data_fitsubjmask,:],axis=0,keepdims=True))
+        target_data_mean=np.atleast_2d(np.mean(target_data[target_data_fitsubjmask,:],axis=0,keepdims=True))
     
     if adapt_mode is None:
         transformer=FunctionTransformer(func=lambda x:torchfloat(x),
@@ -1164,7 +1173,17 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
     else:
         raise Exception("Unknown adapt_mode: %s" % (adapt_mode))
 
-    return transformer
+    if return_fit_info:
+        fit_info={"adaptfit_cc":adaptfit_cc,    
+                  "beta":beta,
+                  "input_data_fitsubjmask":input_data_fitsubjmask,
+                  "target_data_fitsubjmask":target_data_fitsubjmask,
+                  "input_data_fitsubjmask_count":num_input_fitsubj,
+                  "target_data_fitsubjmask_count":num_target_fitsubj,
+                  "adapt_mode":adapt_mode}
+        return transformer, fit_info
+    else:
+        return transformer
         
     
 #################################

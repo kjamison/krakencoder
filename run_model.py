@@ -93,6 +93,7 @@ def argument_parse_newdata(argv):
     parser.add_argument('--outputname','--outputnames',action='append',dest='output_names', help='List of data flavors from model to predict (default=all)',nargs='*')
     
     parser.add_argument('--adaptmode',action='store',dest='adapt_mode',default='none',help='How do adapt new data to fit model (default: none)')
+    parser.add_argument('--adaptmodesplitname',action='store',dest='adapt_mode_split_name',default='train',help='Which subject split to use for domain adaptation (default: train)')
     
     parser.add_argument('--fusioninclude',action='append',dest='fusion_include',help='inputnames to include in fusion average',nargs='*')
     parser.add_argument('--fusion',action ='store_true',dest='fusion',help='fusion mode eval')
@@ -212,6 +213,7 @@ def run_model_on_new_data(argv=None):
     input_json_load_types=args.input_json_load_types
     
     adapt_mode=args.adapt_mode
+    adapt_mode_split_name=args.adapt_mode_split_name
     save_ccmat_in_record=args.ccmat
     
     hack_cortex=args.hack_cortex
@@ -633,6 +635,7 @@ def run_model_on_new_data(argv=None):
             output_subject_splits=None
         
         conndata_alltypes={}
+        adxfm_info_alltypes={}
         for i,x in enumerate(input_conntype_list):
             
             conndata_alltypes[x]=load_input_data(inputfile=input_file_list[i], inputfield=None)
@@ -640,15 +643,25 @@ def run_model_on_new_data(argv=None):
                 conndata_alltypes[x]['subjects']=clean_subject_list(conndata_alltypes[x]['subjects'])
 
             #how should we adapt the input data to the model?
-            if subjects_train is not None:
+            if input_subject_splits and adapt_mode_split_name is not None:
+                if 'subjidx_'+adapt_mode_split_name in input_subject_splits:
+                    subjects_adapt=[s for i,s in enumerate(subjects) if i in input_subject_splits['subjidx_'+adapt_mode_split_name]]
+                    subjidx_adapt=np.array([i for i,s in enumerate(conndata_alltypes[x]['subjects']) if s in subjects_adapt])
+                elif adapt_mode_split_name == 'all':
+                    subjidx_adapt=np.arange(conndata_alltypes[x]['data'].shape[0])
+                else:
+                    raise Exception("Invalid adaptmode subject split name: %s" % (adapt_mode_split_name))
+            elif subjects_train is not None:
                 subjidx_adapt=np.array([i for i,s in enumerate(conndata_alltypes[x]['subjects']) if s in subjects_train])
             else:
                 subjidx_adapt=np.arange(conndata_alltypes[x]['data'].shape[0])
             
-            adxfm=generate_adapt_transformer(input_data=conndata_alltypes[x]['data'],
+            adxfm, adxfm_info=generate_adapt_transformer(input_data=conndata_alltypes[x]['data'],
                                         target_data=transformer_info_list[x],
                                         adapt_mode=adapt_mode,
-                                        input_data_fitsubjmask=subjidx_adapt)
+                                        input_data_fitsubjmask=subjidx_adapt,
+                                        return_fit_info=True)
+            adxfm_info_alltypes[x]=adxfm_info
             conndata_alltypes[x]['data']=adxfm.transform(conndata_alltypes[x]['data'])
             
             if subjects_to_eval is not None:
@@ -706,6 +719,15 @@ def run_model_on_new_data(argv=None):
         
         for conntype in conndata_alltypes.keys():
             conndata_alltypes[conntype]['subjects']=clean_subject_list(subjects_out)
+    
+    quiet=False
+    if not quiet:
+        for conntype in conndata_alltypes.keys():
+            var_explained_ratio=explained_variance_ratio(torchfloat(conndata_alltypes[conntype]['data']),
+                                                         transformer_list[conntype].inverse_transform(
+                                                             transformer_list[conntype].transform(conndata_alltypes[conntype]['data'])
+                                                         ))
+            print("%s (%dx%d) variance maintained: %.2f%%" % (conntype,conndata_alltypes[conntype]['data'].shape[0],conndata_alltypes[conntype]['data'].shape[1],var_explained_ratio*100))
     
     #if we have an inner and outer checkpoint, we loaded the inner first, now load outer
     #cant do this until we have all of the data transformers built
@@ -979,6 +1001,8 @@ def run_model_on_new_data(argv=None):
         newrecord['starting_point_file']=ptfile
         newrecord['starting_point_epoch']=checkpoint['epoch']
         newrecord['topN']=topN
+        if adapt_mode is not None:
+            newrecord['adapt_info']=adxfm_info_alltypes
 
         #using whatever subject list was provided as "val" for fake training record
         
