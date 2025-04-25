@@ -925,10 +925,9 @@ def run_training_command(argv=None):
                     else:
                         conn_str=conntype
                     encoded_inputs_shape=encoded_inputs[conntype].shape
-
                     if encoded_inputs[conntype].shape[0]!=len(subjects) or encoded_inputs[conntype].shape[1]!=latentsize:
-                        raise Exception("Latent-space data from %s, ['predicted_alltypes']['%s']['encoded'] must be %dx%d, not %dx%d" % input_encodingfile,conn_str, 
-                                        len(subjects),latentsize,encoded_inputs[conntype].shape[0],encoded_inputs[conntype].shape[1])
+                        raise Exception("Latent-space data from %s, ['predicted_alltypes']['%s']['encoded'] must be %dx%d, not %dx%d" % (input_encodingfile,conn_str, 
+                                        len(subjects),latentsize,encoded_inputs[conntype].shape[0],encoded_inputs[conntype].shape[1]))
 
                 print("Loaded target latent-space values from %s (%s)" % (input_encodingfile,encoded_inputs_shape))
             
