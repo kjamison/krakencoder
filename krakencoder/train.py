@@ -735,13 +735,17 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
         if "pass_margin" in crit:
             #loss=loss+w*crit['function'](conn_predicted, conn_targets, margin=output_margin)
             thisloss=crit['function'](conn_targets, conn_predicted, margin=output_margin) # compute loss(target,pred) 4/5/2024
+            if torch.isnan(thisloss):
+                thisloss=torchfloat([0])
             loss=loss+w*thisloss
         else:
             #loss=loss+w*crit['function'](conn_predicted, conn_targets)
             thisloss=crit['function'](conn_targets, conn_predicted) # compute loss(target,pred) 4/5/2024
+            if torch.isnan(thisloss):
+                thisloss=torchfloat([0])
             loss=loss+w*thisloss
         loss_list+=[{'name':crit['name'],'loss':thisloss, 'weight':w, 'margin':output_margin}]
-
+    
     for enc_crit in encoded_criterion:
         w=1
         if "weight" in enc_crit:
@@ -766,14 +770,16 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
         loss += loss_enc
 
     if latentnorm_loss_weight > 0:
+        w=latentnorm_loss_weight
         loss_latentnorm = torch.linalg.norm(conn_encoded)
         loss_list+=[{'name':'latentnorm','loss':loss_latentnorm, 'weight':latentnorm_loss_weight, 'margin':None}]
-        loss += latentnorm_loss_weight*loss_latentnorm
+        loss += w*loss_latentnorm
 
     if latent_maxrad_weight > 0:
+        w=latent_maxrad_weight
         loss_latentrad = torch.mean(torch.nn.ReLU()(torch.sum(conn_encoded**2,axis=1)-latent_maxrad))
         loss_list+=[{'name':'latent_maxrad','loss':loss_latentrad, 'weight':latent_maxrad_weight, 'margin':None}]
-        loss += latent_maxrad_weight*loss_latentrad
+        loss += w*loss_latentrad
 
     if return_list:
         return loss, loss_list
