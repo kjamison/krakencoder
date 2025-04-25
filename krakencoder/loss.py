@@ -59,7 +59,7 @@ def xycosine(x,y,axis=1):
         cc=np.matmul(cx,cy.T)
     return cc
 
-def corravgrank(x=None, y=None ,cc=None, sort_descending=True):
+def corravgrank(x=None, y=None ,cc=None, sort_descending=True, return_ranklist=False):
     """
     Compute average rank of each row in xycorr(x,y).
     Perfect match is 1.0, meaning every row i in x has the best match with row i in y
@@ -80,7 +80,8 @@ def corravgrank(x=None, y=None ,cc=None, sort_descending=True):
         selfidx=torch.atleast_2d(torch.arange(cc.shape[0],device=sidx.device)).t()
         srank=torch.argmax((sidx==selfidx).double(),axis=1).double()
         #return np.mean(srank+1) #1-based rank
-        return 1-torch.mean(srank)/cc.shape[0] #percentile
+        ranklist=1-srank/cc.shape[0]
+        avgrank=1-torch.mean(srank)/cc.shape[0] #percentile
     else:
         if sort_descending:
             sidx=np.argsort(cc,axis=1)[:,::-1]
@@ -89,11 +90,15 @@ def corravgrank(x=None, y=None ,cc=None, sort_descending=True):
         selfidx=np.atleast_2d(np.arange(cc.shape[0])).T
         srank=np.argmax(sidx==selfidx,axis=1)
         #return np.mean(srank+1) #1-based rank
+        ranklist=1-srank/cc.shape[0]
         avgrank=1-np.mean(srank)/cc.shape[0] #percentile
-    return avgrank
+    if return_ranklist:
+        return avgrank,ranklist
+    else:
+        return avgrank
 
 
-def distavgrank(x=None, y=None, d=None):
+def distavgrank(x=None, y=None, d=None, return_ranklist=False):
     """
     Return avgrank using distance instead of correlation (See corravgrank)
     
@@ -106,7 +111,7 @@ def distavgrank(x=None, y=None, d=None):
     """
     if d is None:
         d=torch.cdist(x,y)
-    return corravgrank(cc=d,sort_descending=False)
+    return corravgrank(cc=d,sort_descending=False, return_ranklist=return_ranklist)
 
 def corrtrace(x,y):
     """Loss function: negative mean of correlation between row i in x and row i in y"""
@@ -243,6 +248,23 @@ def disttop1acc(x=None, y=None ,d=None):
         s1idx=np.argmin(d,axis=1)
         dmatch=s1idx==np.arange(len(s1idx))
 
+    return dmatch.mean()
+
+def disttopNacc(x=None, y=None, d=None, topn=1):
+    """
+    Compute top-N accuracy for cdist(x,y). See corrtop1acc.
+    """
+    if d is None:
+        d=torch.cdist(x,y)
+    #topidx=np.argsort(np.abs(cc),axis=1)[:,-topn:]
+    if torch.is_tensor(d):
+        topidx=torch.argsort(-d,axis=1,descending=True)[:,:topn]
+        selfidx=torch.atleast_2d(torch.arange(d.shape[0],device=topidx.device)).t()
+        dmatch=torch.any(topidx==selfidx,axis=1).double()
+    else:
+        topidx=np.argsort(-d,axis=1)[:,-topn:]
+        selfidx=np.atleast_2d(np.arange(d.shape[0])).T
+        dmatch=np.any(topidx==selfidx,axis=1)
     return dmatch.mean()
 
 def corrtop1acc(x=None, y=None ,cc=None):

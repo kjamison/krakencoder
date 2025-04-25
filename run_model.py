@@ -107,6 +107,7 @@ def argument_parse_newdata(argv):
     misc_group.add_argument('--newtrainrecord',action='store',dest='new_train_record_file', help='Save a "fake" trainrecord file')
     misc_group.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='.mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields (or "trainrecord" to use from training record)')
     misc_group.add_argument('--subjectsplitname',action='store',dest='subject_split_name', help='Which data split to evaluate: "all", "train", "test", "val", "retest", etc... (overrides --inputdata for hardcoded HCP)')
+    misc_group.add_argument('--metricincludeallsubj',action='store_true',dest='metric_include_allsubj', help='Include per-subject accuracy in outputs (default: only include summary metrics)')
     
     testing_group=parser.add_argument_group('Testing options')
     testing_group.add_argument('--savetransformedinputs',action='store_true',dest='save_transformed_inputs', help='Transform inputs and save them as "encoded" values (for testing PCA/transformed space data)')
@@ -194,6 +195,10 @@ def run_model_on_new_data(argv=None):
     new_train_recordfile=args.new_train_record_file
     input_subject_split_file=args.subject_split_file
     input_subject_split_name=args.subject_split_name
+    
+    metric_include_extra_resid=False
+    metric_include_allsubj=args.metric_include_allsubj
+    
     
     adapt_mode=args.adapt_mode
     save_ccmat_in_record=args.ccmat
@@ -875,14 +880,23 @@ def run_model_on_new_data(argv=None):
             newrecord['numsubjects_val']=len(subjidx)
         
         z=np.nan*np.ones((len(predicted_alltypes.keys())*len(output_conntype_list),1))
-
+        
         metriclist=['corrloss','corrlossN','corrlossRank','avgcorr','explainedvar','avgcorr_resid']
+        
+        if metric_include_extra_resid:
+            metriclist+=['corrlossRank_resid','corrlossRank_doubleresid','avgcorr_doubleresid']
+        if metric_include_allsubj:
+            metriclist+=['avgcorr_allsubj','corrlossRank_allsubj','avgcorr_resid_allsubj']
+        
         for m in metriclist:
             for tv in ['train','val']:
                 for o in ['','_OrigScale']:
                     newrecord['%s%s_%s' % (m,o,tv)]=z.copy()
                     if m=='avgcorr':
                         newrecord['%s%s_other_%s' % (m,o,tv)]=z.copy()
+                    if m.endswith('_allsubj'):
+                        newrecord['%s%s_%s' % (m,o,tv)]=np.nan*np.ones((len(predicted_alltypes.keys())*len(output_conntype_list),len(subjidx)))
+                        
         
         if save_ccmat_in_record:
             newrecord['ccmat_val']=[np.nan]*(len(predicted_alltypes.keys())*len(output_conntype_list))
@@ -935,10 +949,24 @@ def run_model_on_new_data(argv=None):
                                 print("Hack cortex: xtrue=(%dx%d), pred=(%dx%d)" % (x_true.shape[0],x_true.shape[1],x_pred.shape[0],x_pred.shape[1]))
                                 
                             cc=xycorr(x_true,x_pred)
-                            
+
                             x_true_mean=x_true.mean(axis=0,keepdims=True)
-                            cc_resid=xycorr(x_true-x_true_mean, x_pred-x_true_mean)
+                            x_pred_mean=x_pred.mean(axis=0,keepdims=True)
                             
+                            cc_resid=xycorr(x_true-x_true_mean, x_pred-x_true_mean)
+                            cc_doubleresid=xycorr(x_true-x_true_mean, x_pred-x_pred_mean)
+                            
+                            cc1=None
+                            if x_true.shape[1] == 1:
+                                #for demographics
+                                cc=torch.cdist(x_true, x_pred)
+                                cc_resid=torch.cdist(x_true-x_true.mean(), x_pred-x_true.mean())
+                                cc_doubleresid=torch.cdist(x_true-x_true.mean(), x_pred-x_pred.mean())
+                                
+                                cc1=xycorr(x_true.T,x_pred.T)
+                                cc1_resid=cc1
+                                cc1_doubleresid=cc1
+                                
                             if save_ccmat_in_record and tv=='val':
                                 newrecord['ccmat_val'][itp]=np.array(cc).copy()
                                 
@@ -953,14 +981,25 @@ def run_model_on_new_data(argv=None):
                                     v=corrtopNacc(cc=cc,topn=topN)
                                 elif m == 'corrlossRank':
                                     v=corravgrank(cc=cc)
+                                elif m == 'corrlossRank_resid':
+                                    v=corravgrank(cc=cc_resid)
+                                elif m == 'corrlossRank_doubleresid':
+                                    v=corravgrank(cc=cc_doubleresid)
                                 elif m == 'avgcorr':
                                     metricfield2='%s%s_other_%s' % (m,o,tv)
                                     v,v2=corr_ident_parts(cc=cc)
                                 elif m == 'avgcorr_resid':
                                     v,_=corr_ident_parts(cc=cc_resid)
+                                elif m == 'avgcorr_doubleresid':
+                                    v,_=corr_ident_parts(cc=cc_doubleresid)
                                 elif m == 'explainedvar':
                                     v=explained_variance_ratio(x_true,x_pred,axis=0)
-                                
+                                elif m == 'avgcorr_allsubj':
+                                    v=np.diag(cc)
+                                elif m == 'avgcorr_resid_allsubj':
+                                    v=np.diag(cc_resid)
+                                elif m == 'corrlossRank_allsubj':
+                                    _,v=corravgrank(cc=cc,return_ranklist=True)
                                 newrecord[metricfield][itp,:] = numpyvar(v)
                                 if metricfield2 is not None:
                                     newrecord[metricfield2][itp,:] = numpyvar(v2)
