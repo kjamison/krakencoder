@@ -693,7 +693,8 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
 # compute loss for a given path
 def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None, conn_encoded_targets=None, 
                       criterion=[], encoded_criterion=[], output_margin=None, encoder_margin=None, 
-                      latentnorm_loss_weight=0, latent_maxrad_weight=0, latent_maxrad=None, return_list=False):
+                      latentnorm_loss_weight=0, latent_maxrad_weight=0, latent_maxrad=None, return_list=False,
+                      scale_criterion_weight=None, scale_encoded_criterion_weight=None):
     """
     Compute batch loss for a given path (e.g., FCcorr_fs86 -> SCifod2act_shen268)
     Depending on inputs, it may compute reconstruction loss and/or latent space loss
@@ -732,6 +733,8 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
         w=1
         if "weight" in crit:
             w=crit['weight']
+        if scale_criterion_weight is not None:
+            w*=scale_criterion_weight
         if "pass_margin" in crit:
             #loss=loss+w*crit['function'](conn_predicted, conn_targets, margin=output_margin)
             thisloss=crit['function'](conn_targets, conn_predicted, margin=output_margin) # compute loss(target,pred) 4/5/2024
@@ -750,6 +753,8 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
         w=1
         if "weight" in enc_crit:
             w=enc_crit['weight']
+        if scale_encoded_criterion_weight is not None:
+            w*=scale_encoded_criterion_weight
         if "pass_margin" in enc_crit:
             if conn_encoded_targets is None:
                 thisloss=enc_crit['function'](conn_encoded, conn_encoded, margin=encoder_margin)
@@ -1550,10 +1555,11 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                         ######################
                         # loss terms (training)
                         loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                                 output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                                                 latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                        loss = loss*tpweight
-                        
+                                                output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
+                                                latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch, 
+                                                scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
+                        #scale weights inside compute_path_loss so we can control output and latent weights separately
+                        #loss = loss*tpweight
                         loss.backward()
                         optimizer.step()
 
