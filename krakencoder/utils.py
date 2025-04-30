@@ -382,6 +382,15 @@ def justfilename(pathstr):
         newstr=newstr[0]
     return newstr
 
+def data_to_cell_array(data, as2d=False):
+    if as2d:
+        data_new=np.empty([len(data),1],dtype=object)
+        data_new[:,0]=[C for C in data]
+    else:
+        data_new=np.empty(len(data),dtype=object)
+        data_new[:]=[C for C in data]
+    return data_new
+
 def clean_args(args, arg_defaults={}, flatten=True):
     """
     Clean up an argparse namespace by copying default values for missing arguments and flattening list-based arguments

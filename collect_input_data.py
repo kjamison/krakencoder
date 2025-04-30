@@ -17,6 +17,7 @@ def argument_parse_collectdata(argv):
     parser=argparse.ArgumentParser(description='Collect connectome data',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('--subjectfile',action='store',dest='subjectfile', help='Plain-text file with subject names (one per line)')
+    parser.add_argument('--subjects',action='store',dest='subjectlist', nargs='*',help='List of subject names (overrides subjectfile)')
     parser.add_argument('--output',action='store',dest='outputfile', help='Output file (.mat or .zip)',required=True)
     parser.add_argument('--inputdata',action='store',dest='inputdata',nargs='*',help='Can be <flavor>=<filepat> or <filepat>. Use "{SUBJECT}" to insert subject name')
     parser.add_argument('--inputdatafield',action='store',dest='inputdatafield', help='Field name in input data files to use (default = "data")')
@@ -58,7 +59,7 @@ def run_collectdata(argv=None):
     #read in command-line inputs
     args=argument_parse_collectdata(argv)
     
-    subjects=None
+    subjects=args.subjectlist
     outputfile=args.outputfile
     bids_desc_str=args.bidsdesc
     do_canonical=args.canonical
