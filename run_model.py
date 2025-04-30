@@ -340,6 +340,16 @@ def run_model_on_new_data(argv=None):
         ptfile=innerptfile
         print("Loading inner model from %s" % (ptfile))
         
+    #download model data if necessary
+    for i,p in enumerate(ptfile):
+        if not os.path.exists(p) and p in get_fetchable_data_list(filenames_only=True):
+            p=fetch_model_data(files_to_fetch=p, force_download=False)
+            ptfile[i]=p
+    if outerptfile is not None:
+        for i,p in enumerate(outerptfile):
+            if not os.path.exists(p) and p in get_fetchable_data_list(filenames_only=True):
+                p=fetch_model_data(files_to_fetch=p, force_download=False)
+                outerptfile[i]=p
     
     ptfile_list=[p for p in ptfile]
     if len(ptfile)==1:
@@ -594,7 +604,10 @@ def run_model_on_new_data(argv=None):
         for conntype in conn_names:
             precomputed_transformer_info_list[conntype]={'type':'none'}
     else:
-        for ioxfile in input_transform_file_list:
+        for i,ioxfile in enumerate(input_transform_file_list):
+            if not os.path.exists(ioxfile) and ioxfile in get_fetchable_data_list(filenames_only=True):
+                ioxfile=fetch_model_data(files_to_fetch=ioxfile, force_download=False)
+                input_transform_file_list[i]=ioxfile
             print("Loading precomputed input transformations: %s" % (ioxfile))
             ioxtmp=np.load(ioxfile,allow_pickle=True).item()
             for k in ioxtmp:

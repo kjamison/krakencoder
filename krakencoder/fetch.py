@@ -32,7 +32,7 @@ def model_data_folder(data_folder=None, ignore_env=False):
     data_folder=os.path.abspath(os.path.expanduser(data_folder))
     return data_folder
 
-def get_fetchable_data_list():
+def get_fetchable_data_list(filenames_only=False):
     """
     Returns a list of model data files that can be fetched from the internet.
     """
@@ -41,6 +41,8 @@ def get_fetchable_data_list():
     try:
         with open(urlfile) as f:
             data_urls=json.load(f)
+        if filenames_only:
+            data_urls=[data_info['filename'] for data_info in data_urls]
     except:
         data_urls=[]
     
