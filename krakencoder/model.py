@@ -507,9 +507,9 @@ class Krakencoder(nn.Module):
         """
         #warnings.filterwarnings("ignore", category=UserWarning, message="CUDA initialization") #optional
         if torch.cuda.is_available():
-            checkpoint=torch.load(filename)
+            checkpoint=torch.load(filename, weights_only=False)
         else:
-            checkpoint=torch.load(filename,map_location=torch.device('cpu'))
+            checkpoint=torch.load(filename,map_location=torch.device('cpu'), weights_only=False)
         
         #put these defaults in since we added them after some models were saved
         if not 'linear_include_bias' in checkpoint:

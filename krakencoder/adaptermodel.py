@@ -122,9 +122,9 @@ class KrakenAdapter(nn.Module):
     def load_checkpoint(filename, inner_model, data_transformer_list=None, inner_model_extra_dict={}, checkpoint_override=None, eval_mode=False):
         #warnings.filterwarnings("ignore", category=UserWarning, message="CUDA initialization") #optional
         if torch.cuda.is_available():
-            checkpoint=torch.load(filename)
+            checkpoint=torch.load(filename, weights_only=False)
         else:
-            checkpoint=torch.load(filename,map_location=torch.device('cpu'))
+            checkpoint=torch.load(filename,map_location=torch.device('cpu'), weights_only=False)
         
         if checkpoint_override is not None:
             for k in checkpoint_override:
