@@ -19,6 +19,8 @@ def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 def numpyvar(x):
     """Convert a torch tensor to a numpy array, or return the input if it is not a tensor"""
