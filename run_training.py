@@ -140,6 +140,10 @@ def argument_parse_runtraining(argv):
     misc_arg_group.add_argument('--maxthreads',action='store',dest='max_threads', type=int, default=10, help='How many CPU threads to use')
     misc_arg_group.add_argument('--outputprefix',action='store',dest='output_file_prefix', default="kraken", help='Prefix for output files')
     misc_arg_group.add_argument('--logfile',action='store',dest='logfile', default='auto',help='Optional file to print outputs to (along with stdout). "auto"=<prefix>_log_*.txt')
+    
+    #add an option to save a separate hardcoded filename that includes the output filenames in some kind of list format
+    misc_arg_group.add_argument('--outputfilelistjson',action='store',dest='output_file_list_json', default=None,help='JSON file to save list of output files to (for easy retrieval, since they include auto-generated names and timestamps)')
+    
 
     misc_arg_group.add_argument('--intergroup',action='store_true',dest='intergroup', help='Do separate inter-group mapping (experimental)')
     misc_arg_group.add_argument('--intergroup_extra_layer_count',action='store',dest='intergroup_extra_layer_count',type=int,default=0,help='How many extra layers for inter-group? (experimental)')
@@ -211,6 +215,7 @@ def run_training_command(argv=None):
     display_epochs=args.display_epochs
     optimizer_in_checkpoint=args.optimizer_in_checkpoint
     logfile=args.logfile
+    output_file_list_json=args.output_file_list_json
     random_seed_val=args.random_seed
     do_domain_adaptation=args.domain_adaptation
     domain_adaptation_polynomial=args.domain_adaptation_polynomial
@@ -612,6 +617,7 @@ def run_training_command(argv=None):
             for k in ioxtmp:
                 precomputed_transformer_info_list[k]=ioxtmp[k]
                 precomputed_transformer_info_list[k]['filename']=ioxfile.split(os.sep)[-1]
+                precomputed_transformer_info_list[k]['filepath']=os.path.abspath(ioxfile)
                 precomputed_transformer_info_list[k]['fromfile']=True
 
 
@@ -684,6 +690,7 @@ def run_training_command(argv=None):
     
     extra_trainrecord_dict={}
     extra_trainrecord_dict['command']=" ".join(sys.argv)
+    extra_trainrecord_dict['command_args']=data_to_cell_array(sys.argv)
     ######################
 
     for training_params in training_params_list:
@@ -1098,7 +1105,8 @@ def run_training_command(argv=None):
                                                  precomputed_transformer_info_list=data_transformer_info_list,
                                                  save_optimizer_params=optimizer_in_checkpoint,
                                                  save_input_transforms=save_input_transforms, 
-                                                 output_file_prefix=output_file_prefix,logger=log,extra_trainrecord_dict=extra_trainrecord_dict)
+                                                 output_file_prefix=output_file_prefix,logger=log,extra_trainrecord_dict=extra_trainrecord_dict,
+                                                 output_file_list_json=output_file_list_json)
             
                 if not training_params['roundtrip'] and add_roundtrip_epochs > 0:
                     print("Adding %d roundtrip epochs" % (add_roundtrip_epochs))
@@ -1111,7 +1119,8 @@ def run_training_command(argv=None):
                                                      checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
                                                      save_optimizer_params=optimizer_in_checkpoint,
                                                      output_file_prefix=output_file_prefix,
-                                                     extra_trainrecord_dict=extra_trainrecord_dict)
+                                                     extra_trainrecord_dict=extra_trainrecord_dict,
+                                                     output_file_list_json=output_file_list_json)
                                                      
                 if not training_params['meantarget_latentsim'] and add_meanlatent_epochs > 0:
                     print("Adding %d meanlatent epochs" % (add_meanlatent_epochs))
@@ -1124,7 +1133,8 @@ def run_training_command(argv=None):
                                                      checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
                                                      save_optimizer_params=optimizer_in_checkpoint,
                                                      output_file_prefix=output_file_prefix,
-                                                     extra_trainrecord_dict=extra_trainrecord_dict)
+                                                     extra_trainrecord_dict=extra_trainrecord_dict,
+                                                     output_file_list_json=output_file_list_json)
                                                      
                 if not do_fixed_target_encoding and add_fixed_encoding_epochs_after > 0:
                     raise Exception("add_fixed_encoding not yet supported")

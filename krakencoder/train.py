@@ -18,6 +18,7 @@ import time
 from datetime import datetime
 import re
 from collections import OrderedDict
+import json
 
 import numpy as np
 from scipy.io import loadmat, savemat
@@ -798,7 +799,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                   trainthreads=16, display_epochs=20, display_seconds=None, 
                   save_epochs=100, checkpoint_epochs=None, update_single_checkpoint=True, save_optimizer_params=True,
                   explicit_checkpoint_epoch_list=[], precomputed_transformer_info_list={}, save_input_transforms=True,
-                  output_file_prefix="kraken",logger=None, extra_trainrecord_dict={}):
+                  output_file_prefix="kraken",logger=None, extra_trainrecord_dict={},output_file_list_json=None):
     """
     Train a network on a set of training paths. 
     This function is designed to be called from a script or notebook, and will handle all the training details.
@@ -1185,6 +1186,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     else:
         batchsize=trainpath_list[0]['trainloader'].batch_size
     
+    statefile_list=[]
+    statefile_epochstr_list=[]
     ################
     #make subject index dataloader for latentsimloss
     numsubjects_train=len(trainpath_list[0]['subjidx_train'])
@@ -1257,7 +1260,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         np.save(input_transformer_file,transformer_params_to_save)
         del transformer_params_to_save #clear up memory
         print("Saved transforms: %s" % (input_transformer_file))
-
+    
+    output_file_list_json_auto=recordfile.replace("_trainrecord_","_config_")[:-4]+".json"
+    
     trainrecord={}
     trainrecord['subjects'] = subjects
     trainrecord['subjidx_train']=subjidx_train
@@ -2126,15 +2131,18 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                 print("Ep %d) Saved %s" % (epoch, imgfile_heatmap))
             except:
                 pass
-            
+        
+        statefile=None
+        epochstr=None
         if checkpoint_on_this_loop:
             if update_single_checkpoint:
-                statefile=checkpoint_filebase+".pt"
+                epochstr=""
             else:
                 if epoch == nbepochs-1:
-                    statefile=checkpoint_filebase+"_ep%06d.pt" % (nbepochs)
+                    epochstr="_ep%06d" % (nbepochs)
                 else:
-                    statefile=checkpoint_filebase+"_ep%06d.pt" % (epoch)
+                    epochstr="_ep%06d" % (epoch)
+            statefile=checkpoint_filebase+epochstr+".pt"
             checkpoint={"epoch": epoch}
             
             #copy network description fields into checkpoint
@@ -2148,7 +2156,34 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                 checkpoint['optimizer']=optimizer.state_dict()
             net.save_checkpoint(statefile, checkpoint)
             print("Ep %d) Saved %s" % (epoch, statefile))
+            statefile_list.append(statefile)
+            statefile_epochstr_list.append(epochstr)
+        
+        if ((save_on_this_loop or checkpoint_on_this_loop) and
+                (output_file_list_json is not None or output_file_list_json_auto is not None)):
+            ioxfm_list=[v['filepath'] for k,v in precomputed_transformer_info_list.items() if 'filepath' in v]
+            if input_transformer_file is not None:
+                ioxfm_list.append(input_transformer_file)
+            ioxfm_list=unique_preserve_order([os.path.abspath(x) for x in ioxfm_list])
+            output_file_list_dict={'recordfile':recordfile,'logfile':logfile,'ioxfm':ioxfm_list,
+                            'lossfigure':imgfile, 'heatmapfigure':imgfile_heatmap, 'timestamp':timestamp_suffix,
+                            'checkpointbase':checkpoint_filebase,'checkpointlist':statefile_list,'checkpoint_final':statefile,
+                            'epoch_suffix_list':statefile_epochstr_list,'epoch_suffix_final':epochstr,
+                            'workdir':os.path.abspath(os.curdir),'command_args':extra_trainrecord_dict['command_args']}
             
+            for k,v in output_file_list_dict.items():
+                if v is None:
+                    output_file_list_dict[k]=""
+                if isinstance(v,np.ndarray):
+                    output_file_list_dict[k]=[x for x in v]
+            
+            if output_file_list_json_auto is not None:
+                with open(output_file_list_json_auto, 'w') as outfile:
+                    json.dump(output_file_list_dict, outfile, indent='\t')
+            
+            if output_file_list_json is not None:
+                with open(output_file_list_json, 'w') as outfile:
+                    json.dump(output_file_list_dict, outfile, indent='\t')
         if exit_on_this_loop:
             break
 
