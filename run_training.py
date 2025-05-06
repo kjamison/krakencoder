@@ -64,7 +64,7 @@ def argument_parse_runtraining(argv):
 
     input_arg_group=parser.add_argument_group('Input data options')
     input_arg_group.add_argument('--subjectcount',action='store',dest='subjectcount',type=int, default=993, help='HCPTRAIN: Which HCP subject set? 993 (default) or 420')
-    input_arg_group.add_argument('--dataflavors',action='append',dest='dataflavors',help='HCPTRAIN: SCifod2act,SCsdstream,FCcorr,FCcorrgsr,FCpcorr (default=%s)' % (arg_defaults["dataflavors"]),nargs='*')
+    input_arg_group.add_argument('--dataflavors','--inputname',action='append',dest='dataflavors',help='HCPTRAIN: SCifod2act,SCsdstream,FCcorr,FCcorrgsr,FCpcorr (default=%s)' % (arg_defaults["dataflavors"]),nargs='*')
     input_arg_group.add_argument('--roinames',action='append',dest='roinames',help='HCPTRAIN: fs86,shen268,coco439... (default=%s)' % (arg_defaults["roinames"]),nargs='*')
     input_arg_group.add_argument('--fcfilt',action='append',dest='fcfilt',help='list of hpf, bpf, nofilt (default=%s)' % (arg_defaults["fcfilt"]),nargs='*')
     input_arg_group.add_argument('--inputdata',action='append',dest='input_data_file', help='name=file, name=file, (or name@group=file)... Override HCPTRAIN: .mat file(s) containing input data to transform (instead of default HCP set).', nargs='*')
