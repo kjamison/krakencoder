@@ -2162,7 +2162,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         if ((save_on_this_loop or checkpoint_on_this_loop) and
                 (output_file_list_json is not None or output_file_list_json_auto is not None)):
             ioxfm_list=[v['filepath'] for k,v in precomputed_transformer_info_list.items() if 'filepath' in v]
-            if input_transformer_file is not None:
+            if input_transformer_file is not None and os.path.exists(input_transformer_file):
                 ioxfm_list.append(input_transformer_file)
             ioxfm_list=unique_preserve_order([os.path.abspath(x) for x in ioxfm_list])
             output_file_list_dict={'recordfile':recordfile,'logfile':logfile,'ioxfm':ioxfm_list,
