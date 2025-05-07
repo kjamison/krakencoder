@@ -2161,7 +2161,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             statefile_list.append(statefile)
             statefile_epochstr_list.append(epochstr)
         
-        if ((save_on_this_loop or checkpoint_on_this_loop) and
+        if (((epoch==nbepochs-1) or save_on_this_loop or checkpoint_on_this_loop) and
                 (output_file_list_json is not None or output_file_list_json_auto is not None)):
             ioxfm_list=[v['filepath'] for k,v in precomputed_transformer_info_list.items() if 'filepath' in v]
             if input_transformer_file is not None and os.path.exists(input_transformer_file):
