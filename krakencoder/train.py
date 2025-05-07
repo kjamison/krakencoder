@@ -737,7 +737,7 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
         if "weight" in crit:
             w=crit['weight']
         if scale_criterion_weight is not None:
-            w*=scale_criterion_weight
+            w=w*scale_criterion_weight
         if "pass_margin" in crit:
             #loss=loss+w*crit['function'](conn_predicted, conn_targets, margin=output_margin)
             thisloss=crit['function'](conn_targets, conn_predicted, margin=output_margin) # compute loss(target,pred) 4/5/2024
@@ -757,7 +757,7 @@ def compute_path_loss(conn_predicted=None, conn_targets=None, conn_encoded=None,
         if "weight" in enc_crit:
             w=enc_crit['weight']
         if scale_encoded_criterion_weight is not None:
-            w*=scale_encoded_criterion_weight
+            w=w*scale_encoded_criterion_weight
         if "pass_margin" in enc_crit:
             if conn_encoded_targets is None:
                 thisloss=enc_crit['function'](conn_encoded, conn_encoded, margin=encoder_margin)
