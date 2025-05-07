@@ -122,6 +122,7 @@ def argument_parse_runtraining(argv):
     train_arg_group.add_argument('--addmeanlatentepochs',action='store',dest='add_meanlatent_epochs', type=int, default=0, help='add meanlatent training paths AFTER normal training')
     train_arg_group.add_argument('--trainblocks',action='store',dest='trainblocks', type=int, default=1, help='How many total times perform normal training + (roundtrip or meanlatent) set? (optimizer resets each block)')
     train_arg_group.add_argument('--randseed',action='store',dest='random_seed',type=int, default=0, help='Specify random seed for initialization')
+    train_arg_group.add_argument('--batchesperpath',action='store',dest='batches_per_path',type=int, default=0, help='How many batches at a time for each path? (0=default=all at once. 1=loop through paths 1 batch at a time)')
     
     fixed_arg_group=parser.add_argument_group('Target-encoding options (Train new data to match pre-trained latent representation)')
     fixed_arg_group.add_argument('--encodedinputfile',action='store',dest='encoded_input_file', help='.mat file containing latent space data')
@@ -208,6 +209,7 @@ def run_training_command(argv=None):
     fixed_encoding_input_name=args.target_encoding_name
     add_fixed_encoding_epochs_after=args.add_fixed_encoding_epochs_after
     add_fixed_encoding_epochs_before=args.add_fixed_encoding_epochs_before
+    batches_per_path=args.batches_per_path
     starting_point_file=args.starting_point_file
     trainval_split_frac=args.trainval_split_frac
     val_split_frac=args.val_split_frac
@@ -661,7 +663,8 @@ def run_training_command(argv=None):
     training_params_listdict['roundtrip']=[input_roundtrip]
     training_params_listdict['trainval_split_frac']=[trainval_split_frac]
     training_params_listdict['val_split_frac']=[val_split_frac]
-
+    
+    training_params_listdict['batches_per_path']=[batches_per_path]
     ############## intergroup
     training_params_listdict['intergroup']=[intergroup]
     training_params_listdict['intergroup_extra_layer_count']=[intergroup_extra_layer_count]

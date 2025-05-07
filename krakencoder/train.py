@@ -908,6 +908,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     do_trainpath_shuffle=training_params['trainpath_shuffle'] if 'trainpath_shuffle' in training_params else False
     do_roundtrip=training_params['roundtrip'] if 'roundtrip' in training_params else False
     
+    batchloop_innerbatchcount=training_params['batches_per_path'] if 'batches_per_path' in training_params else None #how many batches for each path before moving to next path?
+    
     #how often to compute selfcc and othercc for untransformed space? (eg not PCA)
     origscalecorr_epochs=training_params['origscalecorr_epochs'] if 'origscalecorr_epochs' in training_params else 0
     
@@ -1304,6 +1306,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     trainrecord['fixed_target_encoding']=do_fixed_target_encoding
     trainrecord['meantarget_latentsim']=do_meantarget_latentsim
     trainrecord['recordfile']=recordfile
+    trainrecord['batches_per_path']=batchloop_innerbatchcount
     
     for extra_train_key,extra_train_val in extra_trainrecord_dict.items():
         trainrecord[extra_train_key]=extra_train_val
@@ -1399,7 +1402,15 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             intergroup_dropout_per_epoch=[None]*nbepochs
         else:
             intergroup_dropout_per_epoch=intergroup_dropout*np.ones(nbepochs)
+    
+    
+    if batchloop_innerbatchcount is None or batchloop_innerbatchcount <= 0:
+        batchloop_innerbatchcount=-1
+        batchloop_outerloopcount=1
+    else:
+        batchloop_outerloopcount=len(trainpath_list[0]['trainloader'])//batchloop_innerbatchcount
         
+    batchindex_tracker=[]
     #######################
     for epoch in range(nbepochs):
         
@@ -1411,223 +1422,421 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         else:
             trainpath_order=np.arange(len(trainpath_list))
         
-        #for itp,trainpath in enumerate(trainpath_list):
-        for itp in trainpath_order:
-            trainpath=trainpath_list[itp]
-            
-            trainloader=trainpath['trainloader']
-            valloader=trainpath['valloader']
-            encoder_index=trainpath['encoder_index']
-            decoder_index=trainpath['decoder_index']
+        ###########
+        g = torch.Generator()
+        dataloader_seed = torch.initial_seed()+epoch
+        
+        #do we need to do anything with this?
+        #latentsimloss_subjidx_dataloader=data_utils.DataLoader(np.arange(numsubjects_train), batch_size=tmp_latent_batchsize, shuffle=True, drop_last=True)
+        
+        for itp, tp in enumerate(trainpath_list):
+            sampler = torch.utils.data.RandomSampler(tp['trainloader'].dataset, generator=g)
+            tp['trainloader']=torch.utils.data.DataLoader(tp['trainloader'].dataset, 
+                                                          batch_size=tp['trainloader'].batch_size, drop_last=tp['trainloader'].drop_last, 
+                                                          sampler=sampler, shuffle=False)
+            sampler = torch.utils.data.RandomSampler(tp['valloader'].dataset, generator=g)
+            tp['valloader']=torch.utils.data.DataLoader(tp['valloader'].dataset, 
+                                                          batch_size=tp['valloader'].batch_size, drop_last=tp['valloader'].drop_last, 
+                                                          sampler=sampler, shuffle=False)
+            tp['trainloader_iter']=iter(tp['trainloader'])
+            tp['valloader_iter']=iter(tp['valloader'])
+        
+        train_running_loss=[]
+        loss_train_batch_by_trainpath=[[]]*len(trainpath_list)
+        loss_val_batch_by_trainpath=[[]]*len(trainpath_list)
+        ###########
+        batchindex_tracker_tp=[]
+        batchindex_tracker_thisepoch=[]
+        
+        
 
-            trainloops=trainpath['trainloops']
-            tpweight=torchfloat(trainpath_weights[itp])
-            tpweight_encoded=torchfloat(1) #tpweight
-            criterion_tp=criterion
-            encoded_criterion_tp=encoded_criterion
-            
-            #######
-            tp_predtype=trainpath_prediction_type[itp]
-            if len(tp_predtype)==0 or tp_predtype=="loss":
-                pass
-            elif tp_predtype=="mse":
-                criterion_tp=[{"name":"mse", "function":nn.MSELoss(), "weight": torchfloat(1)}]
-                #current approach: setting encoded_criterion_tp=[]:
-                # when the output NOT connectomic, we skip the latent-space loss functions
-                # so the encoder is ONLY modified based on the demographic prediction loss during this training path
-                # and the latent-space losses are only computed for the connectome->connectome paths
-                #encoded_criterion_tp=[]
-            elif tp_predtype=="binary":
-                criterion_tp=[{"name":"binary", "function":lambda x,y: nn.BCEWithLogitsLoss()(y,x), "weight": torchfloat(1)}]
-                #encoded_criterion_tp=[]
-            elif tp_predtype=="category":
-                criterion_tp=[{"name":"category", "function":lambda x,y: nn.CrossEntropyLoss()(y,x[:,0].long()), "weight": torchfloat(1)}]
-                #encoded_criterion_tp=[]
-            
-            #######
-            train_inputs=trainpath['train_inputs']
-            train_outputs=trainpath['train_outputs']
-            val_inputs=trainpath['val_inputs']
-            val_outputs=trainpath['val_outputs']
-            
-            train_encoded=None
-            val_encoded=None
-            if 'train_encoded' in trainpath:
-                train_encoded=trainpath['train_encoded']
-            if 'val_encoded' in trainpath:
-                val_encoded=trainpath['val_encoded']
-            
-            output_transformer=trainpath['output_transformer']
+        
+        for ibatch_outer in range(batchloop_outerloopcount):
+            #for itp,trainpath in enumerate(trainpath_list):
+            for itp in trainpath_order:
+                trainpath=trainpath_list[itp]
                 
-            #make cpu copy of train and val OUTPUTS for top1acc testing in loop
-            train_outputs_np=train_outputs_list_np[trainpath['output_name']]
-            val_outputs_np=val_outputs_list_np[trainpath['output_name']]
-            #train_outputs_np=train_outputs.cpu().detach().numpy()
-            #val_outputs_np=val_outputs.cpu().detach().numpy()
-            
-            #should already have done this
-            #if torch.cuda.is_available():
-            #    train_inputs, train_outputs = train_inputs.cuda(), train_outputs.cuda()
-            #    val_inputs, val_outputs = val_inputs.cuda(), val_outputs.cuda()
-
-            encoder_index_torch=torchint(encoder_index)
-            decoder_index_torch=torchint(decoder_index)
-
-            #output_margin_torch=torchfloat(trainpath['train_marginmean_outputs'])
-            output_margin_torch=torchfloat(trainpath['train_marginmin_outputs'])
-            
-
-            transcoder_list=None
-            if do_roundtrip:
-                transcoder_list=[decoder_index_torch]
-                decoder_index_torch=encoder_index_torch
-            
-            if do_eval_only:
-                trainloops=0
-            
-
-            criterion_latent_mse=nn.MSELoss()
-            
-            #net.set_dropout(dropout_per_epoch[epoch])
-            net.set_dropout(dropout_per_epoch[epoch],intergroup_dropout_per_epoch[epoch])
-            
-            net.train()
+                trainloader=trainpath['trainloader']
+                valloader=trainpath['valloader']
+                trainloader_iter=trainpath['trainloader_iter']
+                valloader_iter=trainpath['valloader_iter']
+                trainloader.sampler.generator.manual_seed(dataloader_seed)
                 
-            #loop that allows multiple passes for certain paths (default = 1)
-            for iloop in range(trainloops):
-                train_running_loss = 0
+                encoder_index=trainpath['encoder_index']
+                decoder_index=trainpath['decoder_index']
 
-                for batch_idx, train_data in enumerate(trainloader):
+                trainloops=trainpath['trainloops']
+                tpweight=torchfloat(trainpath_weights[itp])
+                #Normal paths have tpweight=1 and tpweight_encoded=1. tpweight ~= 1 when we are assigning
+                #flavor-specific weights (eg: for demographic prediction). In those cases, tpweight applies
+                #to the prediction loss and backpropagates through the encoder, but tpweight_encoded, which is
+                #just conditioning the latent space (correye+enceye, etc...), is still set to 1.0
+                if tpweight == 0:
+                    #but if tpweight==0, we don't want to backprop through the encoder at all
+                    tpweight_encoded=torchfloat(0)
+                else:
+                    tpweight_encoded=torchfloat(1)
+                    #tpweight_encoded=tpweight
+                
+                criterion_tp=criterion
+                encoded_criterion_tp=encoded_criterion
+                
+                #######
+                tp_predtype=trainpath_prediction_type[itp]
+                if len(tp_predtype)==0 or tp_predtype=="loss":
+                    pass
+                elif tp_predtype=="mse":
+                    criterion_tp=[{"name":"mse", "function":nn.MSELoss(), "weight": torchfloat(1)}]
+                    #current approach: setting encoded_criterion_tp=[]:
+                    # when the output NOT connectomic, we skip the latent-space loss functions
+                    # so the encoder is ONLY modified based on the demographic prediction loss during this training path
+                    # and the latent-space losses are only computed for the connectome->connectome paths
+                    #encoded_criterion_tp=[]
+                elif tp_predtype=="binary":
+                    criterion_tp=[{"name":"binary", "function":lambda x,y: nn.BCEWithLogitsLoss()(y,x), "weight": torchfloat(1)}]
+                    #encoded_criterion_tp=[]
+                elif tp_predtype=="category":
+                    criterion_tp=[{"name":"category", "function":lambda x,y: nn.CrossEntropyLoss()(y,x[:,0].long()), "weight": torchfloat(1)}]
+                    #encoded_criterion_tp=[]
+                
+                #######
+                train_inputs=trainpath['train_inputs']
+                train_outputs=trainpath['train_outputs']
+                val_inputs=trainpath['val_inputs']
+                val_outputs=trainpath['val_outputs']
+                
+                train_encoded=None
+                val_encoded=None
+                if 'train_encoded' in trainpath:
+                    train_encoded=trainpath['train_encoded']
+                if 'val_encoded' in trainpath:
+                    val_encoded=trainpath['val_encoded']
+                
+                output_transformer=trainpath['output_transformer']
                     
+                #make cpu copy of train and val OUTPUTS for top1acc testing in loop
+                train_outputs_np=train_outputs_list_np[trainpath['output_name']]
+                val_outputs_np=val_outputs_list_np[trainpath['output_name']]
+                #train_outputs_np=train_outputs.cpu().detach().numpy()
+                #val_outputs_np=val_outputs.cpu().detach().numpy()
+                
+                #should already have done this
+                #if torch.cuda.is_available():
+                #    train_inputs, train_outputs = train_inputs.cuda(), train_outputs.cuda()
+                #    val_inputs, val_outputs = val_inputs.cuda(), val_outputs.cuda()
+
+                encoder_index_torch=torchint(encoder_index)
+                decoder_index_torch=torchint(decoder_index)
+
+                #output_margin_torch=torchfloat(trainpath['train_marginmean_outputs'])
+                output_margin_torch=torchfloat(trainpath['train_marginmin_outputs'])
+                
+                transcoder_list=None
+                if do_roundtrip:
+                    transcoder_list=[decoder_index_torch]
+                    decoder_index_torch=encoder_index_torch
+                
+                if do_eval_only:
+                    trainloops=0
+                
+
+                criterion_latent_mse=nn.MSELoss()
+                
+                #net.set_dropout(dropout_per_epoch[epoch])
+                net.set_dropout(dropout_per_epoch[epoch],intergroup_dropout_per_epoch[epoch])
+                
+                net.train()
+                
+                batchindex_tracker_tp=[]
+                #loop that allows multiple passes for certain paths (default = 1)
+                for iloop in range(trainloops):
+                    train_running_loss=[]
+                    #for batch_idx, train_data in enumerate(trainloader):
+                    for batch_idx in range(len(trainloader_iter)):
+                        try:
+                            train_data = next(trainloader_iter)
+                        except StopIteration:
+                            #recreate the iterator
+                            #should only be needed if we are doing multiple trainloops for a given trainpath
+                            trainloader_iter=iter(trainloader)
+                            train_data = next(trainloader_iter)
+                        
+                        batch_loss=0
+                        if do_target_encoding:
+                            #pulls out <batchsize> at a time
+                            conn_inputs, conn_targets, conn_encoded_targets = train_data
+                            
+
+                            if do_fixed_target_encoding:
+                                #1. input->latent and loss(predictedlatent,fixedlatent)
+                                #2. fixedlatent->output and loss(output,predictedoutput)
+
+                                #first compute current encoding and backprop encoder loss
+                                optimizer.zero_grad(set_to_none=do_zerograd_none)
+                                                    
+                                conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+                                
+                                #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
+                                
+                                loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion_tp, encoder_margin=encoder_margin_torch, 
+                                                        latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                                
+                                loss.backward()
+                                optimizer.step()
+
+                                batch_loss += loss.item() 
+                                
+                                #Then compute predicted output and backprop decoder loss
+                                optimizer.zero_grad(set_to_none=do_zerograd_none)
+                                _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
+                            
+                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch)
+                                loss.backward()
+                                optimizer.step()
+
+                                batch_loss += loss.item() 
+                            else:
+                                #input->latent->output, then loss(predictedlatent,fixedlatent) and loss(output,predictedoutput)
+
+                                optimizer.zero_grad(set_to_none=do_zerograd_none)
+
+                                conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch)
+
+                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
+                                                        criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
+                                                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                                                        latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                                loss.backward()
+                                optimizer.step()
+
+                                batch_loss += loss.item() 
+
+                        else:
+                            optimizer.zero_grad(set_to_none=do_zerograd_none)
+                        
+                            #pulls out <batchsize> at a time
+                            conn_inputs, conn_targets = train_data
+                            
+                            _,dmin=torch.cdist(train_inputs, conn_inputs).min(axis=0)
+                            batchindex_tracker_tp.append([dict(epoch=epoch,ibatch_outer=ibatch_outer,itp=itp,encoder_index=encoder_index,decoder_index=decoder_index,batch=dmin.cpu().numpy().tolist())])
+                            
+                            conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
+                            
+                            #loss.backward() ACCUMULATES gradients in net parameters
+                            #optimizer.step() propagates according to those gradients
+                            #optimizer.zero_grad() ZEROS gradients so backprop is only based on current step
+
+                            ######################
+                            # loss terms (training)
+                            loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
+                                                    output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
+                                                    latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch, 
+                                                    scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
+                            #scale weights inside compute_path_loss so we can control output and latent weights separately
+                            #loss = loss*tpweight #!!!!!!!
+                            loss.backward()
+                            optimizer.step()
+
+                            batch_loss += loss.item()
+                            
+                        train_running_loss.append(batch_loss)
+                        
+                        
+                        if batchloop_innerbatchcount is not None and batchloop_innerbatchcount > 0 and batch_idx >= (batchloop_innerbatchcount-1):
+                            #if we are doing multiple outer batch loops, we need to break out of the inner dataloader loop now after this many batches
+                            break
+                    
+                    #loss_train[itp,epoch] = loss_train[itp,epoch] + train_running_loss
+
+                loss_train_batch_by_trainpath[itp]=loss_train_batch_by_trainpath[itp]+train_running_loss
+                if len(batchindex_tracker_tp)==0:
+                    batchindex_tracker_tp=[[]]
+                batchindex_tracker_thisepoch.append(np.concatenate(batchindex_tracker_tp))
+                
+                if batchloop_outerloopcount <= 1:
+                    #if we are using the outer batchloop (ie: to cycle through training paths 1 batch at a time), we need to wait until after that loop for validation
+                    
+                    # validation
+                    net.eval()
+                    val_running_loss = []
+                    
+                    for batch_idx, val_data in enumerate(valloader):
+                        batch_loss=0
+                        if do_target_encoding:
+                            #pulls out <batchsize> at a time
+                            conn_inputs, conn_targets, conn_encoded_targets = val_data
+                            
+                            if do_fixed_target_encoding:
+                                with torch.no_grad():
+                                    conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+                                    _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
+                                    
+                                #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
+                                loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion_tp, encoder_margin=encoder_margin_torch, 
+                                                latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                                loss = loss*tpweight
+                                batch_loss += loss.item() 
+
+                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch)
+                                loss = loss*tpweight
+                                batch_loss += loss.item() 
+                            else:
+                                with torch.no_grad():
+                                    conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
+
+                                # loss terms (validation)
+                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
+                                                        criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
+                                                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                                                        latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                                loss = loss*tpweight
+                                batch_loss += loss.item() 
+                            
+                        else:
+                            #with new val_batchsize, this should be all the val data at once
+                            conn_inputs, conn_targets = val_data
+                        
+                            with torch.no_grad():
+                                #conn_encoded, conn_predicted = net(conn_inputs)
+                                conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
+
+                            ######################
+                            # loss terms (validation)
+                            loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
+                                output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                                latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                            loss = loss*tpweight
+                            batch_loss += loss.item()
+                        val_running_loss.append(batch_loss)
+                    
+                    loss_val[itp,epoch] = np.mean(val_running_loss)
+
+
+        if batchloop_outerloopcount > 1:
+            #if we are using the outer batchloop (ie: to cycle through training paths 1 batch at a time), do validation now
+            
+            for itp in trainpath_order:
+                trainpath=trainpath_list[itp]
+                
+                valloader=trainpath['valloader']
+                
+                encoder_index=trainpath['encoder_index']
+                decoder_index=trainpath['decoder_index']
+                
+                tpweight=torchfloat(trainpath_weights[itp])
+                #Normal paths have tpweight=1 and tpweight_encoded=1. tpweight ~= 1 when we are assigning
+                #flavor-specific weights (eg: for demographic prediction). In those cases, tpweight applies
+                #to the prediction loss and backpropagates through the encoder, but tpweight_encoded, which is
+                #just conditioning the latent space (correye+enceye, etc...), is still set to 1.0
+                if tpweight == 0:
+                    #but if tpweight==0, we don't want to backprop through the encoder at all
+                    tpweight_encoded=torchfloat(0)
+                else:
+                    tpweight_encoded=torchfloat(1)
+                    #tpweight_encoded=tpweight
+                
+                criterion_tp=criterion
+                encoded_criterion_tp=encoded_criterion
+                
+                #######
+                tp_predtype=trainpath_prediction_type[itp]
+                if len(tp_predtype)==0 or tp_predtype=="loss":
+                    pass
+                elif tp_predtype=="mse":
+                    criterion_tp=[{"name":"mse", "function":nn.MSELoss(), "weight": torchfloat(1)}]
+                    #current approach: setting encoded_criterion_tp=[]:
+                    # when the output NOT connectomic, we skip the latent-space loss functions
+                    # so the encoder is ONLY modified based on the demographic prediction loss during this training path
+                    # and the latent-space losses are only computed for the connectome->connectome paths
+                    #encoded_criterion_tp=[]
+                elif tp_predtype=="binary":
+                    criterion_tp=[{"name":"binary", "function":lambda x,y: nn.BCEWithLogitsLoss()(y,x), "weight": torchfloat(1)}]
+                    #encoded_criterion_tp=[]
+                elif tp_predtype=="category":
+                    criterion_tp=[{"name":"category", "function":lambda x,y: nn.CrossEntropyLoss()(y,x[:,0].long()), "weight": torchfloat(1)}]
+                    #encoded_criterion_tp=[]
+                
+                #######
+                val_inputs=trainpath['val_inputs']
+                val_outputs=trainpath['val_outputs']
+                
+                val_encoded=None
+                if 'val_encoded' in trainpath:
+                    val_encoded=trainpath['val_encoded']
+                
+                encoder_index_torch=torchint(encoder_index)
+                decoder_index_torch=torchint(decoder_index)
+                
+                #output_margin_torch=torchfloat(trainpath['train_marginmean_outputs'])
+                output_margin_torch=torchfloat(trainpath['train_marginmin_outputs'])
+                
+                transcoder_list=None
+                if do_roundtrip:
+                    transcoder_list=[decoder_index_torch]
+                    decoder_index_torch=encoder_index_torch
+                
+                criterion_latent_mse=nn.MSELoss()
+                
+                # validation
+                net.eval()
+                val_running_loss = []
+                
+                for batch_idx, val_data in enumerate(valloader):
+                    batch_loss=0
                     if do_target_encoding:
                         #pulls out <batchsize> at a time
-                        conn_inputs, conn_targets, conn_encoded_targets = train_data
+                        conn_inputs, conn_targets, conn_encoded_targets = val_data
                         
-
                         if do_fixed_target_encoding:
-                            #1. input->latent and loss(predictedlatent,fixedlatent)
-                            #2. fixedlatent->output and loss(output,predictedoutput)
-
-                            #first compute current encoding and backprop encoder loss
-                            optimizer.zero_grad(set_to_none=do_zerograd_none)
-                                                
-                            conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
-                            
+                            with torch.no_grad():
+                                conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
+                                _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
+                                
                             #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
-                            
                             loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion_tp, encoder_margin=encoder_margin_torch, 
-                                                     latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                            
-                            loss.backward()
-                            optimizer.step()
+                                            latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                            loss = loss*tpweight
+                            batch_loss += loss.item() 
 
-                            train_running_loss += loss.item() 
-                            
-                            #Then compute predicted output and backprop decoder loss
-                            optimizer.zero_grad(set_to_none=do_zerograd_none)
-                            _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
-                        
                             loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch)
-                            loss.backward()
-                            optimizer.step()
-
-                            train_running_loss += loss.item() 
+                            loss = loss*tpweight
+                            batch_loss += loss.item() 
                         else:
-                            #input->latent->output, then loss(predictedlatent,fixedlatent) and loss(output,predictedoutput)
+                            with torch.no_grad():
+                                conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
 
-                            optimizer.zero_grad(set_to_none=do_zerograd_none)
-
-                            conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch)
-
+                            # loss terms (validation)
                             loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
-                                                     criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                                     output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                                                     latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                            loss.backward()
-                            optimizer.step()
-
-                            train_running_loss += loss.item() 
-
-                    else:
-                        optimizer.zero_grad(set_to_none=do_zerograd_none)
+                                                    criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
+                                                    output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                                                    latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                            loss = loss*tpweight
+                            batch_loss += loss.item() 
                         
-                        #pulls out <batchsize> at a time
-                        conn_inputs, conn_targets = train_data
-                        conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
-                    
-                        #loss.backward() ACCUMULATES gradients in net parameters
-                        #optimizer.step() propagates according to those gradients
-                        #optimizer.zero_grad() ZEROS gradients so backprop is only based on current step
-
-                        ######################
-                        # loss terms (training)
-                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                                output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
-                                                latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch, 
-                                                scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
-                        #scale weights inside compute_path_loss so we can control output and latent weights separately
-                        #loss = loss*tpweight
-                        loss.backward()
-                        optimizer.step()
-
-                        train_running_loss += loss.item() 
-                
-                loss_train[itp,epoch] = train_running_loss/(batch_idx+1)    
-
-            # validation
-            net.eval()
-            val_running_loss = 0
-
-            for batch_idx, val_data in enumerate(valloader):
-                    
-                if do_target_encoding:
-                    #pulls out <batchsize> at a time
-                    conn_inputs, conn_targets, conn_encoded_targets = val_data
-                    
-                    if do_fixed_target_encoding:
-                        with torch.no_grad():
-                            conn_encoded = net(conn_inputs, encoder_index_torch, neg1_index)
-                            _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
-                            
-                        #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
-                        loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion_tp, encoder_margin=encoder_margin_torch, 
-                                        latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                        loss = loss*tpweight
-                        val_running_loss += loss.item() 
-
-                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch)
-                        loss = loss*tpweight
-                        val_running_loss += loss.item() 
                     else:
+                        #with new val_batchsize, this should be all the val data at once
+                        conn_inputs, conn_targets = val_data
+                    
                         with torch.no_grad():
+                            #conn_encoded, conn_predicted = net(conn_inputs)
                             conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
 
+                        ######################
                         # loss terms (validation)
-                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
-                                                 criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                                 output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                                                 latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                        loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
+                            output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
+                            latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
                         loss = loss*tpweight
-                        val_running_loss += loss.item() 
-                    
-                else:
-                    #with new val_batchsize, this should be all the val data at once
-                    conn_inputs, conn_targets = val_data
+                        batch_loss += loss.item()
+                    val_running_loss.append(batch_loss)
                 
-                    with torch.no_grad():
-                        #conn_encoded, conn_predicted = net(conn_inputs)
-                        conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
-
-                    ######################
-                    # loss terms (validation)
-                    loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                        latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                    loss = loss*tpweight
-                    val_running_loss += loss.item() 
-            
-            loss_val[itp,epoch] = val_running_loss/(batch_idx+1)
-
+                loss_val[itp,epoch] = np.mean(val_running_loss)
+                    
+        for itp in trainpath_order:
+            loss_train[itp,epoch] = np.mean(loss_train_batch_by_trainpath[itp])
+        
+        batchindex_tracker.append(batchindex_tracker_thisepoch)
+        
         ####################################
         ####################################
         # compute between-path latent space similiarity loss and backpropagate
