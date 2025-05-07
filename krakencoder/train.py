@@ -424,6 +424,8 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
             data_transformer_list[conn_name], data_transformer_dict = generate_transformer(traindata,transformer_type=xtype,
                         precomputed_transformer_params=precomputed_transformer_params)
             data_transformer_dict['fromfile']=True
+            data_transformer_dict['filename']=precomputed_transformer_params['filename']
+            data_transformer_dict['filepath']=precomputed_transformer_params['filepath']
         
         elif use_pretrained_encoder and conndata_alltypes[conn_name]['transformer_file'] is not None:
             data_transformer_list[conn_name], data_transformer_dict = generate_transformer(traindata, transformer_type="torchfile", 
