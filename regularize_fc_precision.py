@@ -50,6 +50,8 @@ regularize_fc_precision.py --input newstudy_fs86_FCcov_hpf_100subj.mat \\
     subject_split_parsegroup=parser.add_argument_group('Subject split options')
     subject_split_parsegroup.add_argument('--subjectsplitfile','--subjectfile',action='store',dest='subject_split_file', help='.mat file containing pre-saved "subjects","subjidx_train","subjidx_val","subjidx_test" fields')
     subject_split_parsegroup.add_argument('--subjectsplitname',action='store',dest='subject_split_name', default='all', help='Which data split to evaluate: "all", "train", "test", "val", "retest", etc...')
+    subject_split_parsegroup.add_argument('--outputsubjectsplitname',action='store',dest='output_subject_split_name', default=None, help='Which data split to OUTPUT after finding lambda (default=splitname): "all", "train", "test", "val", "retest", etc...')
+    
     return parser.parse_args(argv)
 
 def precision_to_partialcorr(Xprec):
@@ -182,6 +184,9 @@ def run_optlambda():
     
     splitfile=args.subject_split_file
     splitname=args.subject_split_name
+    outsplitname=args.output_subject_split_name
+    if outsplitname is None:
+        outsplitname=splitname
     
     M=loadmat(inputfile,simplify_cells=True)
     fields_found=[f for f in fields_to_search if f in M]
@@ -212,7 +217,7 @@ def run_optlambda():
             subjects_fromsplit=subjects_fromsplit[subjsplits["subjidx_"+splitname]]
         else:
             raise Exception("Split name %s not found in subject_split_file %s" % (splitname,splitfile))
-    
+        
         FClist=[x for i,x in enumerate(FClist) if subjects[i] in subjects_fromsplit]
         
         #if we are using a subset of subjects, reset the subject info in the output file
@@ -253,6 +258,40 @@ def run_optlambda():
     lambda_raw=optlambda
     optlambda=np.round(lambda_raw,lambda_rounding_places) #round to the nearest 0.01
     
+    #########
+    if splitfile is not None and outsplitname != splitname:
+        splitname=outsplitname
+        
+        #if we are saving a different subset of subjects than are used to find lambda
+        FClist=M[datafield]
+        
+        fields_to_keep=['subject','subjects','ismissing','is_missing']
+        M_out={}
+        for f in fields_to_keep:
+            if f in M:
+                M_out[f]=M[f]
+        
+        subjects=M[subject_field]
+        subjects=[str(s) for s in subjects]
+        
+        subjects_fromsplit=np.array([str(x) for x in subjsplits['subjects']])
+        if splitname.lower() == 'all':
+            pass
+        elif "subjidx_"+splitname in subjsplits:
+            subjects_fromsplit=subjects_fromsplit[subjsplits["subjidx_"+splitname]]
+        else:
+            raise Exception("Split name %s not found in subject_split_file %s" % (splitname,splitfile))
+        
+        FClist=[x for i,x in enumerate(FClist) if subjects[i] in subjects_fromsplit]
+        
+        #if we are using a subset of subjects, reset the subject info in the output file
+        subjects=[s for s in subjects if s in subjects_fromsplit]
+        subjcell=np.empty([len(subjects),1],dtype=object)
+        subjcell[:,0]=subjects
+        M_out={}
+        M_out[subject_field]=subjcell
+        
+    #########
     M_out['lambda_raw']=lambda_raw
     M_out['lambda']=optlambda
     
