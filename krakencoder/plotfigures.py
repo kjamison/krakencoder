@@ -421,6 +421,8 @@ def display_kraken_heatmap(trainrecord,
                                        colorbar=colorbar,clim=clim,colormap=colormap,invert_text_color=invert_text_color,ax=ax[i], ticklabel_text_size=ticklabel_text_size,
                                        outputcsvfile=outputcsvfile,outputcsvfile_append=True)
                 ax_return.append(ax_ret)
+            if outputcsvfile is not None:
+                print("Saved %s" % (outputcsvfile))
             
             if all([x is None for x in ax_return]):
                 print("WARNING: no data to display for any subplots")
@@ -904,7 +906,7 @@ def display_kraken_heatmap(trainrecord,
                     fcsv.write(',"average"')
                 else:
                     fcsv.write(',"target:%s"' % (xlabels_to_display[icol]))
-            print("\n",end="")
+            fcsv.write("\n")
             for irow in range(vmat_todisplay.shape[0]):
                 if ylabels_to_display[irow]=='':
                     continue
