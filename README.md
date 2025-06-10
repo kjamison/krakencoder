@@ -6,7 +6,9 @@
 The Krakencoder is a joint connectome mapping tool that simultaneously, bidirectionally translates between structural and functional connectivity, and across different atlases and processing choices via a common latent representation.
 
 ### Citation
-Keith W. Jamison, Zijin Gu, Qinxin Wang, Ceren Tozlu, Mert R. Sabuncu, Amy Kuceyeski, "Krakencoder: A unified brain connectome translation and fusion tool". _Nature Methods_ (2025) [doi:10.1038/s41592-025-02706-2](https://doi.org/10.1038/s41592-025-02706-2) (bioRxiv link [doi:10.1101/2024.04.12.589274](https://www.biorxiv.org/content/10.1101/2024.04.12.589274))
+Keith W. Jamison, Zijin Gu, Qinxin Wang, Ceren Tozlu, Mert R. Sabuncu, Amy Kuceyeski, "Krakencoder: A unified brain connectome translation and fusion tool". _Nature Methods_ (2025) [doi:10.1038/s41592-025-02706-2](https://doi.org/10.1038/s41592-025-02706-2) 
+
+(bioRxiv link: [doi:10.1101/2024.04.12.589274](https://www.biorxiv.org/content/10.1101/2024.04.12.589274))
 
 
 <img src="images/krakencoder_overview.png" alt="krakencoder overview" width=75%>
