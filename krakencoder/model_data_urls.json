@@ -6,17 +6,17 @@
 
     {"filename":"kraken_ioxfm_SCFC_fs86_pc256_710train.npy",
         "url": "https://osf.io/download/8jxkm/",
-        "hash":"d8a2e1265539dba96ac0cb1c7405e37ac514f518322ffaeefc5f02c63ea755ca",
+        "hash":"9dc8f54fc271420b88e7949d2c917793cbc512b1c3d14786efe1450ee63cb145",
         "hashtype": "sha256"},
 
     {"filename":"kraken_ioxfm_SCFC_shen268_pc256_710train.npy",
         "url": "https://osf.io/download/z2qpt/",
-        "hash":"f89a527199763a198c4be33a51b913258b4f5538e39b62eeba4700c890d2915e",
+        "hash":"c2829bbe60f10e13ab314770c6455f72320b1fa768486f80c007bd05796ea390",
         "hashtype": "sha256"},
 
     {"filename":"kraken_ioxfm_SCFC_coco439_pc256_710train.npy",
         "url": "https://osf.io/download/tu2mr/",
-        "hash":"afbe4d329f00cd99c0f2af5b4fbb095454744717bd4eb7241132f421f2cbef47",
+        "hash":"7ed1b8e16f396f1bb682d42f40944b6d46ada76ffa0fe50e9811b25207a0cefb",
         "hashtype": "sha256"},
 
     {"filename":"subject_splits_993subj_683train_79val_196test_retestInTest.mat",
