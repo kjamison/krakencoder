@@ -22,7 +22,9 @@ def argument_parse_collectdata(argv):
     parser.add_argument('--inputdata',action='store',dest='inputdata',nargs='*',help='Can be <flavor>=<filepat> or <filepat>. Use "{SUBJECT}" to insert subject name')
     parser.add_argument('--inputdatafield',action='store',dest='inputdatafield', help='Field name in input data files to use (default = "data")')
     parser.add_argument('--bidsdesc',action='store',dest='bidsdesc', help='Extra string to add to .tsv filenames in BIDS .zip (*_desc-{BIDSDESC}_*.tsv)')
+    parser.add_argument('--bidsifysubjects','--bidsify_subjects',action='store_true',dest='bidsify_subjects', help='If set, will convert subject names to BIDS-friendly ("sub-"+remove all non-alphanumeric characters)')
     parser.add_argument('--canonical',action='store_true',dest='canonical', help='Transform input flavors to canonical format (only works for known flavors)')
+    parser.add_argument('--ziptype',action='store',dest='ziptype', default='tsv', choices=['tsv','mat'], help='Type of files to save in .zip (default: tsv, can be mat)')
     
     return parser.parse_args(argv)
 
@@ -63,7 +65,9 @@ def run_collectdata(argv=None):
     outputfile=args.outputfile
     bids_desc_str=args.bidsdesc
     do_canonical=args.canonical
+    do_bidsify_subjects=args.bidsify_subjects
     inputdatafield=args.inputdatafield
+    ziptype=args.ziptype
     
     if do_canonical:
         #this import requires torch, so only import if needed
@@ -123,7 +127,10 @@ def run_collectdata(argv=None):
                 sys.exit('Error: input file does not exist')
             M=load_single_connectome_from_file(filepat,datafields=datafields)
             conndata=M
-        conndata_alltypes[conntype]=conndata
+        if conntype in conndata_alltypes:
+            conndata_alltypes[conntype]+=conndata
+        else:
+            conndata_alltypes[conntype]=conndata
     
     #check that all subjects are the same shape
     # (can be smaller if the last ROI is missing)
@@ -148,15 +155,30 @@ def run_collectdata(argv=None):
     if outputfile.lower().endswith(".zip"):
         #make a dummy participants_info file with participant_id=sub-####, and all subjects marked as "training" (to be used for adaptation)
         subjsplit=['train' for s in subjects]
+        if do_bidsify_subjects:
+            #convert subjects to BIDS-friendly format
+            #check if all subjects are already sub-[A-Za-z0-9]+:
+            if all(re.match(r'sub-[A-Za-z0-9]+', s) for s in subjects):
+                bids_subjects = [s for s in subjects]
+                print("Subjects already in BIDS format, no conversion needed.")
+            else:
+                #remove all non-alphanumeric characters and convert to sub-<subject>
+                bids_subjects = ['sub-' + re.sub(r'[^a-zA-Z0-9]', '', s) for s in subjects]
+                print("Converted subjects to BIDS format  (See participants.tsv): %s" % (bids_subjects))
+        else:
+            bids_subjects = ['sub-%04d' % (i+1) for i in range(len(subjects))]
+            print("Creating numerical sub-#### BIDS subject IDs (See participants.tsv): %s" % (bids_subjects))
+            
         participants_info=pd.DataFrame({
-            'participant_id':['sub-%04d' % (i+1) for i in range(len(subjects))],
+            'participant_id':bids_subjects,
             'subject':subjects, 
             'train_val_test':subjsplit
         })
         
-        print("Writing tsv to .zip ...")
-        kjf.save_data_zip(outputfile, conndata_alltypes, participants_info, bids_desc=bids_desc_str, verbose=False)
+        print("Writing %s to .zip ..." % (ziptype))
+        kjf.save_data_zip(outputfile, conndata_alltypes, participants_info, bids_desc=bids_desc_str, verbose=False, filetype=ziptype)
         print("Saved data to %s (%s)" % (outputfile,kjf.humanize_filesize(os.path.getsize(outputfile),binary=True)))
+        
     elif outputfile.lower().endswith(".mat"):
         for conntype in conndata_alltypes:
             outfile_thistype=re.sub('\{(t|f|type|flav|flavor)\}','{FLAVOR}',outputfile,flags=re.IGNORECASE)

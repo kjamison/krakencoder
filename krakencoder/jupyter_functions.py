@@ -398,7 +398,7 @@ def jupyter_create_save_widget(
 
 
 def save_data_zip(
-    filename, conndata_squaremats, participants_info, bids_desc=None, verbose=False
+    filename, conndata_squaremats, participants_info, bids_desc=None, verbose=False, filetype='tsv'
 ):
     desc_str = ""
     if bids_desc is not None:
@@ -412,15 +412,23 @@ def save_data_zip(
         for conntype in conndata_squaremats:
             for i, conndata in enumerate(conndata_squaremats[conntype]):
                 outfile = io.BytesIO()
-                np.savetxt(outfile, conndata, fmt="%.6f", delimiter="\t")
+                if filetype.lower() == 'mat':
+                    savemat(outfile, {'data': conndata.astype(np.float32)}, format="5", do_compression=True)
+                    conn_ext='.mat'
+                elif filetype.lower() == 'tsv':
+                    np.savetxt(outfile, conndata, fmt="%.6f", delimiter="\t")
+                    conn_ext='.tsv'
+                else:
+                    raise ValueError("Unsupported file type: %s" % (filetype))
                 outfile.seek(0)
                 subjid = participants_info["participant_id"][i]
                 if subjid.startswith("sub-"):
                     subjid = subjid[4:]
-                conndata_filename = "sub-%s_%s%s_relmat.dense.tsv" % (
+                conndata_filename = "sub-%s_%s%s_relmat.dense%s" % (
                     subjid,
                     flavor_to_bids_string(conntype),
                     desc_str,
+                    conn_ext
                 )
                 if verbose:
                     print("Adding %s" % (conndata_filename))
