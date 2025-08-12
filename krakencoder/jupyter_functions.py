@@ -14,6 +14,8 @@ import importlib.util
 import ipywidgets as widgets
 from IPython.display import display
 import pandas as pd
+import json
+import re
 
 try:
     colab_spec = importlib.util.find_spec("google.colab")
@@ -555,6 +557,13 @@ def load_data_zip(filename, filebytes=None, allowed_extensions=None):
     conndata_participants = {}
     participants_info = None
 
+    try:
+        #first try to load it as a nemoSC zip
+        conndata_squaremats, participants_info = load_nemodata_zip(filename, filebytes=filebytes, bidsify_subjects=True)
+        return conndata_squaremats, participants_info
+    except:
+        pass
+    
     if filebytes is not None:
         filename_or_filebytes = filebytes
     else:
@@ -598,14 +607,14 @@ def load_data_zip(filename, filebytes=None, allowed_extensions=None):
                 ):
                     continue
             with zip_ref.open(zfile) as zfile_bytes:
-                if zfile.lower().endswith("csv"):
-                    data_tmp = np.loadtxt(zfile_bytes, delimiter=",")
+                if zfile.lower().endswith(".csv"):
+                    data_tmp = np.loadtxt(zfile_bytes, delimiter=",",comments=['#','!','%'])
 
-                elif zfile.lower().endswith("tsv"):
-                    data_tmp = np.loadtxt(zfile_bytes, delimiter="\t")
+                elif zfile.lower().endswith(".tsv"):
+                    data_tmp = np.loadtxt(zfile_bytes, delimiter="\t",comments=['#','!','%'])
 
-                elif zfile.lower().endswith("mat"):
-                    matdata = loadmat(filename_or_filebytes, simplify_cells=True)
+                elif zfile.lower().endswith(".mat"):
+                    matdata = loadmat(zfile_bytes, simplify_cells=True)
                     matfields = ["data", "C", "SC", "FC"]
                     for m in matfields:
                         if m in matdata:
@@ -646,6 +655,138 @@ def load_data_zip(filename, filebytes=None, allowed_extensions=None):
 
     return conndata_squaremats, participants_info
 
+def load_nemodata_zip(filename, filebytes=None, bidsify_subjects=True):
+    # output: conndata_squaremats['conntype']=list([roi x roi])
+    #         participants_info
+    conndata_squaremats = {}
+    conndata_participants = {}
+    participants_info = None
+    
+    if filebytes is not None:
+        filename_or_filebytes = filebytes
+    else:
+        filename_or_filebytes = filename
+    
+    with zipfile.ZipFile(filename_or_filebytes, "r") as zip_ref:
+        #compile information about nemoSC files in .zip
+        nemofiles=[f for f in zip_ref.namelist() if re.search(r'_nemo_output_.*nemoSC.*_mean\.mat$', f)]
+        if len(nemofiles) == 0:
+            raise Exception("No nemoSC files found in zip file")
+        
+        nemofiles_justfile=[os.path.split(f)[-1] for f in nemofiles]
+        nemosubj=[re.sub(r'^(.+)_nemo_output_.+$',r'\1',f) for f in nemofiles_justfile]
+        nemosubj_unique=list(set(nemosubj))
+        
+        nemofiles_pattern=list(set([re.sub(r'^(.+/)?(.+)(_nemo_output_.+$)',r'\1{SUBJECT}\3',f) for f in nemofiles]))
+        
+        nemofiles_pattern_flavor=[re.sub(r'.+nemo_output_(sdstream|ifod2act)_chacoconn_(.+)_nemoSC(_sift2)?(_volnorm)?_mean\.mat$',r'SC\1_\2\3\4',f) for f in nemofiles_pattern]
+        nemofiles_pattern_flavor=[f.replace("_sift2_volnorm","_sift2volnorm") for f in nemofiles_pattern_flavor]
+        nemofiles_pattern_flavor=[f if f.endswith("volnorm") else f+"_count" for f in nemofiles_pattern_flavor]
+        nemofiles_pattern_flavor=[f.replace("_sift2_count","_sift2") for f in nemofiles_pattern_flavor]
+        
+        nemoconfig={}
+        nemoconfig_file = [ z for z in zip_ref.namelist() if z.endswith("_config.json") ]
+        if len(nemoconfig_file) > 0:
+            with zip_ref.open(nemoconfig_file[0]) as jbytes:
+                nemoconfig=json.load(jbytes)
+        
+        if 'siftweights' in nemoconfig and nemoconfig['siftweights']:
+            if not all(["_sift2" in f for f in nemofiles_pattern_flavor]):
+                #older nemo tool did not add "sift2" to output files, so check if config used sift weights and add this to flavor name if needed
+                nemofiles_pattern_flavor=[f.replace("_volnorm","_sift2volnorm") for f in nemofiles_pattern_flavor]
+                nemofiles_pattern_flavor=[f.replace("_count","_sift2") for f in nemofiles_pattern_flavor]
+        
+        #replace some of the atlas names (eg: fs86subj->fs86), or cocommpsuit439->coco439
+        nemofiles_pattern_flavor=[f.replace('subj_','_') for f in nemofiles_pattern_flavor]
+        nemofiles_pattern_flavor=[f.replace('_cocommpsuit439_','_coco439_') for f in nemofiles_pattern_flavor]
+        
+        print("")
+        print("Flavors in nemo zip:")
+        _=[print(f'{flav}={pat}') for flav,pat in zip(nemofiles_pattern_flavor,nemofiles_pattern)]
+        
+        # if a bids-style participants info file was included, read this in separately
+        participants_tmp = [ z for z in zip_ref.namelist() if os.path.basename(z) == "participants.tsv" ]
+        participants_info = None
+        
+        if len(participants_tmp) > 0:
+            participants_info = pd.read_table(
+                zip_ref.open(participants_tmp[0]), delimiter="\t"
+            )
+            if not 'subject' in participants_info:
+                participants_info['subject']=[re.sub("^sub-","",s) for s in participants_info['participant_id']]
+        
+        if participants_info is None:
+            subjsplit=['train' for s in nemosubj_unique]
+            bids_subjects=[]
+            for isubj,s in enumerate(nemosubj_unique):
+                if re.match(r'sub-[A-Za-z0-9]+', s):
+                    bids_subjects+=[s]
+                else:
+                    if bidsify_subjects:
+                        bids_subjects+=['sub-' + re.sub(r'[^a-zA-Z0-9]', '', s)]
+                    else:
+                        bids_subjects+=['sub-%04d' % (isubj+1)]
+            participants_info=pd.DataFrame({
+                'participant_id':bids_subjects,
+                'subject':nemosubj_unique, 
+                'train_val_test':subjsplit
+            })
+        
+        for subject in nemosubj_unique:
+            subjrow=participants_info[(participants_info['participant_id']==subject) | (participants_info['subject']==subject)]
+            if len(subjrow)==0:
+                raise Exception(f'Invalid participants.tsv. Subject {subject} not found.')
+            bids_subj=subjrow['participant_id'].values[0]
+            
+            for conntype,flavpat in zip(nemofiles_pattern_flavor,nemofiles_pattern):
+                f=flavpat.format(SUBJECT=subject)
+                if not f in nemofiles:
+                    print(f"Missing {flavpat} for subject {subject}")
+                    continue
+                with zip_ref.open(f) as zb:
+                    if f.lower().endswith(".csv"):
+                        data_tmp = np.loadtxt(zb, delimiter=",",comments=['#','!','%'])
+                    
+                    elif f.lower().endswith(".tsv"):
+                        data_tmp = np.loadtxt(zb, delimiter="\t",comments=['#','!','%'])
+                    
+                    elif f.lower().endswith(".mat"):
+                        matdata = loadmat(zb, simplify_cells=True)
+                        matfields = ["data", "C", "SC", "FC"]
+                        for m in matfields:
+                            if m in matdata:
+                                data_tmp = matdata[m]
+                                break
+                    else:
+                        # unrecognized file format in zip (could be a random OS file like .DS_Store)
+                        continue
+                if not conntype in conndata_squaremats:
+                    conndata_squaremats[conntype] = []
+                    conndata_participants[conntype] = []
+                conndata_squaremats[conntype].append(data_tmp)
+                conndata_participants[conntype].append(bids_subj)
+        
+        # now reorder all conndata entries to the same subject order
+        participants_info = participants_info.drop_duplicates(
+            subset=["participant_id"]
+        ).reset_index(drop=True)
+        participants_list = participants_info["participant_id"].values
+        
+        for conntype in conndata_squaremats:
+            if not all([s in conndata_participants[conntype] for s in participants_list]):
+                raise Exception('All subjects must have the same set of output flavors')
+            sidx = [
+                np.where(np.array(conndata_participants[conntype]) == s)[0][0]
+                for s in participants_list
+            ]
+            conndata_participants[conntype] = [
+                conndata_participants[conntype][i] for i in sidx
+            ]
+            conndata_squaremats[conntype] = [
+                conndata_squaremats[conntype][i] for i in sidx
+            ]
+    
+    return conndata_squaremats, participants_info
 
 def validate_data(conndata_squaremats, participants_info):
     # confirm that all data matrices for each conntype are the same size
