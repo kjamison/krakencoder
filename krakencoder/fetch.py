@@ -10,6 +10,7 @@ import os
 import requests
 import hashlib
 import json
+import pandas as pd
 import platformdirs
 from tqdm import tqdm
 
@@ -32,15 +33,28 @@ def model_data_folder(data_folder=None, ignore_env=False):
     data_folder=os.path.abspath(os.path.expanduser(data_folder))
     return data_folder
 
-def get_fetchable_data_list(filenames_only=False):
+def get_fetchable_data_list(override_json=None,filenames_only=False):
     """
     Returns a list of model data files that can be fetched from the internet.
     """
+    # Default location for the model data URLs
+    # This file should be in the same directory as this script
+    # or in the krakencoder package directory
     urlfile=os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data_urls.json'))
+    if override_json is not None:
+        # If an override JSON file is provided, use that instead of the default
+        urlfile=override_json
+    
+    if not os.path.exists(urlfile):
+        raise FileNotFoundError(f"Model data URLs file not found: {urlfile}. Please provide a valid JSON file with model data URLs.")
     
     try:
-        with open(urlfile) as f:
-            data_urls=json.load(f)
+        if urlfile.endswith('.json'):
+            with open(urlfile,'r') as f:
+                data_urls=json.load(f)
+        elif urlfile.endswith('.csv'):
+            data_urls=pd.read_csv(urlfile).to_dict(orient='records')
+        
         if filenames_only:
             data_urls=[data_info['filename'] for data_info in data_urls]
     except:
@@ -135,7 +149,7 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False
     return data_file_list
 
 
-def download_url(url, filename, show_progress=False, hash_type=None):
+def download_url(url, filename, show_progress=False, hash_type=None, hash_expected=None):
     """
     Download a file from the internet with a progress bar.
     Optionally compute the hash of the file as it is downloaded.
@@ -180,6 +194,9 @@ def download_url(url, filename, show_progress=False, hash_type=None):
         file_hash = hasher.hexdigest()
     else:
         file_hash = None
+    
+    if hash_expected is not None and file_hash != hash_expected:
+        raise ValueError(f"Hash mismatch: expected {hash_expected}, got {file_hash}")
     
     return file_hash
 

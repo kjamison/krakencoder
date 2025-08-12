@@ -13,6 +13,7 @@ from sklearn.preprocessing import FunctionTransformer
 import os
 import re
 import json
+import pandas as pd
 from copy import deepcopy
 
 
@@ -664,7 +665,7 @@ def merge_conndata_subjects(conndata_list):
             conndata_new[k]=np.concatenate([c[k] for c in conndata_list],axis=0)
     return conndata_new
 
-def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[], override_abs_path=False):
+def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[], override_abs_path=False, fields_to_check=['checkpoint','xform','data']):
     """
     Load a json file with flavor information, including the following fields:
     flavorinfo[conntype]['atlas']: str, atlas name
@@ -686,18 +687,19 @@ def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[
     if isinstance(directory_search_list,str):
         directory_search_list=[directory_search_list]
     
-    with open(jsonfile,'r') as f:
-        flavor_input_info=json.load(f)
-
+    if jsonfile.endswith('.json'):
+        with open(jsonfile,'r') as f:
+            flavor_input_info=json.load(f)
+    elif jsonfile.endswith('.csv'):
+        flavor_input_info=pd.read_csv(jsonfile).set_index('flavor').to_dict(orient='index')
+    
     if conntype_list is not None:
         flavor_input_info={k:flavor_input_info[k] for k in conntype_list}
     
     fetchable_urls=get_fetchable_data_list()
     fetchable_files=[u['filename'] for u in fetchable_urls]
     
-    filename_fields=['checkpoint','xform','data']
-    
-
+    filename_fields=[f for f in fields_to_check if f in ['checkpoint','xform','data']]
     
     for k in flavor_input_info:
         all_exist=True
