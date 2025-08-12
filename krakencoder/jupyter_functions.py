@@ -130,7 +130,15 @@ def jupyter_create_upload_widget(
         tooltip="Click to process the selected file",
         icon="check",
     )
-
+    # Step 7: Button to trigger data processing
+    local_refresh_button = widgets.Button(
+        description="Refresh",
+        disabled=False,
+        button_style="",
+        tooltip="Click to refresh the file list",
+        icon="refresh",
+    )
+    
     # Step 8: Define the item selection event handler
     def local_on_item_selector_double_click(change):
         current_path = change["owner"].current_path  #!test
@@ -164,6 +172,8 @@ def jupyter_create_upload_widget(
         if loadfile_callback is not None:
             with loadfile_output_widget:
                 loadfile_callback(file_path)
+    
+    local_refresh_button.on_click(lambda b: local_update_item_selector(local_item_selector.current_path))
 
     local_process_button.on_click(local_on_process_button_clicked)
 
@@ -200,7 +210,14 @@ def jupyter_create_upload_widget(
         tooltip="Click to process the selected file",
         icon="check",
     )
-
+    
+    gdrive_refresh_button = widgets.Button(
+        description="Refresh",
+        disabled=False,
+        button_style="",
+        tooltip="Click to refresh the file list",
+        icon="refresh",
+    )
     # Step 8: Define the item selection event handler
     def gdrive_on_item_selector_double_click(change):
         current_path = change["owner"].current_path  #!test
@@ -234,16 +251,18 @@ def jupyter_create_upload_widget(
         if loadfile_callback is not None:
             with loadfile_output_widget:
                 loadfile_callback(file_path)
-
+    
     gdrive_process_button.on_click(gdrive_on_process_button_clicked)
-
+    
     # Step 10: Function to update the item selector
     def gdrive_update_item_selector(path):
         items = list_files_and_dirs(path)
         gdrive_item_selector.options = items
         gdrive_item_selector_label.value = "Browsing: " + os.path.abspath(path)
         gdrive_process_button.disabled = True
-
+    
+    gdrive_refresh_button.on_click(lambda b: gdrive_update_item_selector(gdrive_item_selector.current_path))
+    
     ###############
     # FILE UPLOADER TAB
     def on_file_upload(change):
@@ -308,7 +327,7 @@ def jupyter_create_upload_widget(
                 [
                     gdrive_item_selector_label,
                     gdrive_item_selector,
-                    gdrive_process_button,
+                    widgets.HBox([gdrive_process_button, gdrive_refresh_button])
                 ]
             )
             gdrive_item_selector.observe(
@@ -317,7 +336,9 @@ def jupyter_create_upload_widget(
             tab_list.append(drivebox)
         elif t == "local":
             localbox = widgets.VBox(
-                [local_item_selector_label, local_item_selector, local_process_button]
+                [local_item_selector_label, 
+                 local_item_selector, 
+                 widgets.HBox([local_process_button,local_refresh_button])]
             )
             local_item_selector.observe(
                 local_on_item_selector_double_click, names="value"
