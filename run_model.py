@@ -248,7 +248,7 @@ def run_model_on_new_data(argv=None):
             json_directory_search_list+=[d for d in input_json_search_directories]
         flavor_input_info={}
         for j in input_json:
-            tmpinfo=load_flavor_input_json(j, directory_search_list=json_directory_search_list, override_abs_path=True)
+            tmpinfo=load_flavor_database(j, directory_search_list=json_directory_search_list, override_abs_path=True, fields_to_check=['checkpoint','xform','data'])
             for k in tmpinfo:
                 flavor_input_info[k]=tmpinfo[k]
     

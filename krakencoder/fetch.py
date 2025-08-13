@@ -54,6 +54,10 @@ def get_fetchable_data_list(override_json=None,filenames_only=False):
                 data_urls=json.load(f)
         elif urlfile.endswith('.csv'):
             data_urls=pd.read_csv(urlfile).to_dict(orient='records')
+        elif urlfile.endswith('.tsv'):
+            data_urls=pd.read_csv(urlfile, sep='\t').to_dict(orient='records')
+        else:
+            raise Exception(f"Unsupported file format for {urlfile}. Please provide a JSON, CSV, or TSV file.")
         
         if filenames_only:
             data_urls=[data_info['filename'] for data_info in data_urls]

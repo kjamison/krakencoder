@@ -665,7 +665,9 @@ def merge_conndata_subjects(conndata_list):
             conndata_new[k]=np.concatenate([c[k] for c in conndata_list],axis=0)
     return conndata_new
 
-def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[], override_abs_path=False, fields_to_check=['checkpoint','xform','data']):
+def load_flavor_database(dbfile=None, conntype_list=None, directory_search_list=[], override_abs_path=False, 
+                           fields_to_check=['checkpoint','xform'],
+                           only_return_exists_or_fetchable=True):
     """
     Load a json file with flavor information, including the following fields:
     flavorinfo[conntype]['atlas']: str, atlas name
@@ -682,16 +684,24 @@ def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[
 
     Return a dict with only the flavors specified in the conntype_list (or all flavors if conntype_list is None)
     """
+    if dbfile is None:
+        #default to the model_data_urls.json file in the same directory as this script
+        dbfile=os.path.abspath(os.path.join(os.path.dirname(__file__), 'flavordb.json'))
+    
     if isinstance(conntype_list,str):
         conntype_list=[conntype_list]
     if isinstance(directory_search_list,str):
         directory_search_list=[directory_search_list]
     
-    if jsonfile.endswith('.json'):
-        with open(jsonfile,'r') as f:
+    if dbfile.endswith('.json'):
+        with open(dbfile,'r') as f:
             flavor_input_info=json.load(f)
-    elif jsonfile.endswith('.csv'):
-        flavor_input_info=pd.read_csv(jsonfile).set_index('flavor').to_dict(orient='index')
+    elif dbfile.endswith('.csv'):
+        flavor_input_info=pd.read_csv(dbfile).set_index('flavor').to_dict(orient='index')
+    elif dbfile.endswith('.tsv'):
+        flavor_input_info=pd.read_csv(dbfile,sep='\t').set_index('flavor').to_dict(orient='index')
+    else:
+        raise Exception(f"Unsupported file format for {dbfile}. Please provide a JSON, CSV, or TSV file.")
     
     if conntype_list is not None:
         flavor_input_info={k:flavor_input_info[k] for k in conntype_list}
@@ -699,13 +709,21 @@ def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[
     fetchable_urls=get_fetchable_data_list()
     fetchable_files=[u['filename'] for u in fetchable_urls]
     
-    filename_fields=[f for f in fields_to_check if f in ['checkpoint','xform','data']]
+    #filename_fields=[f for f in fields_to_check if f in ['checkpoint','xform','data']]
+    if fields_to_check=='all' or fields_to_check==['all']:
+        k=list(flavor_input_info.keys())[0]
+        filename_fields=list(flavor_input_info[k].keys())
+    else:
+        filename_fields=[f for f in fields_to_check]
     
     for k in flavor_input_info:
         all_exist=True
         all_fetchable=True
         all_exists_or_fetchable=True
         for f in filename_fields:
+            if f not in flavor_input_info[k]:
+                #if the field is not in the flavor info, skip it
+                raise Exception(f"Field '{f}' not found in flavor info for {k}. Available fields: {list(flavor_input_info[k].keys())}")
             is_fetchable=flavor_input_info[k][f] in fetchable_files
             found_absolute=False
             if os.path.exists(flavor_input_info[k][f]):
@@ -733,6 +751,10 @@ def load_flavor_input_json(jsonfile, conntype_list=None, directory_search_list=[
         flavor_input_info[k]['all_exists']=all_exist
         flavor_input_info[k]['all_fetchable']=all_fetchable
         flavor_input_info[k]['all_exists_or_fetchable']=all_exists_or_fetchable
+    
+    if only_return_exists_or_fetchable:
+        #filter out flavors that are not fetchable or do not have all files
+        flavor_input_info={k:v for k,v in flavor_input_info.items() if v['all_exists_or_fetchable']}
     
     return flavor_input_info
 

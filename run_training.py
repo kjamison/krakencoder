@@ -59,6 +59,7 @@ def argument_parse_runtraining(argv):
     arg_defaults['explicit_checkpoint_epochs']=[]
     arg_defaults['hiddenlayersizes']=[]
     arg_defaults['dropout_schedule']=None
+    arg_defaults['input_json_load_types']=['all']
 
     parser=argparse.ArgumentParser(description='Train krakencoder', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -79,6 +80,7 @@ def argument_parse_runtraining(argv):
     json_arg_group.add_argument('--inputjson',action='store',dest='input_json', help='.json file containing filenames for checkpoints, xforms, and input data for each flavor',nargs='*')
     json_arg_group.add_argument('--inputjson_search_directories',action='store',dest='input_json_search_directories', help='List of directories to search for data files from input json',nargs='*')
     json_arg_group.add_argument('--inputjson_fetch_files',action='store_true',dest='input_json_fetch_files', help='Fetch files from input json listing if possible')
+    json_arg_group.add_argument('--inputjson_load_types',action='store',dest='input_json_load_types', help='Data to load from json. (["checkpoint","xform","data"])',nargs='*')
     
     #data transformation options
     xfm_arg_group=parser.add_argument_group('Input transformation options')
@@ -269,6 +271,7 @@ def run_training_command(argv=None):
     input_json=args.input_json
     input_json_search_directories=args.input_json_search_directories
     input_json_fetch_files=args.input_json_fetch_files
+    input_json_load_types=args.input_json_load_types
     
     if do_domain_adaptation and starting_point_file is None:
         raise Exception("Must specify starting point file to use domain adaptation")
@@ -352,6 +355,8 @@ def run_training_command(argv=None):
     ##############
     #check for json option, and override checkpoints, xforms, inputfiles, etc...
     if input_json:
+        if 'all' in input_json_load_types:
+            input_json_load_types=["xform","data"]
         input_conntype_list=[x.split('@')[0] for x in args.dataflavors]
         input_group_dict={x.split('@')[0]:x.split('@')[1] for x in args.dataflavors if '@' in x}
         
@@ -366,7 +371,7 @@ def run_training_command(argv=None):
             json_directory_search_list+=[d for d in input_json_search_directories]
         flavor_input_info={}
         for j in input_json:
-            tmpinfo=load_flavor_input_json(j, directory_search_list=json_directory_search_list, override_abs_path=True)
+            tmpinfo=load_flavor_database(j, directory_search_list=json_directory_search_list, override_abs_path=True, fields_to_check=['checkpoint','xform','data'])
             for k in tmpinfo:
                 flavor_input_info[k]=tmpinfo[k]
         
@@ -396,7 +401,7 @@ def run_training_command(argv=None):
             tmp_xform=None
             tmp_datafile=None
             tmp_all_exist=True
-            for f in ['xform','data']:
+            for f in input_json_load_types:
                 tmp_f=None
                 if flavor_input_info[conntype][f'{f}_exists']:
                     tmp_f=flavor_input_info[conntype][f]
@@ -439,6 +444,9 @@ def run_training_command(argv=None):
                 
         if len(flavors_with_missing_files)>0:
             raise FileNotFoundError("Necessary files not found for flavors in json file: ", flavors_with_missing_files)
+        
+        if not 'xform' in input_json_load_types:
+            input_transform_file_list=args.input_transform_file
     ##################
     
     input_subject_splits=None

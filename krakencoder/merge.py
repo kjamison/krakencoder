@@ -11,7 +11,7 @@ from krakencoder.data import canonical_data_flavor
 from krakencoder.utils import format_columns
 import os
 
-def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False):
+def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False, input_names=None):
     """
     Merge encoders+decoders from multiple networks into a single network.
     
@@ -28,10 +28,13 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False):
     net_and_checkpoint_dict_list : list of dict, each with 'net' and 'checkpoint'. See description above.
     canonicalize_input_names : bool (default False) whether to canonicalize the input names before merging.
         This is useful if the input names are a mix of old and new flavor name conventions
-        
+    input_names : list of str (optional). If provided, only merge the encoders/decoders for these input names.
+    
     Returns:
     net, checkpoint: Krakencoder object and checkpoint dictionary for the merged model
     """
+    
+    input_names_to_merge=input_names
     
     # get the unique input names, in order of appearance
     input_name_list=[]
@@ -39,6 +42,15 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False):
     input_name_list_source_input_idx=[]
     for inet, net_chk in enumerate(net_and_checkpoint_dict_list):
         for i,n in enumerate(net_chk['checkpoint']['input_name_list']):
+            if input_names_to_merge is not None and n not in input_names_to_merge:
+                #skip this input name if it is not in the requested list
+                continue
+            if 'input_names_to_merge' in net_chk['checkpoint'] and \
+               net_chk['checkpoint']['input_names_to_merge'] is not None and n not in net_chk['checkpoint']['input_names_to_merge']:
+                #skip this input name if it is not in the requested list FOR THIS MODEL
+                #this allows merging parts of models that have the same input names
+                continue
+            #if canonicalize_input_names is True, convert the input name to the canonical flavor name
             if canonicalize_input_names:
                 n=canonical_data_flavor(n)
             if n not in input_name_list:
@@ -111,7 +123,7 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False):
 
     return net, checkpoint_info
 
-def merge_model_files(checkpoint_filename_list, canonicalize_input_names=False):
+def merge_model_files(checkpoint_filename_list, canonicalize_input_names=False, input_names=None):
     """
     Load a list of saved Krakencoder models and merge them into a single model.
     
@@ -121,6 +133,7 @@ def merge_model_files(checkpoint_filename_list, canonicalize_input_names=False):
     checkpoint_filename_list : List of .pt files to merge
     canonicalize_input_names : bool (default False) whether to canonicalize the input names before merging.
         This is useful if the input names are a mix of old and new flavor name conventions
+    input_names : list of str (optional). If provided, only merge the encoders/decoders for these input names.
     
     Returns:
     net, checkpoint: Krakencoder object and checkpoint dictionary for the merged model
@@ -130,7 +143,9 @@ def merge_model_files(checkpoint_filename_list, canonicalize_input_names=False):
         net_i, checkpoint_i=Krakencoder.load_checkpoint(ptfile)
         net_and_checkpoint_dict_list.append({'net':net_i, 'checkpoint':checkpoint_i})
     
-    net, checkpoint_info = merge_models(net_and_checkpoint_dict_list=net_and_checkpoint_dict_list, canonicalize_input_names=canonicalize_input_names)
+    net, checkpoint_info = merge_models(net_and_checkpoint_dict_list=net_and_checkpoint_dict_list, 
+                                        canonicalize_input_names=canonicalize_input_names,
+                                        input_names=input_names)
     
     checkpoint_info['merged_checkpointfile_list']=[os.path.split(ptfile)[-1] for ptfile in checkpoint_filename_list]
     
