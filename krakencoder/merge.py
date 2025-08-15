@@ -73,7 +73,8 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False, i
         net.encoder_list.append(net_tmp.encoder_list[iinput])
         net.decoder_list.append(net_tmp.decoder_list[iinput])
         net.inputsize_list.append(net_tmp.inputsize_list[iinput])
-        
+        if hasattr(net, 'adversarial_boolean_list'):
+            net.adversarial_boolean_list.append(net_tmp.adversarial_boolean_list[iinput])
     num_inputs_orig0=len(net_and_checkpoint_dict_list[0]['checkpoint']['input_name_list'])
     num_trainpaths_orig0=len(net_and_checkpoint_dict_list[0]['checkpoint']['trainpath_decoder_index_list'])
     
@@ -103,6 +104,8 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False, i
         except:
             pass
     
+    if hasattr(net, 'adversarial_boolean_list'):
+        checkpoint_info['adversarial_boolean_list']=net.adversarial_boolean_list
     
     checkpoint_info['input_name_list']=input_name_list
     checkpoint_info['merged_training_params_list']=[chk['checkpoint']['training_params'].copy() for chk in net_and_checkpoint_dict_list]
