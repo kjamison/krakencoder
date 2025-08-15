@@ -16,6 +16,7 @@ from IPython.display import display
 import pandas as pd
 import json
 import re
+from tqdm.auto import tqdm
 
 try:
     colab_spec = importlib.util.find_spec("google.colab")
@@ -427,6 +428,9 @@ def save_data_zip(
     if bids_desc is not None:
         desc_str = "_desc-%s" % (bids_desc)
     zipargs = {"compression": zipfile.ZIP_DEFLATED, "compresslevel": 6}
+    filecount=0
+    totalfilecount=len(conndata_squaremats) * len(participants_info)
+    pbar=tqdm(total=totalfilecount, desc="Saving data to zip")
     with zipfile.ZipFile(filename, "w", **zipargs) as zip_ref:
         outfile = io.BytesIO()
         participants_info.to_csv(outfile, sep="\t", index=None)
@@ -453,10 +457,13 @@ def save_data_zip(
                     desc_str,
                     conn_ext
                 )
-                if verbose:
-                    print("Adding %s" % (conndata_filename))
+                filecount+=1
+                #if verbose:
+                #    tqdm.write("Adding %s" % (conndata_filename))
+                pbar.set_description("Adding %s" % (conndata_filename))
+                pbar.update(1)
                 zip_ref.writestr(conndata_filename, outfile.getvalue())
-
+    pbar.close()
 
 def flavor_to_bids_string(flavor):
     atlasname = ""
@@ -596,7 +603,7 @@ def load_data_zip(filename, filebytes=None, allowed_extensions=None):
         allowed_extensions_in_zip = set(allowed_extensions) - set(["zip"])
         if len(allowed_extensions_in_zip) == 0:
             allowed_extensions_in_zip = None
-
+    
     with zipfile.ZipFile(filename_or_filebytes, "r") as zip_ref:
         # if a bids-style participants info file was included, read this in separately
         participants_tmp = [
@@ -618,6 +625,8 @@ def load_data_zip(filename, filebytes=None, allowed_extensions=None):
             )
             participants_info = pd.DataFrame({"participant_id": participants_list})
 
+        totalfiles=len(zip_ref.namelist())
+        pbar=tqdm(total=totalfiles, dynamic_ncols=True, leave=False, position=0)
         for zfile in zip_ref.namelist():
             if os.path.basename(zfile) == "participants.tsv":
                 # skip participants info in main data loop
@@ -654,7 +663,9 @@ def load_data_zip(filename, filebytes=None, allowed_extensions=None):
                 conndata_participants[conntype] = []
             conndata_squaremats[conntype].append(data_tmp)
             conndata_participants[conntype].append(subject)
-
+            pbar.update(1)
+        pbar.close()
+        
         # now reorder all conndata entries to the same subject order
         participants_info = participants_info.drop_duplicates(
             subset=["participant_id"]
@@ -753,6 +764,9 @@ def load_nemodata_zip(filename, filebytes=None, bidsify_subjects=True):
                 'train_val_test':subjsplit
             })
         
+        totalfiles=len(nemosubj_unique) * len(nemofiles_pattern_flavor)
+        pbar=tqdm(total=totalfiles, dynamic_ncols=True, leave=False, position=0)
+        
         for subject in nemosubj_unique:
             subjrow=participants_info[(participants_info['participant_id']==subject) | (participants_info['subject']==subject)]
             if len(subjrow)==0:
@@ -786,6 +800,8 @@ def load_nemodata_zip(filename, filebytes=None, bidsify_subjects=True):
                     conndata_participants[conntype] = []
                 conndata_squaremats[conntype].append(data_tmp)
                 conndata_participants[conntype].append(bids_subj)
+                pbar.update(1)
+        pbar.close()
         
         # now reorder all conndata entries to the same subject order
         participants_info = participants_info.drop_duplicates(
