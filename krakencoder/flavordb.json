@@ -2,6 +2,7 @@
     "FCcorr_fs86_hpf":{
         "group":"FC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_fs86_pc256_710train.npy",
         "data":"fc_fs86_FCcov_hpf_993subj.mat"
@@ -9,6 +10,7 @@
     "FCcorr_fs86_hpfgsr":{
         "group":"FC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_fs86_pc256_710train.npy",
         "data":"fc_fs86_FCcov_hpf_gsr_993subj.mat"
@@ -16,6 +18,7 @@
     "FCpcorr_fs86_hpf":{
         "group":"FC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_fs86_pc256_710train.npy",
         "data":"fc_fs86_FCpcorr_hpf_993subj.mat"
@@ -23,6 +26,7 @@
     "SCifod2act_fs86_volnorm":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_fs86_pc256_710train.npy",
         "data":"sc_fs86_ifod2act_volnorm_993subj.mat"
@@ -30,6 +34,7 @@
     "SCsdstream_fs86_volnorm":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_fs86_pc256_710train.npy",
         "data":"sc_fs86_sdstream_volnorm_993subj.mat"
@@ -37,6 +42,7 @@
     "FCcorr_shen268_hpf":{
         "group":"FC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_shen268_pc256_710train.npy",
         "data":"fc_shen268_FCcov_hpf_993subj.mat"
@@ -44,6 +50,7 @@
     "FCcorr_shen268_hpfgsr":{
         "group":"FC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_shen268_pc256_710train.npy",
         "data":"fc_shen268_FCcov_hpf_gsr_993subj.mat"
@@ -51,6 +58,7 @@
     "FCpcorr_shen268_hpf":{
         "group":"FC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_shen268_pc256_710train.npy",
         "data":"fc_shen268_FCpcorr_hpf_993subj.mat"
@@ -58,6 +66,7 @@
     "SCifod2act_shen268_volnorm":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_shen268_pc256_710train.npy",
         "data":"sc_shen268_ifod2act_volnorm_993subj.mat"
@@ -65,6 +74,7 @@
     "SCsdstream_shen268_volnorm":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_shen268_pc256_710train.npy",
         "data":"sc_shen268_sdstream_volnorm_993subj.mat"
@@ -72,6 +82,7 @@
     "FCcorr_coco439_hpf":{
         "group":"FC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_coco439_pc256_710train.npy",
         "data":"fc_cocommpsuit439_FCcov_hpf_993subj.mat"
@@ -79,6 +90,7 @@
     "FCcorr_coco439_hpfgsr":{
         "group":"FC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_coco439_pc256_710train.npy",
         "data":"fc_cocommpsuit439_FCcov_hpf_gsr_993subj.mat"
@@ -86,6 +98,7 @@
     "FCpcorr_coco439_hpf":{
         "group":"FC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_coco439_pc256_710train.npy",
         "data":"fc_cocommpsuit439_FCpcorr_hpf_993subj.mat"
@@ -93,6 +106,7 @@
     "SCifod2act_coco439_volnorm":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_coco439_pc256_710train.npy",
         "data":"sc_cocommpsuit439_ifod2act_volnorm_993subj.mat"
@@ -100,6 +114,7 @@
     "SCsdstream_coco439_volnorm":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCFC_fs86+shen268+coco439_pc256_225paths_latent128_20240413_ep002000.pt",
         "xform":"kraken_ioxfm_SCFC_coco439_pc256_710train.npy",
         "data":"sc_cocommpsuit439_sdstream_volnorm_993subj.mat"
@@ -109,6 +124,7 @@
     "SCifod2act_fs86_count":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCifod2act_fs86_count_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_fs86_count_pc256_710train.npy",
         "data":"sc_fs86_ifod2act_count_993subj.mat"
@@ -116,6 +132,7 @@
     "SCsdstream_fs86_count":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCsdstream_fs86_count_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_fs86_count_pc256_710train.npy",
         "data":"sc_fs86_sdstream_count_993subj.mat"
@@ -123,6 +140,7 @@
     "SCifod2act_shen268_count":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCifod2act_shen268_count_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_shen268_count_pc256_710train.npy",
         "data":"sc_shen268_ifod2act_count_993subj.mat"
@@ -130,6 +148,7 @@
     "SCsdstream_shen268_count":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCsdstream_shen268_count_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_shen268_count_pc256_710train.npy",
         "data":"sc_shen268_sdstream_count_993subj.mat"
@@ -137,6 +156,7 @@
     "SCifod2act_coco439_count":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCifod2act_coco439_count_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_coco439_count_pc256_710train.npy",
         "data":"sc_cocommpsuit439_ifod2act_count_993subj.mat"
@@ -144,6 +164,7 @@
     "SCsdstream_coco439_count":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCsdstream_coco439_count_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_coco439_count_pc256_710train.npy",
         "data":"sc_cocommpsuit439_sdstream_count_993subj.mat"
@@ -152,6 +173,7 @@
     "SCifod2act_fs86_sift2":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCifod2act_fs86_sift2_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_fs86_sift2_pc256_710train.npy",
         "data":"sc_fs86_ifod2act_sift2_993subj.mat"
@@ -159,6 +181,7 @@
     "SCsdstream_fs86_sift2":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCsdstream_fs86_sift2_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_fs86_sift2_pc256_710train.npy",
         "data":"sc_fs86_sdstream_sift2_993subj.mat"
@@ -166,6 +189,7 @@
     "SCifod2act_shen268_sift2":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCifod2act_shen268_sift2_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_shen268_sift2_pc256_710train.npy",
         "data":"sc_shen268_ifod2act_sift2_993subj.mat"
@@ -173,6 +197,7 @@
     "SCsdstream_shen268_sift2":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCsdstream_shen268_sift2_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_shen268_sift2_pc256_710train.npy",
         "data":"sc_shen268_sdstream_sift2_993subj.mat"
@@ -180,6 +205,7 @@
     "SCifod2act_coco439_sift2":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCifod2act_coco439_sift2_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_coco439_sift2_pc256_710train.npy",
         "data":"sc_cocommpsuit439_ifod2act_sift2_993subj.mat"
@@ -187,6 +213,7 @@
     "SCsdstream_coco439_sift2":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCsdstream_coco439_sift2_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_coco439_sift2_pc256_710train.npy",
         "data":"sc_cocommpsuit439_sdstream_sift2_993subj.mat"
@@ -196,6 +223,7 @@
     "SCifod2act_fs86_sift2volnorm":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCifod2act_fs86_sift2volnorm_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_fs86_sift2volnorm_pc256_710train.npy",
         "data":"sc_fs86_ifod2act_sift2volnorm_993subj.mat"
@@ -203,6 +231,7 @@
     "SCsdstream_fs86_sift2volnorm":{
         "group":"SC",
         "atlas":"fs86",
+        "matrixsize":[86,86],
         "checkpoint":"kraken_chkpt_SCsdstream_fs86_sift2volnorm_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_fs86_sift2volnorm_pc256_710train.npy",
         "data":"sc_fs86_sdstream_sift2volnorm_993subj.mat"
@@ -210,6 +239,7 @@
     "SCifod2act_shen268_sift2volnorm":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCifod2act_shen268_sift2volnorm_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_shen268_sift2volnorm_pc256_710train.npy",
         "data":"sc_shen268_ifod2act_sift2volnorm_993subj.mat"
@@ -217,6 +247,7 @@
     "SCsdstream_shen268_sift2volnorm":{
         "group":"SC",
         "atlas":"shen268",
+        "matrixsize":[268,268],
         "checkpoint":"kraken_chkpt_SCsdstream_shen268_sift2volnorm_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_shen268_sift2volnorm_pc256_710train.npy",
         "data":"sc_shen268_sdstream_sift2volnorm_993subj.mat"
@@ -224,6 +255,7 @@
     "SCifod2act_coco439_sift2volnorm":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCifod2act_coco439_sift2volnorm_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCifod2act_coco439_sift2volnorm_pc256_710train.npy",
         "data":"sc_cocommpsuit439_ifod2act_sift2volnorm_993subj.mat"
@@ -231,6 +263,7 @@
     "SCsdstream_coco439_sift2volnorm":{
         "group":"SC",
         "atlas":"coco439",
+        "matrixsize":[439,439],
         "checkpoint":"kraken_chkpt_SCsdstream_coco439_sift2volnorm_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_coco439_sift2volnorm_pc256_710train.npy",
         "data":"sc_cocommpsuit439_sdstream_sift2volnorm_993subj.mat"
