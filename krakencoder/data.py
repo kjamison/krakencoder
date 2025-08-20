@@ -16,8 +16,6 @@ import json
 import pandas as pd
 from copy import deepcopy
 
-
-
 def clean_subject_list(subjects):
     """
     make all subject lists = str type
@@ -1584,7 +1582,9 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
     
     return transformer, transformer_info
 
-def load_transformers_from_file(input_transform_file_list, input_names=None, quiet=False):
+def load_transformers_from_file(input_transform_file_list, 
+                                input_names=None, 
+                                quiet=False):
     """
     Load precomputed input transformers from a list of files
     
@@ -1592,8 +1592,9 @@ def load_transformers_from_file(input_transform_file_list, input_names=None, qui
     input_transform_file_list: list of str, list of input transformer files (kraken_ioxfm_*.npy) to load
     input_names: list of str (optional), list of input names to load (default=None, load all)
     
-    Returns:
+    Returns (tuple):
     transformer_list: dict, with input names as keys and transformer objects as values
+    transformer_info_list: dict, with input names as keys and transformer information/params as values
     """
     if isinstance(input_transform_file_list,str):
         input_transform_file_list=[input_transform_file_list]
@@ -1602,10 +1603,75 @@ def load_transformers_from_file(input_transform_file_list, input_names=None, qui
     for ioxfile in input_transform_file_list:
         if not quiet:
             print("Loading precomputed input transformations: %s" % (ioxfile))
-        ioxtmp=np.load(ioxfile,allow_pickle=True).item()
+        if ioxfile.lower().endswith('.npy'):
+            ioxtmp=np.load(ioxfile,allow_pickle=True).item()
+        elif ioxfile.lower().endswith('.npz'):
+            ioxtmp=np.load(ioxfile,allow_pickle=True)["transform_params"].item()
+        elif ioxfile.lower().endswith('.h5'):
+            ioxtmp=load_h5_to_dict(ioxfile)
+        else:
+            raise ValueError("Unsupported file format (accepts .npy, .npz, .h5): %s" % (ioxfile))
+        
         for conntype in ioxtmp:
             if input_names is not None and conntype not in input_names:
                 continue
             transformer_list[conntype], transformer_info_list[conntype] = generate_transformer(transformer_type=ioxtmp[conntype]['type'],  
-                                                                                               precomputed_transformer_params=ioxtmp[conntype])
+                                                                                               precomputed_transformer_params=ioxtmp[conntype], 
+                                                                                               return_components=True)
+            transformer_info_list[conntype]['filename']=ioxfile.split(os.sep)[-1]
+            transformer_info_list[conntype]['filepath']=os.path.abspath(ioxfile)
+            transformer_info_list[conntype]['fromfile']=True
     return transformer_list, transformer_info_list
+
+def save_transformers_to_file(input_transformer_file, 
+                              transformer_info_list, 
+                              input_names=None, 
+                              extra_params={}, 
+                              h5_compression="gzip",
+                              save_even_if_fromfile=False,
+                              quiet=False):
+        """
+        Save the transformer information to a file
+        
+        Parameters:
+        input_transformer_file: str, path to the input transformer file
+        transformer_info_list: dict, transformer information to save
+        input_names: list of str (optional), list of input names to save (default=None, save all)
+        extra_params: dict, additional parameters to save
+        h5_compression: str, compression method for HDF5 files (default="gzip")
+        save_even_if_fromfile: bool, whether to save even if the transformer was loaded from a file (default=False)
+        """
+        transformer_params_to_save={}
+        for k_iox in transformer_info_list.keys():
+            if input_names is not None and k_iox not in input_names:
+                continue
+            if 'fromfile' in transformer_info_list[k_iox] and transformer_info_list[k_iox]['fromfile'] and not save_even_if_fromfile:
+                #don't save these, since they are already saved to a file we loaded
+                continue
+            transformer_params_to_save[k_iox]=transformer_info_list[k_iox]["params"]
+            for kk,kv in transformer_info_list[k_iox]["params"].items():
+                if torch.is_tensor(kv):
+                    transformer_params_to_save[k_iox][kk]=kv.cpu().numpy()
+                else:
+                    transformer_params_to_save[k_iox][kk]=kv
+            transformer_params_to_save[k_iox]["type"]=transformer_info_list[k_iox]["type"]
+            for kk,kv in extra_params.items():
+                transformer_params_to_save[k_iox][kk]=kv
+        
+        if len(transformer_params_to_save) == 0:
+            return
+        
+        if input_transformer_file.lower().endswith(".npy"):
+            np.save(input_transformer_file, transformer_params_to_save)
+        elif input_transformer_file.lower().endswith(".npz"):
+            np.savez_compressed(input_transformer_file, transform_params=transformer_params_to_save)
+        elif input_transformer_file.lower().endswith(".h5"):
+            save_dict_to_h5(input_transformer_file,transformer_params_to_save,compression=h5_compression)
+        else:
+            del transformer_params_to_save #clear up memory
+            raise ValueError("Unsupported file format (accepts .npy, .npz, .h5): %s" % (input_transformer_file))
+        
+        del transformer_params_to_save #clear up memory
+        
+        if not quiet:
+            print("Saved transforms: %s" % (input_transformer_file))

@@ -620,15 +620,7 @@ def run_training_command(argv=None):
     ##################################
     precomputed_transformer_info_list={}
     if input_transform_file_list is not None and len(input_transform_file_list)>0:
-        precomputed_transformer_info_list={}
-        for ioxfile in input_transform_file_list:
-            print("Loading precomputed input transformations: %s" % (ioxfile))
-            ioxtmp=np.load(ioxfile,allow_pickle=True).item()
-            for k in ioxtmp:
-                precomputed_transformer_info_list[k]=ioxtmp[k]
-                precomputed_transformer_info_list[k]['filename']=ioxfile.split(os.sep)[-1]
-                precomputed_transformer_info_list[k]['filepath']=os.path.abspath(ioxfile)
-                precomputed_transformer_info_list[k]['fromfile']=True
+        _,precomputed_transformer_info_list=load_transformers_from_file(input_transform_file_list,input_names=conn_names)
 
 
     if input_latentunit:

@@ -599,28 +599,21 @@ def run_model_on_new_data(argv=None):
         print("Must provide input transform (ioxfm) file")
         sys.exit(1)
     
-    precomputed_transformer_info_list={}
+    transformer_list={}
+    transformer_info_list={}
     if checkpoint['input_transformation_info']=='none':
         for conntype in conn_names:
-            precomputed_transformer_info_list[conntype]={'type':'none'}
+            transformer_list[conntype], transformer_info[conntype] = generate_transformer(traindata=None, 
+                transformer_type='none', transformer_param_dict=None, 
+                precomputed_transformer_params={'type':'none'}, return_components=True)
     else:
         for i,ioxfile in enumerate(input_transform_file_list):
             if not os.path.exists(ioxfile) and ioxfile in get_fetchable_data_list(filenames_only=True):
                 ioxfile=fetch_model_data(files_to_fetch=ioxfile, force_download=False)
                 input_transform_file_list[i]=ioxfile
-            print("Loading precomputed input transformations: %s" % (ioxfile))
-            ioxtmp=np.load(ioxfile,allow_pickle=True).item()
-            for k in ioxtmp:
-                precomputed_transformer_info_list[k]=ioxtmp[k]
-        
-    transformer_list={}
-    transformer_info_list={}
-    for conntype in precomputed_transformer_info_list:
-        transformer, transformer_info = generate_transformer(traindata=None, 
-            transformer_type=precomputed_transformer_info_list[conntype]["type"], transformer_param_dict=None, 
-            precomputed_transformer_params=precomputed_transformer_info_list[conntype], return_components=True)
-        transformer_list[conntype]=transformer
-        transformer_info_list[conntype]=transformer_info
+                
+        transformer_list, transformer_info_list = load_transformers_from_file(input_transform_file_list, input_names=conn_names)
+    
     
     ##########
     #handle special case for OLD saved transformers before we updated the connectivity flavors

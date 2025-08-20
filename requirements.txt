@@ -11,3 +11,5 @@ requests
 tqdm
 platformdirs
 seaborn
+pandas
+h5py

@@ -6,7 +6,7 @@ from .model import *
 from .adaptermodel import *
 from .loss import *
 from .utils import *
-from .data import generate_transformer
+from .data import generate_transformer, save_transformers_to_file
 from .plotfigures import *
 
 import torch.utils.data as data_utils
@@ -419,6 +419,12 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
             #if not conn_name in precomputed_transformer_info_list:
                 #raise Exception("'%s' not found in precomputed transformer file" % (conn_name))
             precomputed_transformer_params=precomputed_transformer_info_list[conn_name]
+            if 'params' in precomputed_transformer_params:
+                # if this input was the output of a previous call that embedded params into ['params'] field, 
+                # re-extract it here while keeping other fields like ['filename']
+                for kiox in precomputed_transformer_params['params']:
+                    precomputed_transformer_params[kiox]=precomputed_transformer_params['params'][kiox]
+                del precomputed_transformer_params['params']
             precomputed_transformer_string=" (from file)"
             xtype=precomputed_transformer_params['type']
             data_transformer_list[conn_name], data_transformer_dict = generate_transformer(traindata,transformer_type=xtype,
@@ -1248,22 +1254,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     input_transformer_file=""
     if precomputed_transformer_info_list and save_input_transforms:
         input_transformer_file="%s_ioxfm_%s_%s_%s_%s.npy" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
-        transformer_params_to_save={}
-        for k_iox in precomputed_transformer_info_list.keys():
-            if 'fromfile' in precomputed_transformer_info_list[k_iox] and precomputed_transformer_info_list[k_iox]['fromfile']:
-                #don't save these, since they are already saved to a file we loaded
-                continue
-            transformer_params_to_save[k_iox]=precomputed_transformer_info_list[k_iox]["params"]
-            for kk,kv in precomputed_transformer_info_list[k_iox]["params"].items():
-                if torch.is_tensor(kv):
-                    transformer_params_to_save[k_iox][kk]=kv.cpu().numpy()
-                else:
-                    transformer_params_to_save[k_iox][kk]=kv
-            transformer_params_to_save[k_iox]["type"]=precomputed_transformer_info_list[k_iox]["type"]
-            transformer_params_to_save[k_iox]["train_subjects"]=subjects[subjidx_train]
-        np.save(input_transformer_file,transformer_params_to_save)
-        del transformer_params_to_save #clear up memory
-        print("Saved transforms: %s" % (input_transformer_file))
+        save_transformers_to_file(input_transformer_file, 
+                                  precomputed_transformer_info_list,
+                                  extra_params={'train_subjects':subjects[subjidx_train]})
     
     output_file_list_json_auto=recordfile.replace("_trainrecord_","_config_")[:-4]+".json"
     

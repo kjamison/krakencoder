@@ -7,6 +7,7 @@ import numpy as np
 import random
 import os
 import scipy.interpolate
+import h5py
 
 from ._version import __version__, __version_date__
 
@@ -415,6 +416,121 @@ def clean_args(args, arg_defaults={}, flatten=True):
             except:
                 continue
     return args
+
+def load_h5_to_dict(filename):
+    """
+    Load an HDF5 file created by Option 1 into a nested dict of dicts.
+    Groups become dicts, datasets become numpy arrays, attributes become scalars.
+    """
+    def _recurse(h5obj):
+        result = {}
+        # Load attributes
+        for k, v in h5obj.attrs.items():
+            result[k] = v
+
+        # Load groups and datasets
+        for k, v in h5obj.items():
+            if isinstance(v, h5py.Group):
+                result[k] = _recurse(v)
+            elif isinstance(v, h5py.Dataset):
+                result[k] = v[()]  # read dataset into numpy array or scalar
+        return result
+
+    with h5py.File(filename, "r") as h5f:
+        return {k: _recurse(v) for k, v in h5f.items()}
+
+def save_dict_to_h5(
+    filename,
+    data,
+    compression=None,         # e.g. "gzip", "lzf", or None
+    compression_opts=None,    # e.g. 9 for gzip level
+    overwrite=True
+):
+    """
+    Save a dict-of-dicts to HDF5 using a structured layout:
+      - top-level keys -> groups
+      - inner dict keys:
+          * array-like -> datasets (optionally compressed)
+          * scalar (int/float/bool/str/bytes/np scalar) -> attributes
+
+    Parameters
+    ----------
+    data : dict
+        Nested dictionary (values may be dict, arrays/lists, or scalars).
+    filename : str
+        Output .h5 path.
+    compression : str or None
+        "gzip", "lzf", or None.
+    compression_opts : int or None
+        For gzip, 1..9 (9 = max compression).
+    overwrite : bool
+        If True, open file with mode="w" (overwrite). Else "x" (fail if exists).
+    """
+    mode = "w" if overwrite else "x"
+
+    def _is_scalar(x):
+        # Accept basic Python scalars, numpy scalars, and strings/bytes
+        return (
+            isinstance(x, (int, float, bool, np.number, np.bool_))
+            or isinstance(x, (str, bytes, np.str_, np.bytes_))
+        )
+
+    def _to_dataset(h5group, key, value):
+        """Create a dataset for value under h5group[key], with compression settings."""
+        ds_kwargs = {}
+        if compression is not None:
+            ds_kwargs["compression"] = compression
+            if compression_opts is not None:
+                ds_kwargs["compression_opts"] = compression_opts
+
+        # Strings need special handling: variable-length UTF-8
+        if isinstance(value, (list, tuple)) and all(isinstance(s, (str, np.str_)) for s in value):
+            dt = h5py.string_dtype(encoding="utf-8")
+            h5group.create_dataset(str(key), data=np.asarray(value, dtype=dt), dtype=dt, **ds_kwargs)
+        elif isinstance(value, np.ndarray) and value.dtype.kind in ("U", "O"):
+            # If it's a numpy array of strings/objects, try to coerce to vlen UTF-8 strings
+            # (object arrays must be all strings)
+            arr = value
+            if arr.dtype.kind == "O":
+                if not all(isinstance(s, (str, np.str_)) for s in arr.ravel()):
+                    raise TypeError(f"Object array at '{key}' contains non-string elements.")
+                arr = arr.astype("U")  # to unicode
+            dt = h5py.string_dtype(encoding="utf-8")
+            h5group.create_dataset(str(key), data=arr.astype(dt), dtype=dt, **ds_kwargs)
+        else:
+            # General numeric/boolean arrays or lists
+            arr = np.asarray(value)
+            h5group.create_dataset(str(key), data=arr, **ds_kwargs)
+
+    def _recurse(h5obj, d):
+        if not isinstance(d, dict):
+            raise TypeError("All non-leaf nodes must be dicts.")
+        for k, v in d.items():
+            k = str(k)
+            if isinstance(v, dict):
+                subgrp = h5obj.create_group(k)
+                _recurse(subgrp, v)
+            else:
+                if _is_scalar(v):
+                    # Attributes can't be compressed; store scalars here
+                    # h5py handles str/bytes/numeric scalars as attributes.
+                    h5obj.attrs[k] = v
+                else:
+                    # Treat anything array-like (including lists) as a dataset
+                    _to_dataset(h5obj, k, v)
+
+    with h5py.File(filename, mode) as h5f:
+        # create one group per top-level key
+        for top_k, top_v in data.items():
+            grp = h5f.create_group(str(top_k))
+            if isinstance(top_v, dict):
+                _recurse(grp, top_v)
+            else:
+                # If a top-level value is not a dict, decide where to put it:
+                if _is_scalar(top_v):
+                    grp.attrs["__value__"] = top_v
+                else:
+                    _to_dataset(grp, "__value__", top_v)
 
 def get_version(include_date=False):
     """Return the version of this package"""
