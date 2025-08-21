@@ -564,7 +564,7 @@ def parse_bids_string(bids_str):
                     elif "vn" in s_val_lower:
                         flavor_suffix = "_volnorm"
                     elif "siftcount" in s_val_lower:
-                        flavor_suffix = "_sift2count"
+                        flavor_suffix = "_sift2"
                     elif "count" in s_val_lower:
                         flavor_suffix = "_count"
                         
