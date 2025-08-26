@@ -250,5 +250,113 @@
         "url": "https://osf.io/download/689b9ab0ffa8ba802b3cce08/",
         "hash": "982992de95de6198153e4062a00707372ec6c8bc9074afbcaad978a43fd617e5",
         "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_FCcorr_cocoyeo243_hpf_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae1397738d807c68162131/",
+        "hash": "fa84e1a606445910102ce06fc9697c2440b52ceed7985680819886b3ab385ffd",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCsdstream_cocoyeo243_sift2_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae138317127706c5bcf843/",
+        "hash": "111c0970c83cb97a03d5e14592075871fc7bc766b9ab8e0730410ea7ddfe80dc",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCsdstream_cocoyeo243_sift2volnorm_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae137c34c2e0cce8bcf868/",
+        "hash": "cf0a4113659c81bc2674a305f93f11e363b509e9b5d3386436a2cd164c98780d",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCifod2act_cocoyeo243_sift2_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae138ec0ff126ec9bcc203/",
+        "hash": "28118e97cbca9f1abe346eb25a5f80bbd5c12aaba477490a8dc3b2297bedeada",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCifod2act_cocoyeo243_sift2volnorm_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae138942fc5c41a616219e/",
+        "hash": "34c546af9f11049e1f9f0e2e2e4b1231b931993de80a71bbd60e32216f0a9abd",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCsdstream_cocoyeo243_volnorm_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae137de4ec9df1e7bcf653/",
+        "hash": "f393198ad1f36788e30947369412645c89c8db5e573aa313db909f6364d41eb0",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCifod2act_cocoyeo243_count_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae139545f31a93bdbcbc2d/",
+        "hash": "01b06c3bb8d87dd402c59de72a604cdad12de0a17f07fc37a83ffbcec6e40b48",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_FCpcorr_cocoyeo243_hpf_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae13919dd01870c7bcbc70/",
+        "hash": "fcd0a8288f65b8df4e223ff091f9eb66b9dfefcca49d13c2794fe6e629e97779",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCifod2act_cocoyeo243_volnorm_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae13899dd01870c7bcbc6c/",
+        "hash": "bbcd00d8d6652b4ee00d5b2dfc63f40c5192c079d5f12dff2291c63a4cb4b685",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_FCcorr_cocoyeo243_hpfgsr_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae1398753bc29ddfb000bc/",
+        "hash": "5f21c3a58ca77cc8119114e999235e22aa4138e23c3b4b89733afa78ab913c3c",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_ioxfm_SCsdstream_cocoyeo243_count_pc256_710train.npy",
+        "url": "https://osf.io/download/68ae1384d0eed90f177dac25/",
+        "hash": "20d66dcf43fe6db224d4e86e04acdf0037ca47fec0dc9fa9954700b0d6f19557",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_chkpt_SCifod2act_cocoyeo243_count_pc256_latent128_targlatent_20241029_113350_ep000500.pt",
+        "url": "https://osf.io/download/68ae184f102f979ed9bcf729/",
+        "hash": "68754ddabc2a4c642456190364b60ae5d8be6354071ca84ee54426e05d46d574",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_chkpt_SCFC_cocoyeo243_pc256_5paths_latent128_targlatent_20240920_152856_ep000500.pt",
+        "url": "https://osf.io/download/68ae185686fed02b86affbf8/",
+        "hash": "4e9863182d0e5614f99eccaedf96f5b92b26d788510ade633b430830789f170e",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_chkpt_SCsdstream_cocoyeo243_sift2volnorm_pc256_latent128_targlatent_20241029_113509_ep000500.pt",
+        "url": "https://osf.io/download/68ae18490b1825f46b161fef/",
+        "hash": "6f6a4308eb60db6357d8c012c57e39cbc36e3b60683b33313d1d2d660f584f89",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_chkpt_SCifod2act_cocoyeo243_sift2_pc256_latent128_targlatent_20241029_113352_ep000500.pt",
+        "url": "https://osf.io/download/68ae184f102f979ed9bcf72b/",
+        "hash": "485baaf875481566d26ee2bd5e5375d1f78b17fb1bc9ef9c0566ef94aaf7a778",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_chkpt_SCsdstream_cocoyeo243_sift2_pc256_latent128_targlatent_20241029_113509_ep000500.pt",
+        "url": "https://osf.io/download/68ae184c145d1da01316217b/",
+        "hash": "d8d59f29850150ecd8b90dea9d0bf3b7116b541f80a8dafa7ade2cf5e915df34",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_chkpt_SCifod2act_cocoyeo243_sift2volnorm_pc256_latent128_targlatent_20241029_113352_ep000500.pt",
+        "url": "https://osf.io/download/68ae1855738d807c681622ee/",
+        "hash": "f0b894c5e2a7485a9a13deb66cfeb6cfcc2e7237db8f4f784fc60dfe191e3adb",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_chkpt_SCsdstream_cocoyeo243_count_pc256_latent128_targlatent_20241029_113509_ep000500.pt",
+        "url": "https://osf.io/download/68ae18490b1825f46b161fed/",
+        "hash": "520c95c8772e4e904540a9ac27de6f99bfcf29150a2dec8d7f2f5c7b9a9b33dd",
+        "hashtype": "sha256"
     }
 ]

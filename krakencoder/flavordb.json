@@ -267,5 +267,95 @@
         "checkpoint":"kraken_chkpt_SCsdstream_coco439_sift2volnorm_pc256_latent128_targlatent_20241029_ep000500.pt",
         "xform":"kraken_ioxfm_SCsdstream_coco439_sift2volnorm_pc256_710train.npy",
         "data":"sc_cocommpsuit439_sdstream_sift2volnorm_993subj.mat"
+    },
+    
+    "FCcorr_cocoyeo243_hpf": {
+        "group": "FC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCFC_cocoyeo243_pc256_5paths_latent128_targlatent_20240920_152856_ep000500.pt",
+        "xform": "kraken_ioxfm_FCcorr_cocoyeo243_hpf_pc256_710train.npy",
+        "data": "fc_cocoyeo243_FCcov_hpf_993subj.mat"
+    },
+    "FCcorr_cocoyeo243_hpfgsr": {
+        "group": "FC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCFC_cocoyeo243_pc256_5paths_latent128_targlatent_20240920_152856_ep000500.pt",
+        "xform": "kraken_ioxfm_FCcorr_cocoyeo243_hpfgsr_pc256_710train.npy",
+        "data": "fc_cocoyeo243_FCcov_hpf_gsr_993subj.mat"
+    },
+    "FCpcorr_cocoyeo243_hpf": {
+        "group": "FC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCFC_cocoyeo243_pc256_5paths_latent128_targlatent_20240920_152856_ep000500.pt",
+        "xform": "kraken_ioxfm_FCpcorr_cocoyeo243_hpf_pc256_710train.npy",
+        "data": "fc_cocoyeo243_FCpcorr_hpf_993subj.mat"
+    },
+    "SCifod2act_cocoyeo243_volnorm": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCFC_cocoyeo243_pc256_5paths_latent128_targlatent_20240920_152856_ep000500.pt",
+        "xform": "kraken_ioxfm_SCifod2act_cocoyeo243_volnorm_pc256_710train.npy",
+        "data": "sc_cocoyeo243_ifod2act_volnorm_993subj.mat"
+    },
+    "SCsdstream_cocoyeo243_volnorm": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCFC_cocoyeo243_pc256_5paths_latent128_targlatent_20240920_152856_ep000500.pt",
+        "xform": "kraken_ioxfm_SCsdstream_cocoyeo243_volnorm_pc256_710train.npy",
+        "data": "sc_cocoyeo243_sdstream_volnorm_993subj.mat"
+    },
+    "SCifod2act_cocoyeo243_count": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCifod2act_cocoyeo243_count_pc256_latent128_targlatent_20241029_113350_ep000500.pt",
+        "xform": "kraken_ioxfm_SCifod2act_cocoyeo243_count_pc256_710train.npy",
+        "data": "sc_cocoyeo243_ifod2act_count_993subj.mat"
+    },
+    "SCsdstream_cocoyeo243_count": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCsdstream_cocoyeo243_count_pc256_latent128_targlatent_20241029_113509_ep000500.pt",
+        "xform": "kraken_ioxfm_SCsdstream_cocoyeo243_count_pc256_710train.npy",
+        "data": "sc_cocoyeo243_sdstream_count_993subj.mat"
+    },
+    "SCifod2act_cocoyeo243_sift2": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCifod2act_cocoyeo243_sift2_pc256_latent128_targlatent_20241029_113352_ep000500.pt",
+        "xform": "kraken_ioxfm_SCifod2act_cocoyeo243_sift2_pc256_710train.npy",
+        "data": "sc_cocoyeo243_ifod2act_sift2_993subj.mat"
+    },
+    "SCsdstream_cocoyeo243_sift2": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCsdstream_cocoyeo243_sift2_pc256_latent128_targlatent_20241029_113509_ep000500.pt",
+        "xform": "kraken_ioxfm_SCsdstream_cocoyeo243_sift2_pc256_710train.npy",
+        "data": "sc_cocoyeo243_sdstream_sift2_993subj.mat"
+    },
+    "SCifod2act_cocoyeo243_sift2volnorm": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCifod2act_cocoyeo243_sift2volnorm_pc256_latent128_targlatent_20241029_113352_ep000500.pt",
+        "xform": "kraken_ioxfm_SCifod2act_cocoyeo243_sift2volnorm_pc256_710train.npy",
+        "data": "sc_cocoyeo243_ifod2act_sift2volnorm_993subj.mat"
+    },
+    "SCsdstream_cocoyeo243_sift2volnorm": {
+        "group": "SC",
+        "atlas": "cocoyeo243",
+        "matrixsize": [243,243],
+        "checkpoint": "kraken_chkpt_SCsdstream_cocoyeo243_sift2volnorm_pc256_latent128_targlatent_20241029_113509_ep000500.pt",
+        "xform": "kraken_ioxfm_SCsdstream_cocoyeo243_sift2volnorm_pc256_710train.npy",
+        "data": "sc_cocoyeo243_sdstream_sift2volnorm_993subj.mat"
     }
+
 }
