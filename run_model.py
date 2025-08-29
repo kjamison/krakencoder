@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Command-line script for evaluating a krakencoder model checkpoint on new data
 Must provide a checkpoint file (.pt) and input transform files (*ioxfm*.npy), unless model was trained on non-transformed data

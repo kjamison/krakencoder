@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Command-line script to merge a list of Krakencoder checkpoints (.pt files) into a new single model
 """

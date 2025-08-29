@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Command-line script for training krakencoder. 
 
