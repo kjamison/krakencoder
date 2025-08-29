@@ -6,6 +6,7 @@ Includes some hard-coded paths to HCP data files, which may need to be updated f
 
 from .utils import *
 from .fetch import get_fetchable_data_list
+from ._resources import resource_path
 from scipy.io import loadmat
 from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.preprocessing import FunctionTransformer
@@ -684,7 +685,7 @@ def load_flavor_database(dbfile=None, conntype_list=None, directory_search_list=
     """
     if dbfile is None:
         #default to the model_data_urls.json file in the same directory as this script
-        dbfile=os.path.abspath(os.path.join(os.path.dirname(__file__), 'flavordb.json'))
+        dbfile=os.path.abspath(resource_path('flavordb.json'))
     
     if isinstance(conntype_list,str):
         conntype_list=[conntype_list]

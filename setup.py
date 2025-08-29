@@ -21,6 +21,10 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     install_requires = required,
     include_package_data = True,
+    package_data={
+        "krakencoder": ["resources/*"],
+        "tests": ["resources/*"],
+    },
     classifiers= [
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

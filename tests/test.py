@@ -14,6 +14,13 @@ from krakencoder.data import load_transformers_from_file, generate_adapt_transfo
 from scipy.io import loadmat
 import os
 
+try:
+    from ._resources import resource_path
+except ImportError:
+   #in case it is being called directly from command line
+   from _resources import resource_path
+
+
 class TestDummyEvaluationOutput(unittest.TestCase):
     def test_dummy_eval(self):
         """
@@ -31,7 +38,7 @@ class TestDummyEvaluationOutput(unittest.TestCase):
         """
         
         #test inputs and expected outputs are stored in the same directory as this script
-        testdir=os.path.dirname(__file__)
+        testdir=resource_path('.')
         
         #checkpoint and transformation (just mean for cfeat)
         checkpoint_file=os.path.join(testdir,'krakenTEST_chkpt_SC_fs86_cfeat_4paths_latent128_20240425_ep002000.pt')

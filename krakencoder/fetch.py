@@ -15,6 +15,13 @@ import platformdirs
 from tqdm import tqdm
 
 
+try:
+    from ._resources import resource_path
+except ImportError:
+   #in case it is being called directly from command line
+   from _resources import resource_path
+
+
 def model_data_folder(data_folder=None, ignore_env=False):
     """
     Returns the folder where the model data is stored 
@@ -40,7 +47,7 @@ def get_fetchable_data_list(override_json=None,filenames_only=False):
     # Default location for the model data URLs
     # This file should be in the same directory as this script
     # or in the krakencoder package directory
-    urlfile=os.path.abspath(os.path.join(os.path.dirname(__file__), 'model_data_urls.json'))
+    urlfile=os.path.abspath(resource_path('model_data_urls.json'))
     if override_json is not None:
         # If an override JSON file is provided, use that instead of the default
         urlfile=override_json

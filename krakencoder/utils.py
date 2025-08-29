@@ -11,9 +11,14 @@ import h5py
 
 from ._version import __version__, __version_date__
 
+try:
+    from importlib.resources import files as resource_files  # Py ≥ 3.9
+except ImportError:
+    from importlib_resources import files as resource_files  # backport for 3.8
+
 def getscriptdir():
     """Return the directory that contains this script"""
-    return os.path.realpath(os.path.dirname(__file__))
+    return str(resource_files(__package__))
 
 def set_random_seed(seed):
     """Set random seed for torch, numpy, and random modules"""

@@ -19,13 +19,14 @@ import seaborn as sns
 
 from .data import canonical_data_flavor
 from .utils import *
+from ._resources import resource_path
 
 def extra_colormap_list():
     return ['magma2','magma2_r','flare','flare_r','rocket','rocket_r']
 
 def load_custom_colormap(colormap_name):
     #these additional colormaps were generated for https://github.com/kjamison/colormap_matplotlib_matlab
-    cmap_matfile=os.path.join(getscriptdir(), 'matplotlib_colormaps.mat')
+    cmap_matfile=resource_path('matplotlib_colormaps.mat')
     Ccmap=loadmat(cmap_matfile,simplify_cells=True)
     
     #add custom "magma2" colormap that starts at 10% of the way through the original "magma" colormap
