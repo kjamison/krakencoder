@@ -6,6 +6,7 @@ scipy>=1.7.2
 torch>=1.10
 cycler>=0.11.0
 ipython>=7.31
+ipywidgets
 matplotlib>=3.5
 colorspacious>=1.1.2
 requests
