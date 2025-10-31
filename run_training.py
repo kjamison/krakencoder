@@ -354,6 +354,12 @@ def run_training_command(argv=None):
     input_data_file_list=args.input_data_file
     input_subject_split_file=args.subject_split_file
 
+    #replace any {FETCH} or {KRAKENCODER_DATA} placeholders, fetch data if needed
+    input_data_file_list=fetch_model_data_if_needed(input_data_file_list)
+    input_transform_file_list=fetch_model_data_if_needed(input_transform_file_list)
+    input_subject_split_file=fetch_model_data_if_needed(input_subject_split_file)
+    input_encodingfile=fetch_model_data_if_needed(input_encodingfile)
+    
     ##############
     #check for json option, and override checkpoints, xforms, inputfiles, etc...
     if input_json:

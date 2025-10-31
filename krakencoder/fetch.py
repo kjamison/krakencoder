@@ -169,19 +169,74 @@ def get_fetchable_data_list(override_json=None,filenames_only=False):
     
     return data_urls
 
-def replace_data_folder_placeholder(filename):
+def replace_data_folder_placeholder(filename, data_folder=None):
     """
     Replace placeholder strings in the URLs with the actual data folder path.
     """
     
     if isinstance(filename,list):
-        return [replace_data_folder_placeholder(f) for f in filename]
+        return [replace_data_folder_placeholder(f, data_folder=data_folder) for f in filename]
+    
+    if filename is None:
+        return filename
     
     for d in ['{FETCH}','{KRAKENCODER_DATA}','{KRAKENDATA}','{KRAKENDATAFOLDER}']:
         if d in filename:
-            filename=filename.replace(d,model_data_folder())
+            filename=filename.replace(d,model_data_folder(data_folder))
     
     return filename
+
+def is_fetchable_file(filename, data_folder=None):
+    """
+    Check if a given filename is in the list of fetchable data files.
+    """
+    fetchable_list=get_fetchable_data_list(filenames_only=True)
+    filename=replace_data_folder_placeholder(filename, data_folder=data_folder)
+    if filename.startswith(model_data_folder(data_folder)):
+        filename=os.path.basename(filename)
+    return filename in fetchable_list
+
+def fetch_model_data_if_needed(files_to_fetch=None, data_folder=None, force_download=False, verbose=False):
+    """
+    Fetch model data files if they are fetchable and not already present, otherwise returns input path(s)
+    
+    Parameters:
+    files_to_fetch : str or list of str. List of filenames to fetch. if None, do nothing. Can be NAME=FILE to preserve prefix.
+    data_folder : str (optional). Folder where the data files are stored. If None, the default folder is used.
+    force_download : bool (default=False). If True, download the files even if they already exist.
+    verbose : bool (default=False). If True, print extra messages about the download status.
+    
+    Returns:
+    data_file_list : str or list of str. List of paths to the downloaded files OR input files. If input was a string, this is a string.
+    """
+    
+    if files_to_fetch is None:
+        return None
+    
+    if isinstance(files_to_fetch,str):
+        input_was_str=True
+        files_to_fetch=[files_to_fetch]
+    else:
+        input_was_str=False
+    
+    files_new=[]
+    for f in files_to_fetch:
+        f=replace_data_folder_placeholder(f)
+        fstart=None
+        if '=' in f:
+            fstart, f = f.split('=',1)
+        if f.startswith(model_data_folder(data_folder)):
+            f=os.path.basename(f)
+        if is_fetchable_file(f, data_folder=data_folder):
+            f=fetch_model_data(files_to_fetch=f, data_folder=data_folder, force_download=force_download, verbose=verbose)
+        if fstart is not None:
+            f=fstart+'='+f
+        files_new+=[f]
+    
+    if input_was_str:
+        return files_new[0]
+    else:
+        return files_new
 
 def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False, verbose=False):
     """
@@ -212,10 +267,14 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False
     elif isinstance(files_to_fetch, str):
         input_was_str=True
         files_to_fetch = [files_to_fetch]
-        
+    
+    files_to_fetch=[replace_data_folder_placeholder(f) for f in files_to_fetch]
+    
     data_file_list=[]
     
     for data_file_tofind in files_to_fetch:
+        if data_file_tofind.startswith(model_data_folder()):
+            data_file_tofind=os.path.basename(data_file_tofind)
         data_info = [data_info for data_info in data_urls if data_info['filename']==data_file_tofind]
         if len(data_info) == 0:
             raise Exception(f"Could not find data file {data_file} in data_urls")
