@@ -12,6 +12,7 @@ import pandas as pd
 from scipy.io import loadmat, savemat
 import numpy as np
 import warnings
+import zipfile
 
 import krakencoder.jupyter_functions as kjf
 
@@ -39,23 +40,68 @@ def data_to_cell_array(data, as2d=False):
         data_new[:]=[C for C in data]
     return data_new
 
-def load_single_connectome_from_file(filename, datafields=[]):
-    if not os.path.exists(filename):
-        raise FileNotFoundError("File not found: %s" % filename)
+def check_file_exists(filename):
+    #check based on dir and look in zips
+    file_exists=True
+    if '.zip'+os.path.sep in filename.lower():
+        zipfilename=re.sub(r'\.zip'+os.path.sep+r'.+$','.zip',filename,flags=re.IGNORECASE)
+        filename_new=re.sub(r'^.+\.zip'+os.path.sep,'',filename,flags=re.IGNORECASE)
+        if not os.path.exists(zipfilename):
+            file_exists=False
+        else:
+            #check if the file exists in the zip
+            with zipfile.ZipFile(zipfilename, 'r') as z:
+                if not filename_new in z.namelist():
+                    file_exists=False
+    elif not os.path.exists(filename):
+        file_exists=False
+    return file_exists
+
+def load_single_connectome_from_file(filename, datafields=[], subjectfields=[],file_bytes=None, return_subjectname=False):
+    if datafields is None or len(datafields)==0:
+        datafields=['C','SC','FC','data']
+    if subjectfields is None or len(subjectfields)==0:
+        subjectfields=['subject','subjects']
+    
+    if file_bytes is None:
+        #check if file exists, unless we are given bytes directly
+        if not check_file_exists(filename):
+            raise FileNotFoundError("File not found: %s" % filename)
+        
+        if '.zip'+os.path.sep in filename.lower():
+            zipfilename=re.sub(r'\.zip'+os.path.sep+r'.+$','.zip',filename,flags=re.IGNORECASE)
+            filename_new=re.sub(r'^.+\.zip'+os.path.sep,'',filename,flags=re.IGNORECASE)
+            with zipfile.ZipFile(zipfilename, 'r') as z:
+                if filename_new not in z.namelist():
+                    raise FileNotFoundError("File not found in zip: %s" % filename)
+                with z.open(filename_new) as zb:
+                    return load_single_connectome_from_file(filename_new, datafields=datafields, file_bytes=zb)
+    
+    file_to_load=filename if file_bytes is None else file_bytes
+    
     #load data from file, either .mat, .csv, space-separated .txt/.tsv
     C=None
+    subjectname=None
     if filename.lower().endswith('.mat'):
-        M=loadmat(filename,simplify_cells=True)
+        M=loadmat(file_to_load,simplify_cells=True)
         for f in datafields:
             if f in M:
                 C=M[f]
                 break
+        for sf in subjectfields:
+            if sf in M:
+                subjectname=M[sf]
+                break
     else:
         try:
-            C=np.loadtxt(filename,delimiter=',',comments=['#','!','%'])
+            C=np.loadtxt(file_to_load,delimiter=',',comments=['#','!','%'])
         except ValueError:
-            C=np.loadtxt(filename,comments=['#','!','%'])
-    return C
+            C=np.loadtxt(file_to_load,comments=['#','!','%'])
+    
+    if return_subjectname:
+        return C, subjectname
+    else:
+        return C
 
 def run_collectdata(argv=None):
     if argv is None:
@@ -82,6 +128,7 @@ def run_collectdata(argv=None):
     else:
         datafields=['C','SC','FC','data']
     
+    subjects=[]
     if args.subjectfile:
         if not os.path.exists(args.subjectfile):
             sys.exit('Error: subject file does not exist')
@@ -118,21 +165,23 @@ def run_collectdata(argv=None):
             for s in subjects:
                 filepat_subj=filepat.format(SUBJECT=s)
                 filepat_subj=os.path.expanduser(filepat_subj)
-                if not os.path.exists(filepat_subj):
+                if not check_file_exists(filepat_subj):
                     sys.exit('Error: input file does not exist for subject %s: %s' % (filepat_subj,s))
-                    
                 M=load_single_connectome_from_file(filepat_subj,datafields=datafields)
                 conndata.append(M)
         else:
             filepat=os.path.expanduser(filepat)
-            if not os.path.exists(filepat):
-                sys.exit('Error: input file does not exist')
-            M=load_single_connectome_from_file(filepat,datafields=datafields)
+            if not check_file_exists(filepat):
+                sys.exit('Error: input file does not exist: %s' % (filepat))
+            
+            M,Msubj=load_single_connectome_from_file(filepat,datafields=datafields, return_subjectname=True)
+            if Msubj is not None:
+                subjects+=[x for x in Msubj]
             conndata=M
         if conntype in conndata_alltypes:
-            conndata_alltypes[conntype]+=conndata
+            conndata_alltypes[conntype]+=[x for x in conndata]
         else:
-            conndata_alltypes[conntype]=conndata
+            conndata_alltypes[conntype]=[x for x in conndata]
     
     #check that all subjects are the same shape
     # (can be smaller if the last ROI is missing)

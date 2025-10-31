@@ -96,6 +96,7 @@ def argument_parse_newdata(argv):
     
     parser.add_argument('--adaptmode',action='store',dest='adapt_mode',default='none',help='How do adapt new data to fit model (default: none)')
     parser.add_argument('--adaptmodesplitname',action='store',dest='adapt_mode_split_name',default='train',help='Which subject split to use for domain adaptation (default: train)')
+    parser.add_argument('--adaptmodesourcedata',action='append',dest='adapt_mode_data_file',help='.mat file(s) containing input data to use for domain adaptation (instead of input mean). Can be "name=file"', nargs='*')
     
     parser.add_argument('--fusioninclude',action='append',dest='fusion_include',help='inputnames to include in fusion average',nargs='*')
     parser.add_argument('--fusion',action ='store_true',dest='fusion',help='fusion mode eval')
@@ -124,6 +125,7 @@ def argument_parse_newdata(argv):
     testing_group.add_argument('--untransformedoutputs',action='store_true',dest='save_untransformed_outputs', help='Keep outputs in PCA/transformed space (for testing)')
     testing_group.add_argument('--hackcortex',action='store_true',dest='hack_cortex', help='Hack to only use cortex for eval (for fs86 and coco439) (for testing)')
     testing_group.add_argument('--ccmat',action='store_true',dest='ccmat', help='Save full SUBJxSUBJ ccmat for every prediction path (large record file)')
+    testing_group.add_argument('--usetrainmean',action='store_true',dest='use_train_mean', help='Use training mean for demean if available in ioxform')
     
     parser.add_argument('--version', action='version',version='Krakencoder v{version}'.format(version=get_version(include_date=True)))
     
@@ -216,7 +218,10 @@ def run_model_on_new_data(argv=None):
     
     adapt_mode=args.adapt_mode
     adapt_mode_split_name=args.adapt_mode_split_name
+    adapt_mode_file_list=args.adapt_mode_data_file
     save_ccmat_in_record=args.ccmat
+    
+    do_use_train_mean=args.use_train_mean
     
     hack_cortex=args.hack_cortex
     if hack_cortex:
@@ -489,6 +494,7 @@ def run_model_on_new_data(argv=None):
     input_conntype_list=[x.split('@')[0] for x in input_conntype_list]
     input_conntype_list, input_conntype_idx =search_flavors(input_conntype_list, conn_names, return_index=True)
     
+    
     if len(input_file_list) > 0 and not input_file_list[0] in ['all','test','train','val','retest']:
         #if we provided multiple input files, the conntype list may have been reordered during search_flavors
         # or only a subset were used (if the model checkpoint only accepts certain inputs),
@@ -547,7 +553,21 @@ def run_model_on_new_data(argv=None):
     else:
         eval_input_conntype_list=input_conntype_list.copy()
     
-    
+    #handle optional adaptation data files (to use instead of input mean)
+    #(needs to be down here because we need the final input_conntype_list)
+    adapt_mode_file_dict={c:None for c in input_conntype_list}
+    if adapt_mode_file_list is not None and len(adapt_mode_file_list)>0:
+        if(all(["=" in x for x in adapt_mode_file_list])):
+            for x in adapt_mode_file_list:
+                c=x.split("=")[0]
+                cf=x.split("=")[-1]
+                adapt_mode_file_dict[c]=cf
+        elif len(adapt_mode_file_list)==1 and len(input_conntype_list)==1:
+            adapt_mode_file_dict[input_conntype_list[0]]=adapt_mode_file_list[0]
+        else:
+            raise ValueError("When providing multiple --adaptmodedata files, must use name=file format.")
+        if any([adapt_mode_file_dict[c] is None for c in adapt_mode_file_dict]):
+            raise ValueError("When providing  --adaptmodedata files, must have one for each input conntype")
     
     #handle some shortcuts for the input/output filenames
     do_save_output_data=True
@@ -616,6 +636,13 @@ def run_model_on_new_data(argv=None):
                 
         transformer_list, transformer_info_list = load_transformers_from_file(input_transform_file_list, input_names=conn_names)
     
+    traindata_mean_list={}
+    for conntype, transformer_info in transformer_info_list.items():
+        if 'params' in transformer_info and 'pca_input_mean' in transformer_info['params']:
+                traindata_mean_list[conntype]=transformer_info['params']['pca_input_mean']
+        if 'params' in transformer_info and 'input_mean' in transformer_info['params']:
+                traindata_mean_list[conntype]=transformer_info['params']['input_mean']
+    
     
     ##########
     #handle special case for OLD saved transformers before we updated the connectivity flavors
@@ -664,11 +691,20 @@ def run_model_on_new_data(argv=None):
             else:
                 subjidx_adapt=np.arange(conndata_alltypes[x]['data'].shape[0])
             
-            adxfm, adxfm_info=generate_adapt_transformer(input_data=conndata_alltypes[x]['data'],
+            adapt_data_tmp=conndata_alltypes[x]['data']
+            subjidx_adapt_tmp=subjidx_adapt
+            adapt_source_name="input"
+            if x in adapt_mode_file_dict and adapt_mode_file_dict[x] is not None:
+                adapt_data_tmp=load_input_data(inputfile=adapt_mode_file_dict[x], inputfield=None)['data']
+                subjidx_adapt_tmp=None
+                adapt_source_name="adaptsource"
+            
+            adxfm, adxfm_info=generate_adapt_transformer(input_data=adapt_data_tmp,
                                         target_data=transformer_info_list[x],
                                         adapt_mode=adapt_mode,
-                                        input_data_fitsubjmask=subjidx_adapt,
-                                        return_fit_info=True)
+                                        input_data_fitsubjmask=subjidx_adapt_tmp,
+                                        return_fit_info=True,
+                                        input_source_name=adapt_source_name)
             adxfm_info_alltypes[x]=adxfm_info
             conndata_alltypes[x]['data']=adxfm.transform(conndata_alltypes[x]['data'])
             
@@ -990,7 +1026,7 @@ def run_model_on_new_data(argv=None):
             for k_in in outdict['predicted_alltypes'].keys():
                 for k_out in outdict['predicted_alltypes'][k_in].keys():
                     print("\t%s->%s (%dx%d)" % (k_in,k_out,*outdict['predicted_alltypes'][k_in][k_out].shape))
-
+    
     if new_train_recordfile is not None or heatmapfile is not None:
         #by default, "all" and provide splitfile, then
         # we computed on all (did not use splitfile), and now we use splitfile to pull out just the subjidx_val for trainrecord/heatmap
@@ -1084,6 +1120,13 @@ def run_model_on_new_data(argv=None):
                                 subjidx=newrecord['subjidx_'+tv]
                             else:
                                 continue
+                            
+                            x_true_train_mean=None
+                            if k_out in traindata_mean_list:
+                                #use the mean from the training set
+                                x_true_train_mean=torchfloat(traindata_mean_list[k_out])
+                            elif tv == 'val' and 'subjidx_train' in newrecord:
+                                x_true_train_mean=torchfloat(conndata_alltypes[k_out]['data'][newrecord['subjidx_train'],:]).mean(axis=0,keepdims=True)
                                 
                             x_true=torchfloat(conndata_alltypes[k_out]['data'][subjidx,:])
                             x_pred=predicted_alltypes[k_in][k_out][subjidx,:]
@@ -1105,6 +1148,10 @@ def run_model_on_new_data(argv=None):
 
                             x_true_mean=x_true.mean(axis=0,keepdims=True)
                             x_pred_mean=x_pred.mean(axis=0,keepdims=True)
+                            
+                            if do_use_train_mean and x_true_train_mean is not None:
+                                #use the mean from the training set
+                                x_true_mean=x_true_train_mean
                             
                             cc_resid=xycorr(x_true-x_true_mean, x_pred-x_true_mean)
                             cc_doubleresid=xycorr(x_true-x_true_mean, x_pred-x_pred_mean)

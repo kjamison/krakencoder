@@ -7,6 +7,9 @@ Command-line script to merge a list of Krakencoder checkpoints (.pt files) into 
 from krakencoder.model import *
 from krakencoder.merge import merge_model_files, print_merged_model
 from krakencoder.utils import get_version
+from krakencoder.fetch import get_fetchable_data_list, fetch_model_data
+
+import os
 import sys
 import argparse
 import warnings
@@ -35,6 +38,12 @@ def run_merge_models(argv):
     
     warnings.filterwarnings("ignore", category=UserWarning, message="CUDA initialization")
 
+    checkpointfile_list_resolved=[]
+    for c in checkpointfile_list:
+        if not os.path.exists(c) and c in get_fetchable_data_list(filenames_only=True):
+            c=fetch_model_data(files_to_fetch=c, force_download=False)
+        checkpointfile_list_resolved+=[c]
+    checkpointfile_list=checkpointfile_list_resolved
     net, checkpoint_info=merge_model_files(checkpoint_filename_list=checkpointfile_list, canonicalize_input_names=canonicalize_input_names)
     
     print("Merged model info:")
