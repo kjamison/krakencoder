@@ -21,7 +21,6 @@ except ImportError:
    #in case it is being called directly from command line
    from _resources import resource_path
 
-
 def model_data_folder(data_folder=None, ignore_env=False):
     """
     Returns the folder where the model data is stored 
@@ -39,6 +38,103 @@ def model_data_folder(data_folder=None, ignore_env=False):
         data_folder = os.environ.get('KRAKENCODER_DATA')
     data_folder=os.path.abspath(os.path.expanduser(data_folder))
     return data_folder
+
+
+def load_flavor_database(dbfile=None, conntype_list=None, directory_search_list=[], override_abs_path=False, 
+                           fields_to_check=['checkpoint','xform'],
+                           only_return_exists_or_fetchable=True):
+    """
+    Load a json file with flavor information, including the following fields:
+    flavorinfo[conntype]['atlas']: str, atlas name
+    flavorinfo[conntype]['checkpoint']: str, "*.pt" checkpoint filename trained on this flavor (could include multiple flavors)
+    flavorinfo[conntype]['xform']: str, "*.npy" filename for the pre-computed transformer for this flavor (Eg: PCA)
+    flavorinfo[conntype]['data']: str, filename of the input data for this flavor
+    
+    flavorinfo[conntype]['<field>_exists']: bool, True if a given file has been found (absolute path)
+    flavorinfo[conntype]['<field>_fetchable']: bool, True if a given file can be fetched from the uploaded database
+    
+    Filenames stored in json can be relative names without paths. This function will search for the files in the directory_search_list
+     
+    If override_abs_path=True, even if input json had an absolute path, search for the filename in the directory list anyway
+
+    Return a dict with only the flavors specified in the conntype_list (or all flavors if conntype_list is None)
+    """
+    if dbfile is None:
+        #default to the model_data_urls.json file in the same directory as this script
+        dbfile=os.path.abspath(resource_path('flavordb.json'))
+    
+    if isinstance(conntype_list,str):
+        conntype_list=[conntype_list]
+    if isinstance(directory_search_list,str):
+        directory_search_list=[directory_search_list]
+    
+    if len(directory_search_list)==0:
+        directory_search_list=[model_data_folder()]
+        
+    if dbfile.endswith('.json'):
+        with open(dbfile,'r') as f:
+            flavor_input_info=json.load(f)
+    elif dbfile.endswith('.csv'):
+        flavor_input_info=pd.read_csv(dbfile).set_index('flavor').to_dict(orient='index')
+    elif dbfile.endswith('.tsv'):
+        flavor_input_info=pd.read_csv(dbfile,sep='\t').set_index('flavor').to_dict(orient='index')
+    else:
+        raise Exception(f"Unsupported file format for {dbfile}. Please provide a JSON, CSV, or TSV file.")
+    
+    if conntype_list is not None:
+        flavor_input_info={k:flavor_input_info[k] for k in conntype_list}
+    
+    fetchable_urls=get_fetchable_data_list()
+    fetchable_files=[u['filename'] for u in fetchable_urls]
+    
+    #filename_fields=[f for f in fields_to_check if f in ['checkpoint','xform','data']]
+    if fields_to_check=='all' or fields_to_check==['all']:
+        k=list(flavor_input_info.keys())[0]
+        filename_fields=list(flavor_input_info[k].keys())
+    else:
+        filename_fields=[f for f in fields_to_check]
+    
+    for k in flavor_input_info:
+        all_exist=True
+        all_fetchable=True
+        all_exists_or_fetchable=True
+        for f in filename_fields:
+            if f not in flavor_input_info[k]:
+                #if the field is not in the flavor info, skip it
+                raise Exception(f"Field '{f}' not found in flavor info for {k}. Available fields: {list(flavor_input_info[k].keys())}")
+            is_fetchable=flavor_input_info[k][f] in fetchable_files
+            found_absolute=False
+            if os.path.exists(flavor_input_info[k][f]):
+                found_absolute=True
+            elif os.path.exists(os.path.abspath(os.path.expanduser(flavor_input_info[k][f]))):
+                flavor_input_info[k][f]=os.path.abspath(os.path.expanduser(flavor_input_info[k][f]))
+                found_absolute=True
+            else:
+                fname=flavor_input_info[k][f]
+                for d in directory_search_list:
+                    d=os.path.abspath(os.path.expanduser(d))
+                    if os.path.exists(os.path.join(d,fname)):
+                        found_absolute=True
+                        flavor_input_info[k][f]=os.path.join(d,fname)
+                        break
+                    elif override_abs_path and os.path.exists(os.path.join(d, os.path.split(fname)[-1])):
+                        found_absolute=True
+                        flavor_input_info[k][f]=os.path.join(d,os.path.split(fname)[-1])
+                        break
+            flavor_input_info[k][f'{f}_exists']=found_absolute
+            flavor_input_info[k][f'{f}_fetchable']=is_fetchable
+            all_exist=all_exist and found_absolute
+            all_fetchable=all_fetchable and is_fetchable
+            all_exists_or_fetchable=all_exists_or_fetchable and (found_absolute or is_fetchable)
+        flavor_input_info[k]['all_exists']=all_exist
+        flavor_input_info[k]['all_fetchable']=all_fetchable
+        flavor_input_info[k]['all_exists_or_fetchable']=all_exists_or_fetchable
+    
+    if only_return_exists_or_fetchable:
+        #filter out flavors that are not fetchable or do not have all files
+        flavor_input_info={k:v for k,v in flavor_input_info.items() if v['all_exists_or_fetchable']}
+    
+    return flavor_input_info
 
 def get_fetchable_data_list(override_json=None,filenames_only=False):
     """
@@ -72,6 +168,20 @@ def get_fetchable_data_list(override_json=None,filenames_only=False):
         data_urls=[]
     
     return data_urls
+
+def replace_data_folder_placeholder(filename):
+    """
+    Replace placeholder strings in the URLs with the actual data folder path.
+    """
+    
+    if isinstance(filename,list):
+        return [replace_data_folder_placeholder(f) for f in filename]
+    
+    for d in ['{FETCH}','{KRAKENCODER_DATA}','{KRAKENDATA}','{KRAKENDATAFOLDER}']:
+        if d in filename:
+            filename=filename.replace(d,model_data_folder())
+    
+    return filename
 
 def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False, verbose=False):
     """
@@ -130,6 +240,23 @@ def fetch_model_data(files_to_fetch=None, data_folder=None, force_download=False
                     print(f"Downloading {data_file_path} from {url}")
                     hash_new=download_url(url, data_file_path, show_progress=True, hash_type=hash_type)
                     check_this_hash=True
+                    
+                     # Check hash only if file was downloaded (not if it already existed)
+                    if hash_new is None:
+                        #if we did not compute a hash during download, compute it now
+                        hash_new=_file_hash(data_file_path, hash_type=hash_type)
+                    if hash_new == hash_expected:
+                        if verbose:
+                            print(f" SUCCESS! Hash of {data_file_path} matches expected hash")
+                    else:
+                        print(f" ERROR! Hash of {data_file_path} does not match expected hash")
+                        print("  Expected hash: ", hash_expected)
+                        print("  Computed hash: ", hash_new)
+                        #if has doesn't match, delete the file and raise an exception
+                        os.remove(data_file_path)
+                        raise Exception("Hash mismatch. Please download the file again.")
+                    
+                    check_this_hash=False
                     break
                 except Exception as e:
                     print(f" ERROR! Failed to download {data_file_path} from {url}. {e}")

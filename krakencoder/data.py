@@ -5,7 +5,7 @@ Includes some hard-coded paths to HCP data files, which may need to be updated f
 """
 
 from .utils import *
-from .fetch import get_fetchable_data_list
+from .fetch import get_fetchable_data_list, model_data_folder, replace_data_folder_placeholder, load_flavor_database
 from ._resources import resource_path
 from scipy.io import loadmat
 from sklearn.decomposition import PCA, TruncatedSVD
@@ -665,99 +665,6 @@ def merge_conndata_subjects(conndata_list):
         else:
             conndata_new[k]=np.concatenate([c[k] for c in conndata_list],axis=0)
     return conndata_new
-
-def load_flavor_database(dbfile=None, conntype_list=None, directory_search_list=[], override_abs_path=False, 
-                           fields_to_check=['checkpoint','xform'],
-                           only_return_exists_or_fetchable=True):
-    """
-    Load a json file with flavor information, including the following fields:
-    flavorinfo[conntype]['atlas']: str, atlas name
-    flavorinfo[conntype]['checkpoint']: str, "*.pt" checkpoint filename trained on this flavor (could include multiple flavors)
-    flavorinfo[conntype]['xform']: str, "*.npy" filename for the pre-computed transformer for this flavor (Eg: PCA)
-    flavorinfo[conntype]['data']: str, filename of the input data for this flavor
-    
-    flavorinfo[conntype]['<field>_exists']: bool, True if a given file has been found (absolute path)
-    flavorinfo[conntype]['<field>_fetchable']: bool, True if a given file can be fetched from the uploaded database
-    
-    Filenames stored in json can be relative names without paths. This function will search for the files in the directory_search_list
-     
-    If override_abs_path=True, even if input json had an absolute path, search for the filename in the directory list anyway
-
-    Return a dict with only the flavors specified in the conntype_list (or all flavors if conntype_list is None)
-    """
-    if dbfile is None:
-        #default to the model_data_urls.json file in the same directory as this script
-        dbfile=os.path.abspath(resource_path('flavordb.json'))
-    
-    if isinstance(conntype_list,str):
-        conntype_list=[conntype_list]
-    if isinstance(directory_search_list,str):
-        directory_search_list=[directory_search_list]
-    
-    if dbfile.endswith('.json'):
-        with open(dbfile,'r') as f:
-            flavor_input_info=json.load(f)
-    elif dbfile.endswith('.csv'):
-        flavor_input_info=pd.read_csv(dbfile).set_index('flavor').to_dict(orient='index')
-    elif dbfile.endswith('.tsv'):
-        flavor_input_info=pd.read_csv(dbfile,sep='\t').set_index('flavor').to_dict(orient='index')
-    else:
-        raise Exception(f"Unsupported file format for {dbfile}. Please provide a JSON, CSV, or TSV file.")
-    
-    if conntype_list is not None:
-        flavor_input_info={k:flavor_input_info[k] for k in conntype_list}
-    
-    fetchable_urls=get_fetchable_data_list()
-    fetchable_files=[u['filename'] for u in fetchable_urls]
-    
-    #filename_fields=[f for f in fields_to_check if f in ['checkpoint','xform','data']]
-    if fields_to_check=='all' or fields_to_check==['all']:
-        k=list(flavor_input_info.keys())[0]
-        filename_fields=list(flavor_input_info[k].keys())
-    else:
-        filename_fields=[f for f in fields_to_check]
-    
-    for k in flavor_input_info:
-        all_exist=True
-        all_fetchable=True
-        all_exists_or_fetchable=True
-        for f in filename_fields:
-            if f not in flavor_input_info[k]:
-                #if the field is not in the flavor info, skip it
-                raise Exception(f"Field '{f}' not found in flavor info for {k}. Available fields: {list(flavor_input_info[k].keys())}")
-            is_fetchable=flavor_input_info[k][f] in fetchable_files
-            found_absolute=False
-            if os.path.exists(flavor_input_info[k][f]):
-                found_absolute=True
-            elif os.path.exists(os.path.abspath(os.path.expanduser(flavor_input_info[k][f]))):
-                flavor_input_info[k][f]=os.path.abspath(os.path.expanduser(flavor_input_info[k][f]))
-                found_absolute=True
-            else:
-                fname=flavor_input_info[k][f]
-                for d in directory_search_list:
-                    d=os.path.abspath(os.path.expanduser(d))
-                    if os.path.exists(os.path.join(d,fname)):
-                        found_absolute=True
-                        flavor_input_info[k][f]=os.path.join(d,fname)
-                        break
-                    elif override_abs_path and os.path.exists(os.path.join(d, os.path.split(fname)[-1])):
-                        found_absolute=True
-                        flavor_input_info[k][f]=os.path.join(d,os.path.split(fname)[-1])
-                        break
-            flavor_input_info[k][f'{f}_exists']=found_absolute
-            flavor_input_info[k][f'{f}_fetchable']=is_fetchable
-            all_exist=all_exist and found_absolute
-            all_fetchable=all_fetchable and is_fetchable
-            all_exists_or_fetchable=all_exists_or_fetchable and (found_absolute or is_fetchable)
-        flavor_input_info[k]['all_exists']=all_exist
-        flavor_input_info[k]['all_fetchable']=all_fetchable
-        flavor_input_info[k]['all_exists_or_fetchable']=all_exists_or_fetchable
-    
-    if only_return_exists_or_fetchable:
-        #filter out flavors that are not fetchable or do not have all files
-        flavor_input_info={k:v for k,v in flavor_input_info.items() if v['all_exists_or_fetchable']}
-    
-    return flavor_input_info
 
 def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False, keep_diagonal=False):
     """
@@ -1606,6 +1513,7 @@ def load_transformers_from_file(input_transform_file_list,
     transformer_list={}
     transformer_info_list={}
     for ioxfile in input_transform_file_list:
+        ioxfile=replace_data_folder_placeholder(ioxfile)
         if not quiet:
             print("Loading precomputed input transformations: %s" % (ioxfile))
         if ioxfile.lower().endswith('.npy'):
