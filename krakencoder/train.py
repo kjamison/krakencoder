@@ -341,6 +341,18 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     data_string+="_"+xformstr
     data_string=data_string.replace('__','_')
     
+    ##########
+    conngroup_conntypes={}
+    for x in conndata_alltypes:
+        g=conndata_alltypes[x]['group']
+        if g in conngroup_conntypes:
+            conngroup_conntypes[g].append(x)
+        else:
+            conngroup_conntypes[g]=[x]
+    if 'SC' in conngroup_conntypes and 'FC' in conngroup_conntypes:
+        conngroup_conntypes['SCFC']=conngroup_conntypes['SC']+conngroup_conntypes['FC']
+    ##########
+    
     if trainpath_group_pairs:
         trainpath_pairs=[]
         for g1,g2 in trainpath_group_pairs:
@@ -385,7 +397,9 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
     traindata_origscale_list={}
     valdata_origscale_list={}
     
-    unames=list(set(flatlist(trainpath_pairs)))
+    #unames=list(set(flatlist(trainpath_pairs)))
+    unames=unique_preserve_order(flatlist(flatlist(trainpath_pairs))).tolist()
+    unames=[u for u in unames if not 'fusion(' in u]
     for iconn,conn_name in enumerate(unames):
 
         if type(conn_name) != str:
@@ -1423,16 +1437,18 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         #latentsimloss_subjidx_dataloader=data_utils.DataLoader(np.arange(numsubjects_train), batch_size=tmp_latent_batchsize, shuffle=True, drop_last=True)
         
         for itp, tp in enumerate(trainpath_list):
-            sampler = torch.utils.data.RandomSampler(tp['trainloader'].dataset, generator=g)
-            tp['trainloader']=torch.utils.data.DataLoader(tp['trainloader'].dataset, 
-                                                          batch_size=tp['trainloader'].batch_size, drop_last=tp['trainloader'].drop_last, 
-                                                          sampler=sampler, shuffle=False)
-            sampler = torch.utils.data.RandomSampler(tp['valloader'].dataset, generator=g)
-            tp['valloader']=torch.utils.data.DataLoader(tp['valloader'].dataset, 
+            sampler = data_utils.RandomSampler(tp['trainloader'].dataset, generator=g)
+            tp['trainloader']=data_utils.DataLoader(tp['trainloader'].dataset,
+                batch_size=tp['trainloader'].batch_size, drop_last=tp['trainloader'].drop_last, 
+                sampler=sampler, shuffle=False)
+            
+            sampler = data_utils.RandomSampler(tp['valloader'].dataset, generator=g)
+            tp['valloader']=data_utils.DataLoader(tp['valloader'].dataset, 
                                                           batch_size=tp['valloader'].batch_size, drop_last=tp['valloader'].drop_last, 
                                                           sampler=sampler, shuffle=False)
             tp['trainloader_iter']=iter(tp['trainloader'])
             tp['valloader_iter']=iter(tp['valloader'])
+            
         
         train_running_loss=[]
         loss_train_batch_by_trainpath=[[]]*len(trainpath_list)

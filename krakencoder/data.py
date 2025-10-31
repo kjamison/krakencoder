@@ -22,6 +22,8 @@ def clean_subject_list(subjects):
     make all subject lists = str type
     (for cases where subjects are float(1234.), convert to int first to make sure they are "1234" and not "1234.0")
     """
+    if isinstance(subjects,str):
+        subjects=[subjects]
     try:
         newsubjects=[int(x) for x in subjects]
     except:
@@ -542,7 +544,7 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
         elif "volnorm" in input_conntype_lower:
             input_scproc="volnorm"
         elif "sift2count" in input_conntype_lower or "sift2_count" in input_conntype_lower or input_conntype_lower.endswith("_sift2"):
-            input_fcfilt="sift2count"
+            input_scproc="sift2count"
         elif "_count" in input_conntype_lower:
             input_scproc="count"
         else:
@@ -1099,8 +1101,9 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
         
         if len(subjects)>0:
             subjects=subjects[~subjmissing]
-    
+        
         Ctriu=[x[trimask] for i,x in enumerate(Cmats) if not subjmissing[i]]
+        
         Cdata=np.vstack(Ctriu)
     
     #conndata_alltypes[conn_name]={'data':np.vstack(Ctriu),'numpairs':npairs,'group':ci['group'],'transformer_file':transformer_file}
@@ -1110,7 +1113,8 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
 
 #################################
 #################################
-def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+meanshift',input_data_fitsubjmask=None, target_data_fitsubjmask=None, return_fit_info=False):
+def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+meanshift',input_data_fitsubjmask=None, target_data_fitsubjmask=None, return_fit_info=False,
+                               quiet=False, input_source_name="input"):
     """
     Generate a transformer to adapt input data domain to match training data
     
@@ -1168,7 +1172,7 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
         transformer=FunctionTransformer(func=lambda x:torchfloat(x - input_data_mean + target_data_mean),
                                         inverse_func=lambda x:torchfloat(x - target_data_mean + input_data_mean))
         adaptfit_cc=np.corrcoef(input_data_mean,target_data_mean)[0,1]
-        print("\tShifting input data mean to transformer mean")
+        print("\tShifting %s data mean to transformer mean" % (input_source_name))
         print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
         print("\tAdapted fit R2: %.3f" % (adaptfit_cc**2))
         
@@ -1176,7 +1180,7 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
         A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
         beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0].flatten()
         adaptfit_cc=np.corrcoef(beta.T@A,target_data_mean)[0,1]
-        print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
+        print("\tFitting %s data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (input_source_name, beta[0], beta[1]))
         print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
         print("\tAdapted fit R2: %.3f" % (adaptfit_cc**2))
         #print("\tShifting input data mean to transformer mean: %s" % (x))
@@ -1188,7 +1192,7 @@ def generate_adapt_transformer(input_data, target_data, adapt_mode='meanfit+mean
         A=np.vstack((input_data_mean,np.ones(input_data_mean.shape)))
         beta=np.linalg.lstsq(A.T,target_data_mean.T,rcond=None)[0].flatten()
         adaptfit_cc=np.corrcoef(beta.T@A,target_data_mean)[0,1]
-        print("\tFitting input data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (beta[0],beta[1]))
+        print("\tFitting %s data mean to transformer mean: modeldata=inputdata*%.3f + %.3f" % (input_source_name, beta[0], beta[1]))
         print("\tInput data mean for adapt has %d subjects." % (num_input_fitsubj))
         print("\tAdapted fit R2: %.3f" % (adaptfit_cc**2))
         transformer=FunctionTransformer(func=lambda x:torchfloat(x*beta[0] + beta[1]),

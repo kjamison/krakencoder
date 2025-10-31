@@ -282,7 +282,9 @@ def flavor_reorder(conntypes, pcorr_at_end=True, sort_atlas_last=False):
         conntype_order_groups.append([re.match(".*pcorr.*",x) is not None for x in conntypes])
     conntype_order_groups.append([y[0] if len(y)>0 else len(atlas_order) for y in [np.where([a in x for a in atlas_order])[0] for x in conntypes]])
     conntype_order_groups.append([re.match(".*(ifod2).*",x) is not None for x in conntypes])
-        
+    conntype_order_groups.append([re.match(".*(volnorm).*",x) is not None for x in conntypes])
+    conntype_order_groups.append([re.match(".*(sift2).*",x) is not None for x in conntypes])
+    
     conntype_order_groups=np.stack(conntype_order_groups,axis=-1)
     
     newidx=np.lexsort(conntype_order_groups[:,::-1].T) #sort by columns
