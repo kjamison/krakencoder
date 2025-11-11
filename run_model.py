@@ -349,13 +349,14 @@ def run_model_on_new_data(argv=None):
         
     #download model data if necessary
     for i,p in enumerate(ptfile):
-        if not os.path.exists(p) and p in get_fetchable_data_list(filenames_only=True):
-            p=fetch_model_data(files_to_fetch=p, force_download=False)
+        p=fetch_model_data_if_needed(p)
+        if os.path.exists(p):
             ptfile[i]=p
+
     if outerptfile is not None:
         for i,p in enumerate(outerptfile):
-            if not os.path.exists(p) and p in get_fetchable_data_list(filenames_only=True):
-                p=fetch_model_data(files_to_fetch=p, force_download=False)
+            p=fetch_model_data_if_needed(p)
+            if os.path.exists(p):
                 outerptfile[i]=p
     
     ptfile_list=[p for p in ptfile]
@@ -437,6 +438,7 @@ def run_model_on_new_data(argv=None):
     subjects_to_eval=None #this might end iup being subjects_test, subjects_val, etc...
     
     if input_subject_split_file:
+        input_subject_split_file=fetch_model_data_if_needed(input_subject_split_file)
         subjects_to_eval_splitname='all'
         if input_subject_split_name:
             subjects_to_eval_splitname=input_subject_split_name.lower()
@@ -630,8 +632,8 @@ def run_model_on_new_data(argv=None):
                 precomputed_transformer_params={'type':'none'}, return_components=True)
     else:
         for i,ioxfile in enumerate(input_transform_file_list):
-            if not os.path.exists(ioxfile) and ioxfile in get_fetchable_data_list(filenames_only=True):
-                ioxfile=fetch_model_data(files_to_fetch=ioxfile, force_download=False)
+            ioxfile=fetch_model_data_if_needed(ioxfile)
+            if os.path.exists(ioxfile):
                 input_transform_file_list[i]=ioxfile
                 
         transformer_list, transformer_info_list = load_transformers_from_file(input_transform_file_list, input_names=conn_names)
