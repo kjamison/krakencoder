@@ -154,8 +154,8 @@ def shorten_names(namelist,extrashort=0,remove_common=True,remove_strings=[]):
         return namelist
     namelist=[re.sub("_FC$","",x) for x in namelist]
     namelist=[re.sub("(FCcov|FCcorr|FCpcorr)_(fs86|shen268|coco439|[^_]+)_(.+)",r"\2_\1_\3",x) for x in namelist]
-    namelist=[re.sub("(fs86|shen268|coco439|[^_]+)_(sdstream|ifod2act)(_volnorm)?",r"\1_SC\2\3",x) for x in namelist]
-    namelist=[re.sub("SC(sdstream|ifod2act|[^_]+)_(fs86|shen268|coco439|[^_]+)(_volnorm)?",r"\2_SC\1\3",x) for x in namelist]
+    namelist=[re.sub("(fs86|shen268|coco439|[^_]+)_(sdstream|ifod2act)(_volnorm|_volnormicv)?",r"\1_SC\2\3",x) for x in namelist]
+    namelist=[re.sub("SC(sdstream|ifod2act|[^_]+)_(fs86|shen268|coco439|[^_]+)(_volnorm|_volnormicv)?",r"\2_SC\1\3",x) for x in namelist]
     
     if extrashort > 0:
         namelist=[re.sub("_(FCcov|FCcorr)_hpf$","_FC#hpf",x) for x in namelist]
@@ -184,11 +184,13 @@ def shorten_names(namelist,extrashort=0,remove_common=True,remove_strings=[]):
         #namelist=[re.sub("_sift2volnorm",".sift2vn",x) for x in namelist]
         
         namelist=[re.sub("^(.+)_volnorm_(SC[^_]+)$",r"\1_\2.vn",x) for x in namelist]
+        namelist=[re.sub("^(.+)_volnormicv_(SC[^_]+)$",r"\1_\2.vnicv",x) for x in namelist]
         namelist=[re.sub("^(.+)_count_(SC[^_]+)$",r"\1_\2.cnt",x) for x in namelist]
         namelist=[re.sub("^(.+)_sift2_(SC[^_]+)$",r"\1_\2.sift2",x) for x in namelist]
         namelist=[re.sub("^(.+)_sift2volnorm_(SC[^_]+)$",r"\1_\2.sift2vn",x) for x in namelist]
         
         namelist=[re.sub("^(.+)_(SC[^_]+)_volnorm$",r"\1_\2.vn",x) for x in namelist]
+        namelist=[re.sub("^(.+)_(SC[^_]+)_volnormicv$",r"\1_\2.vnicv",x) for x in namelist]
         namelist=[re.sub("^(.+)_(SC[^_]+)_count$",r"\1_\2.cnt",x) for x in namelist]
         namelist=[re.sub("^(.+)_(SC[^_]+)_sift2$",r"\1_\2.sift2",x) for x in namelist]
         namelist=[re.sub("^(.+)_(SC[^_]+)_sift2volnorm$",r"\1_\2.sift2vn",x) for x in namelist]
@@ -199,7 +201,7 @@ def shorten_names(namelist,extrashort=0,remove_common=True,remove_strings=[]):
         
         #if all SC are volnorm, remove volnorm string from name
         if all([".vn" in x for x in namelist if "SC" in x and not ("fusion" in x or "burst" in x)]):
-            namelist=[x.replace(".vn","") for x in namelist]
+            namelist=[x if "vnicv" in x else x.replace(".vn","") for x in namelist]
             
         namelist=[re.sub("burst","fusion",x) for x in namelist]
         

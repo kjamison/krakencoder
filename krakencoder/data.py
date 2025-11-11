@@ -551,6 +551,9 @@ def canonical_data_flavor(conntype, only_if_brackets=False, return_groupname=Fal
             is_unknown=True
             if not accept_unknowns:
                 raise Exception("Unknown SC processing type for input type: %s" % (conntype))
+        #handle special volnormicv case
+        if "volnormicv" in input_conntype_lower or "volnorm_icv" in input_conntype_lower:
+            input_scproc=input_scproc.replace("volnorm","volnormicv")
     
     if "FC" in input_flavor:
         groupname="FC"
