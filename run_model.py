@@ -466,6 +466,14 @@ def run_model_on_new_data(argv=None):
         if input_file_list[0] in ['all','test','train','val','retest']:
             #use HCP data
             pass
+        elif all([x.endswith(".zip") for x in input_file_list]):
+            tmp_inputfiles=input_file_list
+            input_conntype_list=[]
+            input_file_list=[]
+            for x in tmp_inputfiles:
+                tmpdata,tmpinfo=load_data_zip(x, just_read_info=True)
+                input_conntype_list+=[canonical_data_flavor(k) for k in tmpdata.keys()]
+                input_file_list+=[x for k in tmpdata.keys()] #just repeat this file for all
         elif(all(["=" in x for x in input_file_list])):
             tmp_inputfiles=input_file_list
             input_conntype_list=[]
@@ -563,7 +571,12 @@ def run_model_on_new_data(argv=None):
             for x in adapt_mode_file_list:
                 c=x.split("=")[0]
                 cf=x.split("=")[-1]
-                adapt_mode_file_dict[c]=cf
+                if c.lower()=='all':
+                    #providing a single file that must contain all conntypes
+                    adapt_mode_file_dict={c:cf for c in input_conntype_list}
+                    break
+                else:
+                    adapt_mode_file_dict[c]=cf
         elif len(adapt_mode_file_list)==1 and len(input_conntype_list)==1:
             adapt_mode_file_dict[input_conntype_list[0]]=adapt_mode_file_list[0]
         else:
@@ -582,8 +595,10 @@ def run_model_on_new_data(argv=None):
         instrlist=["i","in","input","s","src","source"]
         outstrlist=["o","out","output","t","trg","targ","target"]
         for s in instrlist:
+            outfile_template=outfile_template.replace("{"+s.upper()+"}","{input}")
             outfile_template=outfile_template.replace("{"+s+"}","{input}")
         for s in outstrlist:
+            outfile_template=outfile_template.replace("{"+s.upper()+"}","{output}")
             outfile_template=outfile_template.replace("{"+s+"}","{output}")
             
     outfile_list=[]
@@ -672,13 +687,33 @@ def run_model_on_new_data(argv=None):
             output_subject_splits=None
         
         conndata_alltypes={}
+        for i,x in enumerate(input_conntype_list):
+            if input_file_list[i].endswith(".zip"):
+                if x in conndata_alltypes and i > 0 and input_file_list[i] in input_file_list[:i]:
+                    #already read this zip file (and we read all data from it)
+                    break
+                try:
+                    conndata_tmp,participant_info_tmp=load_data_zip(input_file_list[i],conntypes_to_load=input_conntype_list)
+                    if 'subject' in participant_info_tmp:
+                        subj_tmp=list(participant_info_tmp['subject'])
+                    else:
+                        subj_tmp=list(participant_info_tmp['participant_id'])
+                    subj_tmp=clean_subject_list(subj_tmp)
+                    for kk in input_conntype_list:
+                        if kk in conndata_tmp:
+                            conndata_alltypes[kk]=load_data_square2tri(np.array(conndata_tmp[kk]), subjects=subj_tmp, group=None)
+                        #conndata_alltypes[kk]={'subjects':subj_tmp,'data':conndata_tmp[kk]}
+                    del conndata_tmp
+                except:
+                    print("Only bids-ish zips can be loaded by this function.")
+                    exit(0)
+            else:
+                conndata_alltypes[x]=load_input_data(inputfile=input_file_list[i], inputfield=None)
+                if 'subjects' in conndata_alltypes[x]:
+                    conndata_alltypes[x]['subjects']=clean_subject_list(conndata_alltypes[x]['subjects'])
+
         adxfm_info_alltypes={}
         for i,x in enumerate(input_conntype_list):
-            
-            conndata_alltypes[x]=load_input_data(inputfile=input_file_list[i], inputfield=None)
-            if 'subjects' in conndata_alltypes[x]:
-                conndata_alltypes[x]['subjects']=clean_subject_list(conndata_alltypes[x]['subjects'])
-
             #how should we adapt the input data to the model?
             if input_subject_splits and adapt_mode_split_name is not None:
                 if 'subjidx_'+adapt_mode_split_name in input_subject_splits:
@@ -697,7 +732,13 @@ def run_model_on_new_data(argv=None):
             subjidx_adapt_tmp=subjidx_adapt
             adapt_source_name="input"
             if x in adapt_mode_file_dict and adapt_mode_file_dict[x] is not None:
-                adapt_data_tmp=load_input_data(inputfile=adapt_mode_file_dict[x], inputfield=None)['data']
+                try:
+                    #first try to load the data from a multi-conntype file using conntype as the fieldname
+                    adapt_data_tmp=load_input_data(inputfile=adapt_mode_file_dict[x], inputfield=x)
+                except:
+                    #if that fails, assume it is a single conntype file
+                    adapt_data_tmp=load_input_data(inputfile=adapt_mode_file_dict[x], inputfield=None)
+                adapt_data_tmp=adapt_data_tmp['data']
                 subjidx_adapt_tmp=None
                 adapt_source_name="adaptsource"
             
