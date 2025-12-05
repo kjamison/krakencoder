@@ -4,7 +4,7 @@ try:
     from importlib.resources import files as resource_files  # Py ≥ 3.9
 except ImportError:
     from importlib_resources import files as resource_files  # backport for 3.8
-    
+
 def _pkg_name():
     """
     Return the *tests* package name even from subpackages (e.g., tests.unit).

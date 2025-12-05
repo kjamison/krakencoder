@@ -18,6 +18,9 @@ import json
 import re
 from tqdm.auto import tqdm
 
+from .data_notorch import flavor_to_bids_string, parse_bids_string, load_data_zip, save_data_zip
+from .utils_notorch import humanize_filesize, data_shape_string
+
 try:
     colab_spec = importlib.util.find_spec("google.colab")
     from google.colab import drive as colab_drive
@@ -420,273 +423,6 @@ def jupyter_create_save_widget(
 
     display(widgets.HBox(hboxlist), savefile_output_widget)
 
-
-def save_data_zip(
-    filename, conndata_squaremats, participants_info, bids_desc=None, verbose=False, filetype='tsv'
-):
-    desc_str = ""
-    if bids_desc is not None:
-        desc_str = "_desc-%s" % (bids_desc)
-    zipargs = {"compression": zipfile.ZIP_DEFLATED, "compresslevel": 6}
-    filecount=0
-    totalfilecount=len(conndata_squaremats) * len(participants_info)
-    pbar=tqdm(total=totalfilecount, desc="Saving data to zip")
-    with zipfile.ZipFile(filename, "w", **zipargs) as zip_ref:
-        outfile = io.BytesIO()
-        participants_info.to_csv(outfile, sep="\t", index=None)
-        outfile.seek(0)
-        zip_ref.writestr("participants.tsv", outfile.getvalue())
-        for conntype in conndata_squaremats:
-            for i, conndata in enumerate(conndata_squaremats[conntype]):
-                outfile = io.BytesIO()
-                if filetype.lower() == 'mat':
-                    savemat(outfile, {'data': conndata.astype(np.float32)}, format="5", do_compression=True)
-                    conn_ext='.mat'
-                elif filetype.lower() == 'tsv':
-                    np.savetxt(outfile, conndata, fmt="%.6f", delimiter="\t")
-                    conn_ext='.tsv'
-                else:
-                    raise ValueError("Unsupported file type: %s" % (filetype))
-                outfile.seek(0)
-                subjid = participants_info["participant_id"][i]
-                if subjid.startswith("sub-"):
-                    subjid = subjid[4:]
-                conndata_filename = "sub-%s_%s%s_relmat.dense%s" % (
-                    subjid,
-                    flavor_to_bids_string(conntype),
-                    desc_str,
-                    conn_ext
-                )
-                filecount+=1
-                #if verbose:
-                #    tqdm.write("Adding %s" % (conndata_filename))
-                pbar.set_description("Adding %s" % (conndata_filename))
-                pbar.update(1)
-                zip_ref.writestr(conndata_filename, outfile.getvalue())
-    pbar.close()
-
-def flavor_to_bids_string(flavor):
-    atlasname = ""
-    participant_id = ""
-    subject = ""
-    flavor_prefix = ""
-    flavor_suffix = ""
-    
-    meas_str = ""
-    desc_str = ""
-
-    if "fccorr" in flavor.lower():
-        meas_str += "FCcorr"
-    elif "fcpcorr" in flavor.lower():
-        meas_str += "FCpcorr"
-    elif "ifod2act" in flavor.lower():
-        meas_str = "SCifod2act"
-    elif "sdstream" in flavor.lower():
-        meas_str = "SCsdstream"
-    else:
-        raise Exception("Unknown meas: %s" % (flavor))
-
-    if "hpf" in flavor.lower():
-        meas_str += "HPF"
-    elif "bpf" in flavor.lower():
-        meas_str += "BPF"
-    elif "nofilt" in flavor.lower():
-        meas_str += "NF"
-
-    if "gsr" in flavor.lower():
-        meas_str += "GSR"
-
-    if "sift2count" in flavor.lower() or "sift2_count" in flavor.lower() or flavor.lower().endswith("sift2"):
-        meas_str += "SiftCount"
-    elif "sift2volnorm" in flavor.lower() or "sift2_volnorm" in flavor.lower():
-        meas_str += "SiftVN"
-    elif "volnorm" in flavor.lower():
-        meas_str += "VN"
-    elif "count" in flavor.lower():
-        meas_str += "Count"
-
-    atlasname=flavor.split("_")[1].lower()
-    
-    bids_str = "atlas-%s_meas-%s" % (atlasname, meas_str)
-    if desc_str:
-        bids_str += "_desc-%s" % (desc_str)
-
-    return bids_str
-
-
-def parse_bids_string(bids_str):
-    bids_str = os.path.basename(bids_str)
-    bids_str = bids_str.split(".")[0]
-    bids_parts = bids_str.split("_")
-
-    atlasname = ""
-    participant_id = ""
-    subject = ""
-    flavor_prefix = ""
-    flavor_suffix = ""
-
-    for s in bids_parts:
-        if "-" in s:
-            s_name = s.split("-")[0].lower()
-            s_val = "-".join(s.split("-")[1:])
-            s_val_lower = s_val.lower()
-            if s_name == "sub":
-                participant_id = s
-                subject = s_val
-
-            elif s_name == "atlas" or s_name.lower() == "seg":
-                atlasname = s_val.lower()
-
-            elif s_name == "meas":
-                if any([s_val_lower.startswith(p) for p in ["fccorr", "fccov"]]):
-                    flavor_prefix = "FCcorr_"
-                elif s_val_lower.startswith("fcpcorr"):
-                    flavor_prefix = "FCpcorr_"
-                elif s_val_lower.startswith("scifod2act"):
-                    flavor_prefix = "SCifod2act_"
-                elif s_val_lower.startswith("scsdstream"):
-                    flavor_prefix = "SCsdstream_"
-                else:
-                    raise Exception("Unknown meas-: %s" % (s_val))
-
-                if flavor_prefix.startswith("FC"):
-                    if "hpf" in s_val_lower:
-                        flavor_suffix = "_hpf"
-                    elif "bpf" in s_val_lower:
-                        flavor_suffix = "_bpf"
-                    elif s_val_lower.endswith("nf") or s_val_lower.endswith("nfgsr"):
-                        flavor_suffix = "_nofilt"
-                    if "gsr" in s_val_lower:
-                        flavor_suffix += "gsr"
-                elif flavor_prefix.startswith("SC"):
-                    if "siftvn" in s_val_lower:
-                        flavor_suffix = "_sift2volnorm"
-                    elif "vn" in s_val_lower:
-                        flavor_suffix = "_volnorm"
-                    elif "siftcount" in s_val_lower:
-                        flavor_suffix = "_sift2"
-                    elif "count" in s_val_lower:
-                        flavor_suffix = "_count"
-                        
-
-    flavorname = flavor_prefix + atlasname + flavor_suffix
-
-    return {
-        "participant_id": participant_id,
-        "subject": subject,
-        "inputtype": flavorname,
-    }
-
-
-def load_data_zip(filename, filebytes=None, allowed_extensions=None):
-    # output: conndata_squaremats['conntype']=list([roi x roi])
-    #         participants_info
-    conndata_squaremats = {}
-    conndata_participants = {}
-    participants_info = None
-
-    try:
-        #first try to load it as a nemoSC zip
-        conndata_squaremats, participants_info = load_nemodata_zip(filename, filebytes=filebytes, bidsify_subjects=True)
-        return conndata_squaremats, participants_info
-    except:
-        pass
-    
-    if filebytes is not None:
-        filename_or_filebytes = filebytes
-    else:
-        filename_or_filebytes = filename
-
-    if allowed_extensions is None:
-        allowed_extensions_in_zip = None
-    else:
-        allowed_extensions_in_zip = set(allowed_extensions) - set(["zip"])
-        if len(allowed_extensions_in_zip) == 0:
-            allowed_extensions_in_zip = None
-    
-    with zipfile.ZipFile(filename_or_filebytes, "r") as zip_ref:
-        # if a bids-style participants info file was included, read this in separately
-        participants_tmp = [
-            z for z in zip_ref.namelist() if os.path.basename(z) == "participants.tsv"
-        ]
-        participants_info = None
-
-        if len(participants_tmp) > 0:
-            participants_info = pd.read_table(
-                zip_ref.open(participants_tmp[0]), delimiter="\t"
-            )
-
-        if participants_info is None:
-            participants_list = [
-                parse_bids_string(z)["participant_id"] for z in zip_ref.namelist()
-            ]
-            participants_list = np.unique(
-                [s for s in participants_list if s is not None]
-            )
-            participants_info = pd.DataFrame({"participant_id": participants_list})
-
-        totalfiles=len(zip_ref.namelist())
-        pbar=tqdm(total=totalfiles, dynamic_ncols=True, leave=False, position=0)
-        for zfile in zip_ref.namelist():
-            if os.path.basename(zfile) == "participants.tsv":
-                # skip participants info in main data loop
-                continue
-            if allowed_extensions_in_zip is not None:
-                if not any(
-                    [zfile.lower().endswith(ext) for ext in allowed_extensions_in_zip]
-                ):
-                    continue
-            with zip_ref.open(zfile) as zfile_bytes:
-                if zfile.lower().endswith(".csv"):
-                    data_tmp = np.loadtxt(zfile_bytes, delimiter=",",comments=['#','!','%'])
-
-                elif zfile.lower().endswith(".tsv"):
-                    data_tmp = np.loadtxt(zfile_bytes, delimiter="\t",comments=['#','!','%'])
-
-                elif zfile.lower().endswith(".mat"):
-                    matdata = loadmat(zfile_bytes, simplify_cells=True)
-                    matfields = ["data", "C", "SC", "FC"]
-                    for m in matfields:
-                        if m in matdata:
-                            data_tmp = matdata[m]
-                            break
-
-                else:
-                    # unrecognized file format in zip (could be a random OS file like .DS_Store)
-                    continue
-
-            bids_result = parse_bids_string(zfile)
-            conntype = bids_result["inputtype"]
-            subject = bids_result["participant_id"]
-            if conntype not in conndata_squaremats:
-                conndata_squaremats[conntype] = []
-                conndata_participants[conntype] = []
-            conndata_squaremats[conntype].append(data_tmp)
-            conndata_participants[conntype].append(subject)
-            pbar.update(1)
-        pbar.close()
-        
-        # now reorder all conndata entries to the same subject order
-        participants_info = participants_info.drop_duplicates(
-            subset=["participant_id"]
-        ).reset_index(drop=True)
-        participants_list = participants_info["participant_id"].values
-
-        conndata_subjidx = {}
-        for conntype in conndata_squaremats:
-            sidx = [
-                np.where(np.array(conndata_participants[conntype]) == s)[0][0]
-                for s in participants_list
-            ]
-            conndata_participants[conntype] = [
-                conndata_participants[conntype][i] for i in sidx
-            ]
-            conndata_squaremats[conntype] = [
-                conndata_squaremats[conntype][i] for i in sidx
-            ]
-
-    return conndata_squaremats, participants_info
-
 def load_nemodata_zip(filename, filebytes=None, bidsify_subjects=True):
     # output: conndata_squaremats['conntype']=list([roi x roi])
     #         participants_info
@@ -847,30 +583,6 @@ def validate_data(conndata_squaremats, participants_info):
 
     return valid, conndata_matsize_template
 
-
-def humanize_filesize(size, binary=False):
-    basesize = 1000.0
-    if binary:
-        basesize = 1024.0
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size < basesize:
-            break
-        size /= basesize
-    return "%.1f %s" % (size, unit)
-
-
-def data_shape_string(data):
-    if isinstance(data, np.ndarray):
-        return "x".join(["%d" % (d) for d in data.shape])
-    elif isinstance(data, list):
-        return "%dx[%s]" % (len(data), data_shape_string(data[0]))
-    else:
-        import torch
-        if isinstance(data, torch.Tensor):
-            return "torch[%s]" % ("x".join(["%d" % (d) for d in data.shape]))
-        else:
-            raise Exception("Unknown data type")
-
 def callback_load_and_process_data(
     filename,
     filebytes=None,
@@ -882,9 +594,15 @@ def callback_load_and_process_data(
 
     print("Loading data from %s" % (filename))
     allowed_extensions = None  #! hack because its breaking the upload option
-    conndata_squaremats, participants_info = load_data_zip(
-        filename, filebytes=filebytes, allowed_extensions=allowed_extensions
-    )
+    
+
+    try:
+        #first try to load it as a nemoSC zip
+        conndata_squaremats, participants_info = load_nemodata_zip(filename, filebytes=filebytes, bidsify_subjects=True)
+    except:
+        conndata_squaremats, participants_info = load_data_zip(
+            filename, filebytes=filebytes, allowed_extensions=allowed_extensions
+        )
 
     isvalid, conndata_sizetemplate = validate_data(
         conndata_squaremats, participants_info

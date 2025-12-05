@@ -14,7 +14,8 @@ import numpy as np
 import warnings
 import zipfile
 
-import krakencoder.jupyter_functions as kjf
+from krakencoder.data_notorch import load_data_zip, save_data_zip
+from krakencoder.utils_notorch import humanize_filesize, data_shape_string
 
 def argument_parse_collectdata(argv):
     parser=argparse.ArgumentParser(description='Collect connectome data',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -152,6 +153,16 @@ def run_collectdata(argv=None):
         else:
             filepat=inputfile_info
             conntype='unknown'
+        
+        if filepat.endswith(".zip"):
+            try:
+                conndata_alltypes,participant_info=load_data_zip(filepat)
+                subjects=list(participant_info['subject'])
+                break
+            except:
+                print("Only bids-ish zips can be loaded by this function.")
+                exit(0)
+        
         #canonicalize input flavors if requested:
         if do_canonical:
             conntype=canonical_data_flavor(conntype,accept_unknowns=True)
@@ -199,7 +210,7 @@ def run_collectdata(argv=None):
             conndata_alltypes[conntype]=conndata
     
     for conntype in conndata_alltypes:
-        print("%s: %s" % (conntype,kjf.data_shape_string(conndata_alltypes[conntype])))
+        print("%s: %s" % (conntype,data_shape_string(conndata_alltypes[conntype])))
     
     #savemat(outputfile,{'predicted_alltypes':conndata_alltypes},format='5',do_compression=True)
     
@@ -227,8 +238,8 @@ def run_collectdata(argv=None):
         })
         
         print("Writing %s to .zip ..." % (ziptype))
-        kjf.save_data_zip(outputfile, conndata_alltypes, participants_info, bids_desc=bids_desc_str, verbose=False, filetype=ziptype)
-        print("Saved data to %s (%s)" % (outputfile,kjf.humanize_filesize(os.path.getsize(outputfile),binary=True)))
+        save_data_zip(outputfile, conndata_alltypes, participants_info, bids_desc=bids_desc_str, verbose=False, filetype=ziptype)
+        print("Saved data to %s (%s)" % (outputfile,humanize_filesize(os.path.getsize(outputfile),binary=True)))
         
     elif outputfile.lower().endswith(".mat"):
         for conntype in conndata_alltypes:
@@ -240,7 +251,7 @@ def run_collectdata(argv=None):
                     outfile_thistype=outfile_thistype.replace(".mat","_%s.mat" % (conntype))
             savemat(outfile_thistype,{'subjects':data_to_cell_array(subjects, True),
                                       'C':data_to_cell_array(conndata_alltypes[conntype],True)},format='5',do_compression=True)
-            print("Saved data to %s (%s)" % (outfile_thistype,kjf.humanize_filesize(os.path.getsize(outfile_thistype),binary=True)))
+            print("Saved data to %s (%s)" % (outfile_thistype,humanize_filesize(os.path.getsize(outfile_thistype),binary=True)))
 
 if __name__ == "__main__":
     if len(sys.argv)<=1:
