@@ -1,7 +1,7 @@
 """
 Functions related to loading and manipulating input data WITHOUT requiring pytorch
 """
-
+from .utils_notorch import *
 from ._resources import resource_path
 import numpy as np
 from scipy.io import loadmat, savemat
@@ -299,11 +299,35 @@ def load_input_data(inputfile, group=None, inputfield=None, keep_diagonal=False)
         predicted_alltypes_keys0_keys=list(Cdata['predicted_alltypes'][predicted_alltypes_keys[0]].keys())
         
         if len(predicted_alltypes_keys)==1 and len(predicted_alltypes_keys0_keys)==1:
+            tmpdata=Cdata['predicted_alltypes'][predicted_alltypes_keys[0]][predicted_alltypes_keys0_keys[0]]
+            
             if predicted_alltypes_keys0_keys[0] == 'encoded':
                 connfield='encoded'
             else:
                 connfield='data'
-            Cdata={connfield:Cdata['predicted_alltypes'][predicted_alltypes_keys[0]][predicted_alltypes_keys0_keys[0]]}
+            
+            if 'subjects' in Cdata:
+                tmpsubj=Cdata['subjects']
+            else:
+                tmpsubj=None
+            
+            #guess the trimask if possible
+            tmptrimask=None
+            if connfield != 'encoded':
+                datashape=tmpdata.shape
+                if keep_diagonal:
+                    tmpk=0
+                else:
+                    tmpk=1
+                tmpnumroi=num_triu_indices(datashape[1],k=tmpk,inverse=True)
+                if tmpnumroi>0:
+                    tmptrimask=np.triu_indices(tmpnumroi,k=tmpk)
+            
+            Cdata={connfield:tmpdata}
+            if tmpsubj is not None:
+                Cdata['subjects']=tmpsubj
+            if tmptrimask is not None:
+                Cdata['trimask']=tmptrimask
         else:
             raise Exception("Found multi-input or multi-output data in 'predicted_alltypes' for input file %s. Can only read single intype+output" % (inputfile))
     

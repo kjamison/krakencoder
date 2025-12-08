@@ -19,10 +19,12 @@ def getscriptdir():
     return str(resource_files(__package__))
 
 
-def humanize_filesize(size, binary=False):
+def humanize_filesize(size=0, filename=None, binary=False):
     basesize = 1000.0
     if binary:
         basesize = 1024.0
+    if filename is not None:
+        size = os.path.getsize(filename)
     for unit in ["B", "KB", "MB", "GB"]:
         if size < basesize:
             break
@@ -32,7 +34,10 @@ def humanize_filesize(size, binary=False):
 
 def data_shape_string(data):
     if isinstance(data, np.ndarray):
-        return "x".join(["%d" % (d) for d in data.shape])
+        if isinstance(data.dtype, np.dtype) and data.dtype.kind == 'O':
+            return "%dx[%s]" % (len(data), data_shape_string(data[0]))
+        else:
+            return "x".join(["%d" % (d) for d in data.shape])
     elif isinstance(data, list):
         return "%dx[%s]" % (len(data), data_shape_string(data[0]))
     else:
@@ -173,12 +178,39 @@ def flatlist(l):
     #return [x for y in l for x in y]
     return lnew
 
+def data_to_cell_array(data, as2d=False):
+    if as2d:
+        data_new=np.empty([len(data),1],dtype=object)
+        data_new[:,0]=[C for C in data]
+    else:
+        data_new=np.empty(len(data),dtype=object)
+        data_new[:]=[C for C in data]
+    return data_new
+
 def unique_preserve_order(seq):
     """
     Return a list of unique elements in the same order as the input list
     """
     u,idx=np.unique(seq, return_index=True)
     return u[np.argsort(idx)]
+
+def num_triu_indices(n, k=0, inverse=False):
+    """
+    Return the number of upper-triangular indices for a square matrix of size n x n, with diagonal offset k
+    If inverse=True, return the size n of the square matrix given the number of edges and diagonal offset k
+    """
+    if k >= n:
+        return -1
+    if inverse:
+        num_edges=n
+        n=k+(np.sqrt(1+8*num_edges)-1)/2
+        ncheck=np.triu_indices(n,k)[0].shape[0]
+        if ncheck != num_edges:
+            #inconsitent number of edges (does not match any n for given k)
+            return -1
+        return int(n)
+    else:
+        return (n-k)*(n-k+1)//2
 
 def square2tri_numpy(C, tri_indices=None, k=1, return_indices=False):
     """

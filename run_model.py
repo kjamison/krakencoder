@@ -88,8 +88,9 @@ def argument_parse_newdata(argv):
     parser.add_argument('--innercheckpoint',action='store',dest='innercheckpoint', help='Inner checkpoint file (.pt): eg: if checkpoint is an adaptation layer')
     parser.add_argument('--trainrecord',action='store',dest='trainrecord', default='auto', help='trainrecord.mat file')
     parser.add_argument('--inputxform',action='append',dest='input_transform_file', help='Precomputed transformer file (.npy)',nargs='*')
-    parser.add_argument('--output',action='store',dest='output', help='file to save model outputs. Can include "{input}" and/or "{output}" in name to save separate files for each input/output combo (or just group inputs and outputs)')
     parser.add_argument('--inputdata',action='append',dest='input_data_file', help='.mat file(s) containing input data to transform (instead of default HCP validation set). Can be "name=file"', nargs='*')
+    parser.add_argument('--output',action='store',dest='output', help='file to save model outputs. Can include "{input}" and/or "{output}" in name to save separate files for each input/output combo (or just group inputs and outputs)')
+    parser.add_argument('--output_squaremats','--output_square',action='store_true',dest='output_squaremats',help='Convert output matrices from triangular to square form (Currently k=1 with NaN diag only)')
     
     parser.add_argument('--inputname','--inputnames',action='append',dest='input_names', help='Name(s) of input data flavors (eg: FCcorr_fs86_hpf, SCsdstream_fs86, encoded)',nargs='*')
     parser.add_argument('--outputname','--outputnames',action='append',dest='output_names', help='List of data flavors from model to predict (default=all)',nargs='*')
@@ -196,6 +197,7 @@ def run_model_on_new_data(argv=None):
     do_save_transformed_inputs=args.save_transformed_inputs
     outputs_in_model_space=args.save_untransformed_outputs
     outfile = args.output
+    do_output_squaremats = args.output_squaremats
     input_transform_file_list=args.input_transform_file
     input_conntype_list=args.input_names
     output_conntype_list=args.output_names
@@ -1056,6 +1058,20 @@ def run_model_on_new_data(argv=None):
             
             outdict['predicted_alltypes']={k_in:{k_out:v_out for k_out,v_out in v_in.items() if k_out in outdict['outputtypes']} for k_in,v_in in predicted_alltypes.items() if k_in in outdict['inputtypes']}
 
+            if do_output_squaremats:
+                for k_in in outdict['predicted_alltypes'].keys():
+                    for k_out in outdict['predicted_alltypes'][k_in].keys():
+                        #for now, only support square output for k=1 (no diag), and fill diag with NaN
+                        #at some point we can make this more flexible, especially storing expected diagval for each conntype
+                        # (problem is it is output types so we may not have loaded data for it in this script)
+                        kdiag=1
+                        diagval=np.nan
+                        numroi_tmp=num_triu_indices(predicted_alltypes[k_in][k_out].shape[1],k=kdiag,inverse=True)
+                        if numroi_tmp <= 0:
+                            print("Cannot convert to square matrix. Output %s->%s (Sx%d) is not triangular format." % (k_in,k_out,predicted_alltypes[k_in][k_out].shape[1]))
+                            continue
+                        outdict['predicted_alltypes'][k_in][k_out]=data_to_cell_array([tri2square(x, tri_indices=None, numroi=numroi_tmp,k=kdiag, diagval=diagval) for x in outdict['predicted_alltypes'][k_in][k_out]])
+            
             if fusionmode_names_dict:
                 outdict['fusionmode_inputtypes']=fusionmode_names_dict
             
@@ -1065,10 +1081,10 @@ def run_model_on_new_data(argv=None):
                         outdict['predicted_alltypes'][k_in]={encout:encoded_alltypes[k_in]}
             
             savemat(outfile,outdict,format='5',do_compression=True, long_field_names=True)
-            print("Saved %d/%d: %s" % (i_out+1,len(outfile_list),outfile))
+            print("Saved %d/%d: %s (%s)" % (i_out+1,len(outfile_list),outfile, humanize_filesize(filename=outfile)))
             for k_in in outdict['predicted_alltypes'].keys():
                 for k_out in outdict['predicted_alltypes'][k_in].keys():
-                    print("\t%s->%s (%dx%d)" % (k_in,k_out,*outdict['predicted_alltypes'][k_in][k_out].shape))
+                    print("\t%s->%s (%s)" % (k_in,k_out,data_shape_string(outdict['predicted_alltypes'][k_in][k_out])))
     
     if new_train_recordfile is not None or heatmapfile is not None:
         #by default, "all" and provide splitfile, then

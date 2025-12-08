@@ -15,7 +15,7 @@ import warnings
 import zipfile
 
 from krakencoder.data_notorch import load_data_zip, save_data_zip
-from krakencoder.utils_notorch import humanize_filesize, data_shape_string
+from krakencoder.utils_notorch import humanize_filesize, data_shape_string, data_to_cell_array
 
 def argument_parse_collectdata(argv):
     parser=argparse.ArgumentParser(description='Collect connectome data',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -31,15 +31,6 @@ def argument_parse_collectdata(argv):
     parser.add_argument('--ziptype',action='store',dest='ziptype', default='tsv', choices=['tsv','mat'], help='Type of files to save in .zip (default: tsv, can be mat)')
     
     return parser.parse_args(argv)
-
-def data_to_cell_array(data, as2d=False):
-    if as2d:
-        data_new=np.empty([len(data),1],dtype=object)
-        data_new[:,0]=[C for C in data]
-    else:
-        data_new=np.empty(len(data),dtype=object)
-        data_new[:]=[C for C in data]
-    return data_new
 
 def check_file_exists(filename):
     #check based on dir and look in zips
