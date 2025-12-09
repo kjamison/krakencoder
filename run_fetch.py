@@ -185,9 +185,12 @@ def run_fetchdata(argv=None):
     
     if args.displaydata:
         data_folder = model_data_folder()
-        print(f"Contents of data folder: {data_folder}")
-        for filename in os.listdir(data_folder):
-            print(f"{os.path.join(data_folder,filename)}")
+        if os.path.exists(data_folder):
+            print(f"Contents of data folder: {data_folder}")
+            for filename in os.listdir(data_folder):
+                print(f"{os.path.join(data_folder,filename)}")
+        else:
+            print(f"Data folder {data_folder} does not exist.")
 
 if __name__ == "__main__":
     if len(sys.argv)<=1:
