@@ -268,8 +268,8 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
         #when calling generate_training_paths with precomputed transformers, pull "type" from first one
         default_transformation_type=[v['type'] for k,v in precomputed_transformer_info_list.items()][0]
     elif input_transformation_info is not None and input_transformation_info is not False:
-        if re.search("^pc[0-9]+$",input_transformation_info):
-            reduce_dimension=int(input_transformation_info.replace("pc",""))
+        if re.search("^pca?[0-9]+$",input_transformation_info):
+            reduce_dimension=int(input_transformation_info.replace("pca","").replace("pc",""))
             use_truncated_svd=False
         elif re.search("^tsvd[0-9]+$",input_transformation_info):
             reduce_dimension=int(input_transformation_info.replace("tsvd",""))
