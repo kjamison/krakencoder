@@ -6,6 +6,7 @@ Needed for running some functions like data prep without pytorch
 import numpy as np
 import os
 import h5py
+import re
 
 from ._version import __version__, __version_date__
 
@@ -293,6 +294,30 @@ def justfilename(pathstr):
     if not is_iterable:
         newstr=newstr[0]
     return newstr
+
+def format_filename_string(format_string,
+                           remove_multiple_underscores=False,
+                           remove_trailing_underscores=False,
+                           remove_starting_underscores=False,
+                           remove_unused_fields=True,
+                           **kwargs):
+    """Format a filename string by replacing {field} with the corresponding value in kwargs, 
+    and optionally removing multiple underscores and trailing/starting underscores"""
+
+    output_string=format_string
+    for k,v in kwargs.items():
+        output_string=re.sub(r"\{"+k+r"\}",str(v),output_string,flags=re.IGNORECASE)
+    
+    if remove_unused_fields:
+        #replace any remaining {} with empty string
+        output_string=re.sub(r"\{.*?\}","",output_string)
+    if remove_multiple_underscores:
+        output_string=re.sub(r"_+","_",output_string) #replace multiple underscores with single underscore
+    if remove_trailing_underscores:
+        output_string=re.sub(r"_+$","",output_string) #remove trailing underscores
+    if remove_starting_underscores:
+        output_string=re.sub(r"^_+","",output_string) #remove starting underscores
+    return output_string
 
 def data_to_cell_array(data, as2d=False):
     if as2d:

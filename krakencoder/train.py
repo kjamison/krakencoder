@@ -821,7 +821,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                   trainthreads=16, display_epochs=20, display_seconds=None, 
                   save_epochs=100, checkpoint_epochs=None, update_single_checkpoint=True, save_optimizer_params=True,
                   explicit_checkpoint_epoch_list=[], precomputed_transformer_info_list={}, save_input_transforms=True,
-                  output_file_prefix="kraken",logger=None, extra_trainrecord_dict={},output_file_list_json=None):
+                  output_file_prefix="kraken",logger=None, extra_trainrecord_dict={},output_file_list_json=None,
+                  output_file_suffix_format=None):
     """
     Train a network on a set of training paths. 
     This function is designed to be called from a script or notebook, and will handle all the training details.
@@ -968,7 +969,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
         # for FIXED target encoding, do not use latentsim
         latentsim_loss_weight=0
         
-        
+    if output_file_suffix_format is None:
+        output_file_suffix_format="{data}_{network}_{train}_{timestamp}"
+    
     #if latent_normalize is true, use dot product for distance
     #do_latent_dotproduct_distance=latent_normalize
     do_latent_dotproduct_distance=False
@@ -1224,8 +1227,10 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     data_string_filename=data_string
     network_string_filename=network_string
     train_string_filename=train_string
-    
+
     for filename_length_loop in range(2):
+        output_file_suffix=format_filename_string(output_file_suffix_format, data=data_string_filename, network=network_string_filename, train=train_string_filename, timestamp=timestamp_suffix)
+
         if 'starting_point_file' in training_params and training_params['starting_point_file'] and nbepochs<=1:
             starting_point_base=os.path.join(os.path.split(output_file_prefix)[0],os.path.split(training_params['starting_point_file'])[1])
             starting_point_base=re.sub(r"\.pt$","",starting_point_base)
@@ -1233,12 +1238,12 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             imgfile=starting_point_base.replace("_chkpt_","_loss_")+".png"
             imgfile_heatmap=starting_point_base.replace("_chkpt_","_heatmap_")+".png"
             #keep checkpoint_filebase so we don't overwrite anything. shouldn't be saved in the nbepochs=0 case anyway
-            checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
+            checkpoint_filebase=f"{output_file_prefix}_chkpt_{output_file_suffix}"
         else:
-            recordfile="%s_trainrecord_%s_%s_%s_%s.mat" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
-            imgfile="%s_loss_%s_%s_%s_%s.png" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
-            imgfile_heatmap="%s_heatmap_%s_%s_%s_%s.png" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
-            checkpoint_filebase="%s_chkpt_%s_%s_%s_%s" % (output_file_prefix,data_string_filename,network_string_filename,train_string_filename,timestamp_suffix)
+            recordfile=f"{output_file_prefix}_trainrecord_{output_file_suffix}.mat"
+            imgfile=f"{output_file_prefix}_loss_{output_file_suffix}.png"
+            imgfile_heatmap=f"{output_file_prefix}_heatmap_{output_file_suffix}.png"
+            checkpoint_filebase=f"{output_file_prefix}_chkpt_{output_file_suffix}"
             
         #need to check if we have created filenames that cant be saved
         #if so, we need to truncate using some hackish heuristic about 
@@ -1267,7 +1272,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     # from the list. Just save params
     input_transformer_file=""
     if precomputed_transformer_info_list and save_input_transforms:
-        input_transformer_file="%s_ioxfm_%s_%s_%s_%s.npy" % (output_file_prefix,data_string,network_string,train_string,timestamp_suffix)
+        input_transformer_file=f"{output_file_prefix}_ioxfm_{output_file_suffix}.npy"
         save_transformers_to_file(input_transformer_file, 
                                   precomputed_transformer_info_list,
                                   extra_params={'train_subjects':subjects[subjidx_train]})
@@ -1314,6 +1319,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     trainrecord['meantarget_latentsim']=do_meantarget_latentsim
     trainrecord['recordfile']=recordfile
     trainrecord['batches_per_path']=batchloop_innerbatchcount
+    trainrecord['output_file_prefix']=output_file_prefix
+    trainrecord['output_file_suffix']=output_file_suffix
     
     for extra_train_key,extra_train_val in extra_trainrecord_dict.items():
         trainrecord[extra_train_key]=extra_train_val

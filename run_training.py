@@ -144,8 +144,10 @@ def argument_parse_runtraining(argv):
     misc_arg_group.add_argument('--optimizercheckpoint',action='store_true',dest='optimizer_in_checkpoint',help='Include optimizer params in checkpoint (allows resumed training)')
     misc_arg_group.add_argument('--maxthreads',action='store',dest='max_threads', type=int, default=10, help='How many CPU threads to use')
     misc_arg_group.add_argument('--outputprefix',action='store',dest='output_file_prefix', default="kraken", help='Prefix for output files')
+    misc_arg_group.add_argument('--outputsuffixformat',action='store',dest='output_file_suffix_format', default='{data}_{network}_{train}_{timestamp}', help='Format string for output file suffix. Fields that can be used: {data}, {network}, {train}, {timestamp}."')
     misc_arg_group.add_argument('--logfile',action='store',dest='logfile', default='auto',help='Optional file to print outputs to (along with stdout). "auto"=<prefix>_log_*.txt')
-    
+    misc_arg_group.add_argument('--outputsubjectsplitfile','--outputsubjectfile',action='store',dest='output_subject_split_file', help='Save train/val/test subject splits to .mat file with this name')
+   
     #add an option to save a separate hardcoded filename that includes the output filenames in some kind of list format
     misc_arg_group.add_argument('--outputfilelistjson',action='store',dest='output_file_list_json', default=None,help='JSON file to save list of output files to (for easy retrieval, since they include auto-generated names and timestamps)')
     
@@ -221,6 +223,8 @@ def run_training_command(argv=None):
     display_epochs=args.display_epochs
     optimizer_in_checkpoint=args.optimizer_in_checkpoint
     logfile=args.logfile
+    output_subject_split_file=args.output_subject_split_file
+    output_file_suffix_format=args.output_file_suffix_format
     output_file_list_json=args.output_file_list_json
     random_seed_val=args.random_seed
     do_domain_adaptation=args.domain_adaptation
@@ -753,6 +757,11 @@ def run_training_command(argv=None):
                 subjidx_train, subjidx_val = random_train_test_split(subjlist=subjidx_trainval,
                                                                      seed=train_val_seed, 
                                                                      train_frac=1-training_params['val_split_frac'])
+            if output_subject_split_file is not None:
+                new_subject_splits={'subjects': data_to_cell_array(subjects), 'subjidx_train':subjidx_train, 'subjidx_val':subjidx_val, 'subjidx_test':subjidx_test}
+                savemat(output_subject_split_file, new_subject_splits, format='5',do_compression=True)
+                print("Saved subject splits to %s (%d/%d/%d train/val/test)" % (output_subject_split_file, len(subjidx_train), len(subjidx_val), len(subjidx_test)))
+
         ####################
 
         for grouptype in input_pathgroups:
@@ -1117,7 +1126,8 @@ def run_training_command(argv=None):
                                                  save_optimizer_params=optimizer_in_checkpoint,
                                                  save_input_transforms=save_input_transforms, 
                                                  output_file_prefix=output_file_prefix,logger=log,extra_trainrecord_dict=extra_trainrecord_dict,
-                                                 output_file_list_json=output_file_list_json)
+                                                 output_file_list_json=output_file_list_json,
+                                                 output_file_suffix_format=output_file_suffix_format)
             
                 if not training_params['roundtrip'] and add_roundtrip_epochs > 0:
                     print("Adding %d roundtrip epochs" % (add_roundtrip_epochs))
@@ -1131,7 +1141,8 @@ def run_training_command(argv=None):
                                                      save_optimizer_params=optimizer_in_checkpoint,
                                                      output_file_prefix=output_file_prefix,
                                                      extra_trainrecord_dict=extra_trainrecord_dict,
-                                                     output_file_list_json=output_file_list_json)
+                                                     output_file_list_json=output_file_list_json,
+                                                     output_file_suffix_format=output_file_suffix_format)
                                                      
                 if not training_params['meantarget_latentsim'] and add_meanlatent_epochs > 0:
                     print("Adding %d meanlatent epochs" % (add_meanlatent_epochs))
@@ -1145,7 +1156,8 @@ def run_training_command(argv=None):
                                                      save_optimizer_params=optimizer_in_checkpoint,
                                                      output_file_prefix=output_file_prefix,
                                                      extra_trainrecord_dict=extra_trainrecord_dict,
-                                                     output_file_list_json=output_file_list_json)
+                                                     output_file_list_json=output_file_list_json,
+                                                     output_file_suffix_format=output_file_suffix_format)
                                                      
                 if not do_fixed_target_encoding and add_fixed_encoding_epochs_after > 0:
                     raise Exception("add_fixed_encoding not yet supported")
@@ -1180,6 +1192,7 @@ def run_training_command(argv=None):
                                                      checkpoint_epochs=checkpoint_epochs, update_single_checkpoint=False,
                                                      save_optimizer_params=optimizer_in_checkpoint,
                                                      output_file_prefix=output_file_prefix,
+                                                     output_file_suffix_format=output_file_suffix_format,
                                                      extra_trainrecord_dict=extra_trainrecord_dict)
                     
 if __name__ == "__main__":
