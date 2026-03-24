@@ -182,6 +182,7 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
                             data_string=None, batch_size=40, skip_selfs=False, crosstrain_repeats=1, 
                             reduce_dimension=None, leave_data_alone=False, use_pretrained_encoder=False, keep_origscale_data=False, quiet=False,
                             use_lognorm_for_sc=False, use_truncated_svd=False, use_truncated_svd_for_sc=False, input_transformation_info=None, 
+                            subjidx_test=[], 
                             prediction_type_dict={},
                             input_is_adversarial=[],
                             precomputed_transformer_info_list={}, create_data_loader=True):
@@ -697,7 +698,8 @@ def generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_tra
             trainpath_tmp['reduce_dimension']=0
         if not input_transformation_info:
             trainpath_tmp['input_transformation_info']=False #avoid saving None type
-        
+        if subjidx_test is not None:
+            trainpath_tmp['subjidx_test']=subjidx_test #avoid saving None type
         trainpath_tmp['adversarial_boolean_list']=input_is_adversarial
         trainpath_list.append(trainpath_tmp)
 
@@ -905,6 +907,10 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     subjects=trainpath_list[0]['subjects']
     subjidx_train=trainpath_list[0]['subjidx_train']
     subjidx_val=trainpath_list[0]['subjidx_val']
+    subjidx_test=[]
+    if 'subjidx_test' in trainpath_list[0]:
+        #just keep this if it is available, for saving in the optional subject split file
+        subjidx_test=trainpath_list[0]['subjidx_test']
     
     latentsize=training_params['latentsize']
     dropout=training_params['dropout']
@@ -1268,6 +1274,17 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
             logger=logger.transfer(logfile)
         print("Log file:",logger.logfile)
     
+    if output_subject_split_file is not None:
+        new_subject_splits={'subjects': data_to_cell_array(subjects), 'subjidx_train':subjidx_train, 'subjidx_val':subjidx_val}
+        splitsize_str="%d/%d/%d train/val/test" % (len(subjidx_train), len(subjidx_val), 0)
+        if subjidx_test is not None and len(subjidx_test)>0:
+            new_subject_splits['subjidx_test'] = subjidx_test
+            splitsize_str="%d/%d/%d train/val/test" % (len(subjidx_train), len(subjidx_val), len(subjidx_test))
+        if output_subject_split_file.lower()=="auto":
+            output_subject_split_file=recordfile.replace("_trainrecord_","_subjsplit_")
+        savemat(output_subject_split_file, new_subject_splits, format='5',do_compression=True)
+        print("Saved subject splits to %s (%s)" % (output_subject_split_file, splitsize_str))
+
     #if saving transformer info (eg: precomputed PCA weights), need to remove the transformer OBJECT with embedded functions etc
     # from the list. Just save params
     input_transformer_file=""

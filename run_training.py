@@ -146,7 +146,7 @@ def argument_parse_runtraining(argv):
     misc_arg_group.add_argument('--outputprefix',action='store',dest='output_file_prefix', default="kraken", help='Prefix for output files')
     misc_arg_group.add_argument('--outputsuffixformat',action='store',dest='output_file_suffix_format', default='{data}_{network}_{train}_{timestamp}', help='Format string for output file suffix. Fields that can be used: {data}, {network}, {train}, {timestamp}."')
     misc_arg_group.add_argument('--logfile',action='store',dest='logfile', default='auto',help='Optional file to print outputs to (along with stdout). "auto"=<prefix>_log_*.txt')
-    misc_arg_group.add_argument('--outputsubjectsplitfile','--outputsubjectfile',action='store',dest='output_subject_split_file', help='Save train/val/test subject splits to .mat file with this name')
+    misc_arg_group.add_argument('--outputsubjectsplitfile','--outputsubjectfile',action='store',dest='output_subject_split_file', default='auto',help='Save train/val/test subject splits to .mat file with this name ("auto" to generate from prefix+suffix)')
    
     #add an option to save a separate hardcoded filename that includes the output filenames in some kind of list format
     misc_arg_group.add_argument('--outputfilelistjson',action='store',dest='output_file_list_json', default=None,help='JSON file to save list of output files to (for easy retrieval, since they include auto-generated names and timestamps)')
@@ -757,10 +757,11 @@ def run_training_command(argv=None):
                 subjidx_train, subjidx_val = random_train_test_split(subjlist=subjidx_trainval,
                                                                      seed=train_val_seed, 
                                                                      train_frac=1-training_params['val_split_frac'])
-            if output_subject_split_file is not None:
+            if output_subject_split_file is not None and output_subject_split_file.lower() != "auto":
                 new_subject_splits={'subjects': data_to_cell_array(subjects), 'subjidx_train':subjidx_train, 'subjidx_val':subjidx_val, 'subjidx_test':subjidx_test}
                 savemat(output_subject_split_file, new_subject_splits, format='5',do_compression=True)
                 print("Saved subject splits to %s (%d/%d/%d train/val/test)" % (output_subject_split_file, len(subjidx_train), len(subjidx_val), len(subjidx_test)))
+                output_subject_split_file=None #set to None after saving to avoid accidentally rewriting within train()
 
         ####################
 
@@ -1002,6 +1003,7 @@ def run_training_command(argv=None):
 
                     
                 trainpath_list, data_optimscale, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes_targetencoding, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                subjidx_test=subjidx_test, 
                                                 trainpath_pairs=init_trainpath_pairs, 
                                                 trainpath_group_pairs=init_trainpath_group_pairs, data_string=data_string_targetencoding, 
                                                 batch_size=batchsize, skip_selfs=False, crosstrain_repeats=crosstrain_repeats,
@@ -1018,6 +1020,7 @@ def run_training_command(argv=None):
                 ##################
                 # this is the normal training mode         
                 trainpath_list, data_optimscale, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                    subjidx_test=subjidx_test, 
                                                     trainpath_pairs=trainpath_pairs, 
                                                     trainpath_group_pairs=trainpath_group_pairs, data_string=data_string, 
                                                     batch_size=batchsize, skip_selfs=do_skipself, crosstrain_repeats=crosstrain_repeats,
@@ -1093,6 +1096,7 @@ def run_training_command(argv=None):
                     #previous: input_transformation_info="NONE"
                     #new: precomputed_transformer_info_list=new_outer_transformer_info_list, 
                     trainpath_list, data_optimscale, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                        subjidx_test=subjidx_test, 
                                                         trainpath_pairs=trainpath_pairs, 
                                                         trainpath_group_pairs=trainpath_group_pairs, data_string=data_string, 
                                                         batch_size=batchsize, skip_selfs=do_skipself, crosstrain_repeats=crosstrain_repeats,
@@ -1127,7 +1131,8 @@ def run_training_command(argv=None):
                                                  save_input_transforms=save_input_transforms, 
                                                  output_file_prefix=output_file_prefix,logger=log,extra_trainrecord_dict=extra_trainrecord_dict,
                                                  output_file_list_json=output_file_list_json,
-                                                 output_file_suffix_format=output_file_suffix_format)
+                                                 output_file_suffix_format=output_file_suffix_format,
+                                                 output_subject_split_file=output_subject_split_file)
             
                 if not training_params['roundtrip'] and add_roundtrip_epochs > 0:
                     print("Adding %d roundtrip epochs" % (add_roundtrip_epochs))
@@ -1142,7 +1147,8 @@ def run_training_command(argv=None):
                                                      output_file_prefix=output_file_prefix,
                                                      extra_trainrecord_dict=extra_trainrecord_dict,
                                                      output_file_list_json=output_file_list_json,
-                                                     output_file_suffix_format=output_file_suffix_format)
+                                                     output_file_suffix_format=output_file_suffix_format,
+                                                     output_subject_split_file=output_subject_split_file)
                                                      
                 if not training_params['meantarget_latentsim'] and add_meanlatent_epochs > 0:
                     print("Adding %d meanlatent epochs" % (add_meanlatent_epochs))
@@ -1157,7 +1163,8 @@ def run_training_command(argv=None):
                                                      output_file_prefix=output_file_prefix,
                                                      extra_trainrecord_dict=extra_trainrecord_dict,
                                                      output_file_list_json=output_file_list_json,
-                                                     output_file_suffix_format=output_file_suffix_format)
+                                                     output_file_suffix_format=output_file_suffix_format,
+                                                     output_subject_split_file=output_subject_split_file)
                                                      
                 if not do_fixed_target_encoding and add_fixed_encoding_epochs_after > 0:
                     raise Exception("add_fixed_encoding not yet supported")
@@ -1170,6 +1177,7 @@ def run_training_command(argv=None):
                     data_string_targetencoding="self"+"_"+roilist_str
                 
                     trainpath_list, data_orig, data_transformer_info_list = generate_training_paths(conndata_alltypes_targetencoding, conn_names, subjects, subjidx_train, subjidx_val, 
+                                                    subjidx_test=subjidx_test,
                                                     trainpath_pairs="self", 
                                                     trainpath_group_pairs=[], data_string=data_string_targetencoding, 
                                                     batch_size=batchsize, skip_selfs=False, crosstrain_repeats=crosstrain_repeats,
@@ -1193,6 +1201,7 @@ def run_training_command(argv=None):
                                                      save_optimizer_params=optimizer_in_checkpoint,
                                                      output_file_prefix=output_file_prefix,
                                                      output_file_suffix_format=output_file_suffix_format,
+                                                     output_subject_split_file=output_subject_split_file,
                                                      extra_trainrecord_dict=extra_trainrecord_dict)
                     
 if __name__ == "__main__":
