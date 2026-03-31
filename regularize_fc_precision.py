@@ -41,6 +41,7 @@ regularize_fc_precision.py --input newstudy_fs86_FCcov_hpf_100subj.mat \\
     parser.add_argument('--target',action='store',dest='targetfile', help='Optional .mat file containing a precision matrix "C" that will be the optimzation target\n(otherwise use mean of unregularized inverse of all inputs)')
     parser.add_argument('--partialcorr',action='store_true',dest='partialcorr', help='Transform outputs to partial correlation, instead of precision')
     parser.add_argument('--outputfigure',action='store',dest='outputfigure', help='Filename to save a summary figure of the regularization (.png)')
+    parser.add_argument('--outputfigurecsv',action='store',dest='outputfigurecsv', help='Filename to save a summary figure of the regularization (.csv)')
     
     lambda_search_parsegroup=parser.add_argument_group('Lambda search options')
     lambda_search_parsegroup.add_argument('--applylambda',action='store',dest='applylambda', type=float, help='Apply this lambda to create new output (NO search)')
@@ -96,7 +97,7 @@ def invtikh(X, lam, quiet=True):
 
 def find_optimal_precision_lambda(FClist, FCprec_target=None, 
     lambda_range=[0,1], lambda_loops=3, lambda_gridcount=10,
-    drawplot=False, plotfilename=None):
+    drawplot=False, plotfilename=None, outputcsvfile=None):
     """
     Perform grid search to identify lambda that minimizes the average difference between each regularized 
     inverse and a 'target' precision matrix. This target can be provided, otherwise use the average unregularized 
@@ -151,6 +152,11 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
     midx=np.argmin(reg_err_full)
     optlambda=lambda_full[midx]
     
+    if outputcsvfile:
+        import pandas as pd
+        df=pd.DataFrame({'lambda':lambda_full,'reg_err':reg_err_full})
+        df.to_csv(outputcsvfile,index=False)
+
     if drawplot or plotfilename:
         #dont bother importing this unless we actually use it (takes time sometimes)
         import matplotlib.pyplot as plt
@@ -176,6 +182,7 @@ def run_optlambda():
     outputfile=args.outputfile
     outputfile_mean=args.outputfile_mean
     output_figure=args.outputfigure
+    output_figure_csv=args.outputfigurecsv
     do_partialcorr=args.partialcorr
     
     applylambda=args.applylambda
@@ -250,7 +257,7 @@ def run_optlambda():
         optlambda=find_optimal_precision_lambda(FClist, 
             FCprec_target=FCprec_target, 
             lambda_range=lambda_range, lambda_loops=lambda_loops, lambda_gridcount=lambda_gridsize, 
-            plotfilename=output_figure)
+            plotfilename=output_figure, outputcsvfile=output_figure_csv)
         
         print("Found optimal lambda: %f" % (optlambda))
     
