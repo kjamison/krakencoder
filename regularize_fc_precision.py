@@ -4,6 +4,8 @@ import sys
 import argparse
 import numpy as np
 from scipy.io import loadmat, savemat
+from scipy.linalg import logm, expm
+from tqdm import tqdm
 
 class CustomFormatter_optlambda(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
     pass
@@ -42,7 +44,8 @@ regularize_fc_precision.py --input newstudy_fs86_FCcov_hpf_100subj.mat \\
     parser.add_argument('--partialcorr',action='store_true',dest='partialcorr', help='Transform outputs to partial correlation, instead of precision')
     parser.add_argument('--outputfigure',action='store',dest='outputfigure', help='Filename to save a summary figure of the regularization (.png)')
     parser.add_argument('--outputfigurecsv',action='store',dest='outputfigurecsv', help='Filename to save a summary figure of the regularization (.csv)')
-    
+    parser.add_argument('--usegeometricmean',action='store_true',dest='geometric_mean', help='Use geometric mean of unreg inverses for target.')
+
     lambda_search_parsegroup=parser.add_argument_group('Lambda search options')
     lambda_search_parsegroup.add_argument('--applylambda',action='store',dest='applylambda', type=float, help='Apply this lambda to create new output (NO search)')
     lambda_search_parsegroup.add_argument('--roundlambda',action='store',dest='roundlambda', default=2, type=int, help='Decimal places to keep in optimized lambda')
@@ -66,17 +69,40 @@ def precision_to_partialcorr(Xprec):
     Xpc[np.eye(Xpc.shape[0])>0]=0
     return Xpc
 
-def unregularized_precision_mean(FClist, quiet=False):
+def geometric_matrix_mean(Xlist):
+    return expm(sum([logm((x+x.T)/2) for x in Xlist])/len(Xlist))
+
+def unregularized_precision_mean(FClist, geometric_mean=False, quiet=False):
     """
     Compute unregularized inverse (or pinv if fails due to sparsity/collinearity) of each FC in input, then return mean
     """
     try:
-        FCprec_mean=np.mean(np.stack([np.linalg.inv(x) for x in FClist],axis=-1),axis=-1)
+        FCprec = [np.linalg.inv(x) for x in FClist]
     except np.linalg.LinAlgError:
         if not quiet:
             print("inv(x) failed on inputs for initial unreg step. Using pinv(x) instead")
-        FCprec_mean=np.mean(np.stack([np.linalg.pinv(x) for x in FClist],axis=-1),axis=-1)
+        FCprec=[np.linalg.pinv(x) for x in FClist]
+
+    if geometric_mean:
+        FCprec_mean=geometric_matrix_mean(FCprec)
+    else:
+        FCprec_mean=np.mean(np.stack(FCprec,axis=-1),axis=-1)
     return FCprec_mean
+
+def invtikh_eig(Xeigvals,Xeigvecs, lam, quiet=True):
+    """
+    Compute tikhonov-regularized inverse of X with specified lambda
+    """
+    if lam==0:
+        Xinv=(Xeigvecs / Xeigvals) @ Xeigvecs.T
+    else:
+        #Xinv=np.linalg.inv(X+lam*np.trace(X)/X.shape[0]*np.eye(X.shape[0]))
+        #Xeigvals, Xeigvecs = np.linalg.eigh(X)
+        eigvals_clipped = np.maximum(Xeigvals, 0)  # enforce PSD
+        reg_eigvals = eigvals_clipped + lam
+        Xinv = (Xeigvecs / reg_eigvals) @ Xeigvecs.T
+    
+    return Xinv
 
 def invtikh(X, lam, quiet=True):
     """
@@ -96,7 +122,8 @@ def invtikh(X, lam, quiet=True):
     return Xinv
 
 def find_optimal_precision_lambda(FClist, FCprec_target=None, 
-    lambda_range=[0,1], lambda_loops=3, lambda_gridcount=10,
+    lambda_range=[0,1], lambda_loops=3, lambda_gridcount=10, 
+    use_geometric_mean=False,use_eig_mode=False,
     drawplot=False, plotfilename=None, outputcsvfile=None):
     """
     Perform grid search to identify lambda that minimizes the average difference between each regularized 
@@ -115,7 +142,7 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
     """
     
     if FCprec_target is None:
-        FCprec_target=unregularized_precision_mean(FClist)
+        FCprec_target=unregularized_precision_mean(FClist, geometric_mean=use_geometric_mean)
     
     mask=np.triu_indices(FCprec_target.shape[0],1) #skip diag when computing similarity
     
@@ -124,12 +151,19 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
     lambda_full=np.empty(0)
     reg_err_full=np.empty(0)
     
+    FCeigs=None
+    if use_eig_mode:
+        FCeigs=[np.linalg.eigh(x) for x in tqdm(FClist)]
+    
     for iloop in range(lambda_loops):
         lam=np.linspace(lambda_range[0],lambda_range[1],lambda_gridcount)
         reg_err=np.zeros([len(FClist),len(lam)])
         
         for i,l in enumerate(lam):
-            FCprec=[invtikh(x,l) for x in FClist]
+            if use_eig_mode:
+                FCprec = [invtikh_eig(Xeigvals,Xeigvecs, l) for Xeigvals,Xeigvecs in FCeigs]
+            else:
+                FCprec=[invtikh(x,l) for x in FClist]
             FCprec_reg_err=[np.linalg.norm(x[mask]-FCprec_target[mask]) for x in FCprec]
             reg_err[:,i]=FCprec_reg_err
         
@@ -184,7 +218,8 @@ def run_optlambda():
     output_figure=args.outputfigure
     output_figure_csv=args.outputfigurecsv
     do_partialcorr=args.partialcorr
-    
+    do_geometric_mean=args.geometric_mean
+
     applylambda=args.applylambda
     lambda_rounding_places=args.roundlambda
     lambda_loops=args.lambdagridloops
@@ -202,7 +237,20 @@ def run_optlambda():
     assert len(fields_found)>0, f"Input have one of the following fields: {fields_to_search}"
     datafield=fields_found[0]
     FClist=M[datafield]
-    
+
+    do_force_symmetry=False
+    if do_force_symmetry:
+        FClist=[(x+x.T)/2 for x in FClist] #force symmetry just in case
+
+    do_force_corr=True
+    if do_force_corr:
+        #any diagonals that are basically zero, set them to 1 to avoid divide-by-zero in next step
+        for i in range(len(FClist)):
+            diag=np.diag(FClist[i]).copy()
+            diag[np.abs(diag)<1e-10]=1
+            np.fill_diagonal(FClist[i],diag)
+        FClist=[x/np.sqrt(np.outer(np.diag(x),np.diag(x))) for x in FClist] #force correlation just in case
+
     fields_to_keep=['subject','subjects','ismissing','is_missing']
     M_out={}
     for f in fields_to_keep:
@@ -257,6 +305,7 @@ def run_optlambda():
         optlambda=find_optimal_precision_lambda(FClist, 
             FCprec_target=FCprec_target, 
             lambda_range=lambda_range, lambda_loops=lambda_loops, lambda_gridcount=lambda_gridsize, 
+            use_geometric_mean=do_geometric_mean, use_eig_mode=True,
             plotfilename=output_figure, outputcsvfile=output_figure_csv)
         
         print("Found optimal lambda: %f" % (optlambda))
@@ -305,10 +354,10 @@ def run_optlambda():
     M_out['lambda']=optlambda
     
     if do_partialcorr:
-        FCprec=[precision_to_partialcorr(invtikh(x, optlambda)) for x in FClist]
+        FCprec=[precision_to_partialcorr(invtikh(x, optlambda)) for x in tqdm(FClist)]
         M_out['conntype']='partialcorr'
     else:
-        FCprec=[invtikh(x, optlambda) for x in FClist]
+        FCprec=[invtikh(x, optlambda) for x in tqdm(FClist)]
         M_out['conntype']='precision'
     
     if outputfile:
@@ -318,7 +367,10 @@ def run_optlambda():
         print("Saved %d (%dx%d) matrices to %s" % (len(FCout),FCout[0,0].shape[0],FCout[0,0].shape[1],outputfile))
     
     if outputfile_mean:
-        FCout=np.mean(np.stack(FCprec,axis=-1),-1)
+        if do_geometric_mean:
+            FCout=geometric_matrix_mean(FCprec)
+        else:
+            FCout=np.mean(np.stack(FCprec,axis=-1),-1)
         savemat(outputfile_mean,{'C':FCout,**M_out},format='5',do_compression=True)
         print("Saved 1 (%dx%d) matrix to %s" % (FCout.shape[0],FCout.shape[1],outputfile_mean))
 
