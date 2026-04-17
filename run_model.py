@@ -127,6 +127,7 @@ def argument_parse_newdata(argv):
     testing_group.add_argument('--hackcortex',action='store_true',dest='hack_cortex', help='Hack to only use cortex for eval (for fs86 and coco439) (for testing)')
     testing_group.add_argument('--ccmat',action='store_true',dest='ccmat', help='Save full SUBJxSUBJ ccmat for every prediction path (large record file)')
     testing_group.add_argument('--usetrainmean',action='store_true',dest='use_train_mean', help='Use training mean for demean if available in ioxform')
+    testing_group.add_argument('--extraresid',action='store_true',dest='metric_include_extra_resid', help='Include avgrank_resid and avgcorr_doubleresid outputs')
     
     parser.add_argument('--version', action='version',version='Krakencoder v{version}'.format(version=get_version(include_date=True)))
     
@@ -210,7 +211,7 @@ def run_model_on_new_data(argv=None):
     input_subject_split_file=args.subject_split_file
     input_subject_split_name=args.subject_split_name
     
-    metric_include_extra_resid=False
+    metric_include_extra_resid=args.metric_include_extra_resid
     metric_include_allsubj=args.metric_include_allsubj
     
     input_json=args.input_json
@@ -1036,7 +1037,8 @@ def run_model_on_new_data(argv=None):
                 conn_predicted_origscale=conn_predicted.cpu().detach().numpy()
             else:
                 conn_predicted_origscale=transformer_list[outtype].inverse_transform(conn_predicted.cpu().detach().numpy())
-            predicted_alltypes[intype][outtype]=conn_predicted_origscale.cpu().detach().numpy()
+                conn_predicted_origscale=conn_predicted_origscale.cpu().detach().numpy()
+            predicted_alltypes[intype][outtype]=conn_predicted_origscale.copy()
             print("Output %s->%s: %dx%d%s" % (intype,outtype,conn_predicted_origscale.shape[0],conn_predicted_origscale.shape[1],noself_str))
 
     #now save each output file with the input->output paths requested
