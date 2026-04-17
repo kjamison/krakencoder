@@ -824,7 +824,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                   save_epochs=100, checkpoint_epochs=None, update_single_checkpoint=True, save_optimizer_params=True,
                   explicit_checkpoint_epoch_list=[], precomputed_transformer_info_list={}, save_input_transforms=True,
                   output_file_prefix="kraken",logger=None, extra_trainrecord_dict={},output_file_list_json=None,
-                  output_file_suffix_format=None):
+                  output_file_suffix_format=None, output_subject_split_file=None):
     """
     Train a network on a set of training paths. 
     This function is designed to be called from a script or notebook, and will handle all the training details.
@@ -1416,6 +1416,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
     starttime=time.time()
     timestamp_last_display=starttime    
     
+    #track how many times each training sample is seen during the epoch, for debugging purposes (eg to check that shuffling is working as expected)
+    do_track_batch_indices=False
+
     skipped_epoch_counter=0
     do_compute_performance_AFTER_latentsim=True #this way recorded performance matches checkpoint
 
@@ -1650,8 +1653,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                             #pulls out <batchsize> at a time
                             conn_inputs, conn_targets = train_data
                             
-                            _,dmin=torch.cdist(train_inputs, conn_inputs).min(axis=0)
-                            batchindex_tracker_tp.append([dict(epoch=epoch,ibatch_outer=ibatch_outer,itp=itp,encoder_index=encoder_index,decoder_index=decoder_index,batch=dmin.cpu().numpy().tolist())])
+                            if do_track_batch_indices:
+                                _,dmin=torch.cdist(train_inputs, conn_inputs).min(axis=0)
+                                batchindex_tracker_tp.append([dict(epoch=epoch,ibatch_outer=ibatch_outer,itp=itp,encoder_index=encoder_index,decoder_index=decoder_index,batch=dmin.cpu().numpy().tolist())])
                             
                             conn_encoded, conn_predicted = net(conn_inputs,encoder_index_torch,decoder_index_torch, transcoder_index_list=transcoder_list)
                             
