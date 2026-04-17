@@ -949,8 +949,8 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
             data_mean=precomputed_transformer_params['input_mean']
             data_stdev=precomputed_transformer_params['input_stdev']
         else:
-            data_mean=np.mean(traindata,axis=0,keepdims=True)
-            data_stdev=np.std(traindata,axis=0,keepdims=True)
+            data_mean=np.nanmean(traindata,axis=0,keepdims=True)
+            data_stdev=np.nanstd(traindata,axis=0,keepdims=True)
             data_stdev[data_stdev==0]=1.0
         
         input_dimension=data_mean.shape[1]
@@ -971,8 +971,7 @@ def generate_transformer(traindata=None, transformer_type=None, transformer_para
         if precomputed_transformer_params:
             data_mean=precomputed_transformer_params['input_mean']
         else:
-            
-            data_mean=np.mean(traindata,axis=0,keepdims=True)
+            data_mean=np.nanmean(traindata,axis=0,keepdims=True)
         
         input_dimension=data_mean.shape[1]
         output_dimension=data_mean.shape[1]

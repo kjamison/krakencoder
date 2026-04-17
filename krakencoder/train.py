@@ -1597,6 +1597,18 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                             trainloader_iter=iter(trainloader)
                             train_data = next(trainloader_iter)
                         
+                        if train_data[1].shape[1] == 1:
+                            #for demographic variables, we might have some nans in the targets. We want to ignore those during training, so we create a mask and remove those from the targets and predictions before computing the loss. 
+                            notnanmask = ~torch.any(torch.isnan(train_data[1]),axis=1)
+                            if not torch.any(notnanmask):
+                                #if all targets are nan, skip this batch
+                                #train_running_loss.append(torch.nan)
+                                continue
+                            if len(train_data)==3:
+                                train_data = (train_data[0][notnanmask], train_data[1][notnanmask], train_data[2][notnanmask])
+                            else:
+                                train_data = (train_data[0][notnanmask], train_data[1][notnanmask]) 
+
                         batch_loss=0
                         if do_target_encoding:
                             #pulls out <batchsize> at a time
@@ -1700,6 +1712,18 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                     val_running_loss = []
                     
                     for batch_idx, val_data in enumerate(valloader):
+                        if val_data[1].shape[1] == 1:
+                            #for demographic variables, we might have some nans in the targets. We want to ignore those during training, so we create a mask and remove those from the targets and predictions before computing the loss. 
+                            notnanmask = ~torch.any(torch.isnan(val_data[1]),axis=1)
+                            if not torch.any(notnanmask):
+                                #if all targets are nan, skip this batch
+                                #val_running_loss.append(torch.nan)
+                                continue
+                            if len(val_data)==3:
+                                val_data = (val_data[0][notnanmask], val_data[1][notnanmask], val_data[2][notnanmask])
+                            else:
+                                val_data = (val_data[0][notnanmask], val_data[1][notnanmask]) 
+
                         batch_loss=0
                         if do_target_encoding:
                             #pulls out <batchsize> at a time
@@ -1824,6 +1848,17 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                 val_running_loss = []
                 
                 for batch_idx, val_data in enumerate(valloader):
+                    if val_data[1].shape[1] == 1:
+                        #for demographic variables, we might have some nans in the targets. We want to ignore those during training, so we create a mask and remove those from the targets and predictions before computing the loss. 
+                        notnanmask = ~torch.any(torch.isnan(val_data[1]),axis=1)
+                        if not torch.any(notnanmask):
+                            #if all targets are nan, skip this batch
+                            #val_running_loss.append(torch.nan)
+                            continue
+                        if len(val_data)==3:
+                            val_data = (val_data[0][notnanmask], val_data[1][notnanmask], val_data[2][notnanmask])
+                        else:
+                            val_data = (val_data[0][notnanmask], val_data[1][notnanmask]) 
                     batch_loss=0
                     if do_target_encoding:
                         #pulls out <batchsize> at a time
@@ -2134,6 +2169,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                         corrlossN_OrigScale_val[itp,epoch]=disttopNacc(d=valOrig_cc,topn=topN)
                         corrlossRank_OrigScale_val[itp,epoch]=distavgrank(d=valOrig_cc)
                         avgcorr_OrigScale_val[itp,epoch],avgcorr_OrigScale_other_val[itp,epoch]=corr_ident_parts(cc=valOrig_cc)
+                        if np.isnan(avgcorr_OrigScale_val[itp,epoch]):
+                            #for some demographic outputs where nans exist, provide a nan-free validation prediction error
+                            avgcorr_OrigScale_val[itp,epoch]=np.nanmean(np.diag(valOrig_cc))
 
                         corrloss_OrigScale_pred2true_val[itp,epoch]=disttop1acc(d=valOrig_cc.T)
                         corrlossN_OrigScale_pred2true_val[itp,epoch]=disttopNacc(d=valOrig_cc.T,topn=topN)
