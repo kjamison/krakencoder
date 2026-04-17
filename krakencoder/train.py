@@ -1615,7 +1615,8 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                 #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
                                 
                                 loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion_tp, encoder_margin=encoder_margin_torch, 
-                                                        latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                                                        latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch,
+                                                        scale_encoded_criterion_weight=tpweight_encoded)
                                 
                                 loss.backward()
                                 optimizer.step()
@@ -1626,7 +1627,7 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                 optimizer.zero_grad(set_to_none=do_zerograd_none)
                                 _ , conn_predicted = net(conn_encoded_targets, neg1_index, decoder_index_torch)
                             
-                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch)
+                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch,scale_criterion_weight=tpweight)
                                 loss.backward()
                                 optimizer.step()
 
@@ -1640,8 +1641,9 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
 
                                 loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
                                                         criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                                                        latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
+                                                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
+                                                        latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch, 
+                                                        scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
                                 loss.backward()
                                 optimizer.step()
 
@@ -1710,12 +1712,13 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                     
                                 #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
                                 loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion_tp, encoder_margin=encoder_margin_torch, 
-                                                latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                                loss = loss*tpweight
+                                                latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch,
+                                                scale_encoded_criterion_weight=tpweight_encoded)
+                                #loss = loss*tpweight
                                 batch_loss += loss.item() 
 
-                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch)
-                                loss = loss*tpweight
+                                loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch,scale_criterion_weight=tpweight)
+                                #loss = loss*tpweight
                                 batch_loss += loss.item() 
                             else:
                                 with torch.no_grad():
@@ -1724,9 +1727,10 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                 # loss terms (validation)
                                 loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
                                                         criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                                                        latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                                loss = loss*tpweight
+                                                        output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
+                                                        latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch,
+                                                        scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
+                                #loss = loss*tpweight
                                 batch_loss += loss.item() 
                             
                         else:
@@ -1740,9 +1744,10 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                             ######################
                             # loss terms (validation)
                             loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                                latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                            loss = loss*tpweight
+                                output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
+                                latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch,
+                                scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
+                            #loss = loss*tpweight
                             batch_loss += loss.item()
                         val_running_loss.append(batch_loss)
                     
@@ -1831,12 +1836,13 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                                 
                             #loss = criterion_latent_mse(conn_encoded,conn_encoded_targets) #where can we use this?
                             loss = compute_path_loss(conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, encoded_criterion=encoded_criterion_tp, encoder_margin=encoder_margin_torch, 
-                                            latentnorm_loss_weight=latentnorm_loss_weight_torch, latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                            loss = loss*tpweight
+                                            latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch,
+                                            scale_encoded_criterion_weight=tpweight_encoded)
+                            #loss = loss*tpweight
                             batch_loss += loss.item() 
 
-                            loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch)
-                            loss = loss*tpweight
+                            loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, criterion=criterion_tp, output_margin=output_margin_torch,scale_criterion_weight=tpweight)
+                            #loss = loss*tpweight
                             batch_loss += loss.item() 
                         else:
                             with torch.no_grad():
@@ -1845,9 +1851,10 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                             # loss terms (validation)
                             loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, conn_encoded_targets=conn_encoded_targets, 
                                                     criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                                                    output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                                                    latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                            loss = loss*tpweight
+                                                    output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
+                                                    latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch, 
+                                                    scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
+                            #loss = loss*tpweight
                             batch_loss += loss.item() 
                         
                     else:
@@ -1861,9 +1868,10 @@ def train_network(trainpath_list, training_params, net=None, data_optimscale_lis
                         ######################
                         # loss terms (validation)
                         loss = compute_path_loss(conn_predicted=conn_predicted, conn_targets=conn_targets, conn_encoded=conn_encoded, criterion=criterion_tp, encoded_criterion=encoded_criterion_tp, 
-                            output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=latentnorm_loss_weight_torch, 
-                            latent_maxrad_weight=latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch)
-                        loss = loss*tpweight
+                            output_margin=output_margin_torch, encoder_margin=encoder_margin_torch, latentnorm_loss_weight=tpweight_encoded*latentnorm_loss_weight_torch, 
+                            latent_maxrad_weight=tpweight_encoded*latent_maxrad_weight_torch, latent_maxrad=latent_maxrad_torch,
+                            scale_criterion_weight=tpweight, scale_encoded_criterion_weight=tpweight_encoded)
+                        #loss = loss*tpweight
                         batch_loss += loss.item()
                     val_running_loss.append(batch_loss)
                 
