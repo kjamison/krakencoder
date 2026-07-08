@@ -547,5 +547,32 @@
 		],
 		"hash": "520c95c8772e4e904540a9ac27de6f99bfcf29150a2dec8d7f2f5c7b9a9b33dd",
 		"hashtype": "sha256"
-	}
+	},
+	{
+        "filename": "kraken_regtarget_FCpcorr_fs86_hpf_HCPYA710train.mat",
+        "url": [
+			"https://osf.io/download/6a4e83d61440c65871da36be/",
+			"https://wcm.box.com/shared/static/06milj6uzfly9q3au6xrfi8adi8ydopo.mat"
+		],
+        "hash": "f4be1af0d521f4db9ee6c2616fd73f641b0fd255e78527ed7d1e114f01d978c5",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_regtarget_FCpcorr_shen268_hpf_HCPYA710train.mat",
+        "url": [
+			"https://osf.io/download/6a4e83d6e1cf27a05f5b9207/",
+			"https://wcm.box.com/shared/static/lsa9f078ctl8xvalel5xwuvmrik9tcgk.mat"
+		],
+        "hash": "9e385810d0f5fa53069ef243fd637e154794879f51a7db250092a533ec4f58e6",
+        "hashtype": "sha256"
+    },
+    {
+        "filename": "kraken_regtarget_FCpcorr_coco439_hpf_HCPYA710train.mat",
+        "url": [ 
+			"https://osf.io/download/6a4e83d76ba58abd2b7afa37/",
+			"https://wcm.box.com/shared/static/2dbyhavwch4r9c8jj38akypogp7q1y51.mat"
+		],
+        "hash": "a9a2eeec93b3911e9ab2af20353dcaa63853b3ad12df6175b1ebf36ba305c0e1",
+        "hashtype": "sha256"
+    }
 ]
