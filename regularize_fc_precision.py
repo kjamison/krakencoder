@@ -74,16 +74,19 @@ def precision_to_partialcorr(Xprec):
 def geometric_matrix_mean(Xlist):
     return expm(sum([logm((x+x.T)/2) for x in Xlist])/len(Xlist))
 
-def unregularized_precision_mean(FClist, geometric_mean=False, quiet=False):
+def unregularized_precision_mean(FClist, FCeigs=None, geometric_mean=False, quiet=False):
     """
     Compute unregularized inverse (or pinv if fails due to sparsity/collinearity) of each FC in input, then return mean
     """
-    try:
-        FCprec = [np.linalg.inv(x) for x in FClist]
-    except np.linalg.LinAlgError:
-        if not quiet:
-            print("inv(x) failed on inputs for initial unreg step. Using pinv(x) instead")
-        FCprec=[np.linalg.pinv(x) for x in FClist]
+    if FCeigs is not None:
+        FCprec=[invtikh_eig(Xeigvals,Xeigvecs, 0) for Xeigvals,Xeigvecs in FCeigs]
+    else:
+        try:
+            FCprec = [np.linalg.inv(x) for x in FClist]
+        except np.linalg.LinAlgError:
+            if not quiet:
+                print("inv(x) failed on inputs for initial unreg step. Using pinv(x) instead")
+            FCprec=[np.linalg.pinv(x) for x in FClist]
 
     if geometric_mean:
         FCprec_mean=geometric_matrix_mean(FCprec)
@@ -91,18 +94,22 @@ def unregularized_precision_mean(FClist, geometric_mean=False, quiet=False):
         FCprec_mean=np.mean(np.stack(FCprec,axis=-1),axis=-1)
     return FCprec_mean
 
-def invtikh_eig(Xeigvals,Xeigvecs, lam, quiet=True):
+def invtikh_eig(Xeigvals,Xeigvecs=None, lam=0, eigval_thresh=1e-6, quiet=True):
     """
     Compute tikhonov-regularized inverse of X with specified lambda
     """
-    if lam==0:
+    if Xeigvecs is None:
+        #if no eigenvectors provided, assume Xeigvals is actually the matrix X and compute eigen decomposition
+        Xeigvals, Xeigvecs = np.linalg.eigh(Xeigvals)
+    if False and lam==0:
         Xinv=(Xeigvecs / Xeigvals) @ Xeigvecs.T
     else:
         #Xinv=np.linalg.inv(X+lam*np.trace(X)/X.shape[0]*np.eye(X.shape[0]))
         #Xeigvals, Xeigvecs = np.linalg.eigh(X)
         eigvals_clipped = np.maximum(Xeigvals, 0)  # enforce PSD
         reg_eigvals = eigvals_clipped + lam
-        Xinv = (Xeigvecs / reg_eigvals) @ Xeigvecs.T
+        mask=reg_eigvals > eigval_thresh
+        Xinv = (Xeigvecs[:,mask] / reg_eigvals[mask]) @ Xeigvecs[:,mask].T
     
     return Xinv
 
@@ -153,7 +160,7 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
         FCeigs=[np.linalg.eigh(x) for x in tqdm(FClist)]
     
     if FCprec_target is None:
-        FCprec_target=unregularized_precision_mean(FClist, geometric_mean=use_geometric_mean)
+        FCprec_target=unregularized_precision_mean(FClist, FCeigs=FCeigs, geometric_mean=use_geometric_mean)
     
     mask=np.triu_indices(FCprec_target.shape[0],1) #skip diag when computing similarity
     
@@ -242,6 +249,10 @@ def run_optlambda():
     outsplitname=args.output_subject_split_name
     if outsplitname is None:
         outsplitname=splitname
+
+    #should always use eigenvalue decomposition for speed, since we are doing many repeated inverses of the same matrices
+    #plus this allows us to clean up negative/small eigenvalues in a more principled way before computing the inverse
+    do_eig_mode=True
     
     M=loadmat(inputfile,simplify_cells=True)
     fields_found=[f for f in fields_to_search if f in M]
@@ -314,7 +325,7 @@ def run_optlambda():
         optlambda=find_optimal_precision_lambda(FClist, 
             FCprec_target=FCprec_target, 
             lambda_range=lambda_range, lambda_loops=lambda_loops, lambda_gridcount=lambda_gridsize, 
-            use_geometric_mean=do_geometric_mean, use_eig_mode=True,
+            use_geometric_mean=do_geometric_mean, use_eig_mode=do_eig_mode,
             plotfilename=output_figure, outputcsvfile=output_figure_csv)
         
         print("Found optimal lambda: %f" % (optlambda))
