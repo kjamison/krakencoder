@@ -45,6 +45,8 @@ regularize_fc_precision.py --input newstudy_fs86_FCcov_hpf_100subj.mat \\
     parser.add_argument('--outputfigure',action='store',dest='outputfigure', help='Filename to save a summary figure of the regularization (.png)')
     parser.add_argument('--outputfigurecsv',action='store',dest='outputfigurecsv', help='Filename to save a summary figure of the regularization (.csv)')
     parser.add_argument('--usegeometricmean',action='store_true',dest='geometric_mean', help='Use geometric mean of unreg inverses for target.')
+    parser.add_argument('--keepunnormalizedinputs',action='store_true',dest='keep_unnormalized_inputs', help='Keep input matrices unnormalized before regularization (default = normalize by diag).')
+    parser.add_argument('--forcesymmetry',action='store_true',dest='force_symmetry', help='Force symmetry in the input matrices.')
 
     lambda_search_parsegroup=parser.add_argument_group('Lambda search options')
     lambda_search_parsegroup.add_argument('--applylambda',action='store',dest='applylambda', type=float, help='Apply this lambda to create new output (NO search)')
@@ -141,6 +143,15 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
     optlambda: scalar lambda value identified from grid search
     """
     
+    has_nan=[np.any(np.isnan(x)) for x in FClist]
+    if any(has_nan):
+        print("These subjects have NaN values in their FC matrices:",np.where(has_nan)[0])
+        raise Exception("Input FC list contains NaN values. Please remove or impute before running this function.")
+
+    FCeigs=None
+    if use_eig_mode:
+        FCeigs=[np.linalg.eigh(x) for x in tqdm(FClist)]
+    
     if FCprec_target is None:
         FCprec_target=unregularized_precision_mean(FClist, geometric_mean=use_geometric_mean)
     
@@ -150,11 +161,9 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
     
     lambda_full=np.empty(0)
     reg_err_full=np.empty(0)
-    
-    FCeigs=None
-    if use_eig_mode:
-        FCeigs=[np.linalg.eigh(x) for x in tqdm(FClist)]
-    
+
+    lambda_range_full=lambda_range.copy()
+
     for iloop in range(lambda_loops):
         lam=np.linspace(lambda_range[0],lambda_range[1],lambda_gridcount)
         reg_err=np.zeros([len(FClist),len(lam)])
@@ -170,9 +179,9 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
         reg_err_mean=np.mean(reg_err,axis=0)
         midx=np.argmin(reg_err_mean)
         if midx==0:
-            lambda_range=[0,lam[1]]
+            lambda_range=[lambda_range_full[0],lam[1]]
         elif midx==len(lam)-1:
-            lambda_range=[lam[-2],1]
+            lambda_range=[lam[-2],lambda_range_full[1]]
         else:
             lambda_range=[lam[midx-1],lam[midx+1]]
             
@@ -189,7 +198,7 @@ def find_optimal_precision_lambda(FClist, FCprec_target=None,
     if outputcsvfile:
         import pandas as pd
         df=pd.DataFrame({'lambda':lambda_full,'reg_err':reg_err_full})
-        df.to_csv(outputcsvfile,index=False)
+        df.to_csv(outputcsvfile,index=False,na_rep='NaN')
 
     if drawplot or plotfilename:
         #dont bother importing this unless we actually use it (takes time sometimes)
@@ -219,6 +228,8 @@ def run_optlambda():
     output_figure_csv=args.outputfigurecsv
     do_partialcorr=args.partialcorr
     do_geometric_mean=args.geometric_mean
+    do_force_symmetry=args.force_symmetry
+    do_force_corr=not args.keep_unnormalized_inputs
 
     applylambda=args.applylambda
     lambda_rounding_places=args.roundlambda
@@ -238,11 +249,9 @@ def run_optlambda():
     datafield=fields_found[0]
     FClist=M[datafield]
 
-    do_force_symmetry=False
     if do_force_symmetry:
         FClist=[(x+x.T)/2 for x in FClist] #force symmetry just in case
 
-    do_force_corr=True
     if do_force_corr:
         #any diagonals that are basically zero, set them to 1 to avoid divide-by-zero in next step
         for i in range(len(FClist)):
