@@ -157,7 +157,7 @@ def run_collectdata(argv=None):
         #canonicalize input flavors if requested:
         if do_canonical:
             conntype=canonical_data_flavor(conntype,accept_unknowns=True)
-        filepat=re.sub('\{(s|subj|subject)\}','{SUBJECT}',filepat,flags=re.IGNORECASE)
+        filepat=re.sub(r'\{(s|subj|subject)\}','{SUBJECT}',filepat,flags=re.IGNORECASE)
         
         conndata=[]
         if '{SUBJECT}' in filepat:
@@ -234,7 +234,7 @@ def run_collectdata(argv=None):
         
     elif outputfile.lower().endswith(".mat"):
         for conntype in conndata_alltypes:
-            outfile_thistype=re.sub('\{(t|f|type|flav|flavor)\}','{FLAVOR}',outputfile,flags=re.IGNORECASE)
+            outfile_thistype=re.sub(r'\{(t|f|type|flav|flavor)\}','{FLAVOR}',outputfile,flags=re.IGNORECASE)
             if '{FLAVOR}' in outfile_thistype:
                 outfile_thistype=outfile_thistype.format(FLAVOR=conntype)
             else:
