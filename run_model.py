@@ -645,7 +645,7 @@ def run_model_on_new_data(argv=None):
     transformer_info_list={}
     if checkpoint['input_transformation_info']=='none':
         for conntype in conn_names:
-            transformer_list[conntype], transformer_info[conntype] = generate_transformer(traindata=None, 
+            transformer_list[conntype], transformer_info_list[conntype] = generate_transformer(traindata=None, 
                 transformer_type='none', transformer_param_dict=None, 
                 precomputed_transformer_params={'type':'none'}, return_components=True)
     else:
@@ -656,6 +656,15 @@ def run_model_on_new_data(argv=None):
                 
         transformer_list, transformer_info_list = load_transformers_from_file(input_transform_file_list, input_names=conn_names)
     
+    if input_conntype_list:
+        #create empty transformers for types not in input files 
+        #(especially for 'encoded' where there is no transform)
+        for conntype in input_conntype_list:
+            if not conntype in transformer_list:
+                transformer_list[conntype], transformer_info_list[conntype] = generate_transformer(traindata=None, 
+                    transformer_type='none', transformer_param_dict=None, 
+                    precomputed_transformer_params={'type':'none'}, return_components=True)
+
     traindata_mean_list={}
     for conntype, transformer_info in transformer_info_list.items():
         if 'params' in transformer_info and 'pca_input_mean' in transformer_info['params']:
