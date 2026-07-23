@@ -206,7 +206,7 @@ def dotproduct_neighbor_loss(x,y,margin=None):
     """Loss function wrapper for dotproduct_loss(x,y,margin,neighbor=True)"""
     return dotproduct_loss(x,y,margin=margin, neighbor=True)
 
-def corr_ident_parts(x=None, y=None ,cc=None):
+def corr_ident_parts(x=None, y=None, cc=None, use_nanmean=False):
     """
     Compute average self-correlation (diagonal) and average other-correlation (off-diagonal) for xycorr(x,y)
     
@@ -219,12 +219,20 @@ def corr_ident_parts(x=None, y=None ,cc=None):
     """
     if cc is None:
         cc=xycorr(x,y)
-    cc_self=cc.trace()/cc.shape[0]
-    if torch.is_tensor(cc):
-        #cc_other=cc[torch.triu_indices(cc.shape[0],cc.shape[1],offset=1)].mean()
-        cc_other=cc[triu_indices_torch(cc.shape[0],k=1)].mean()
+    if use_nanmean:
+        if torch.is_tensor(cc):
+            cc_self=torch.nanmean(cc.diag())
+            cc_other=torch.nanmean(cc[triu_indices_torch(cc.shape[0],k=1)])
+        else:
+            cc_self=np.nanmean(np.diag(cc))
+            cc_other=np.nanmean(cc[np.triu_indices(cc.shape[0],k=1)])
     else:
-        cc_other=cc[np.triu_indices(cc.shape[0],k=1)].mean()
+        cc_self=cc.trace()/cc.shape[0]
+        if torch.is_tensor(cc):
+            #cc_other=cc[torch.triu_indices(cc.shape[0],cc.shape[1],offset=1)].mean()
+            cc_other=cc[triu_indices_torch(cc.shape[0],k=1)].mean()
+        else:
+            cc_other=cc[np.triu_indices(cc.shape[0],k=1)].mean()
     
     return cc_self,cc_other
 
