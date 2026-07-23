@@ -39,6 +39,13 @@ def model_data_folder(data_folder=None, ignore_env=False):
     data_folder=os.path.abspath(os.path.expanduser(data_folder))
     return data_folder
 
+def flavor_database_metadata_string(dbfile=None):
+    flavor_info=load_flavor_database(dbfile=dbfile)
+    flav1=list(flavor_info.keys())
+    metadata_string=""
+    if flav1:
+        metadata_string=json.dumps(flavor_info[flav1[0]]['metadata'])
+    return metadata_string
 
 def load_flavor_database(dbfile=None, conntype_list=None, directory_search_list=[], override_abs_path=False, 
                            fields_to_check=['checkpoint','xform'],
@@ -80,6 +87,12 @@ def load_flavor_database(dbfile=None, conntype_list=None, directory_search_list=
         flavor_input_info=pd.read_csv(dbfile,sep='\t').set_index('flavor').to_dict(orient='index')
     else:
         raise Exception(f"Unsupported file format for {dbfile}. Please provide a JSON, CSV, or TSV file.")
+    
+    flavordb_metadata={k:v for k,v in flavor_input_info.items() if k.startswith('_')}
+    flavor_input_info={k:v for k,v in flavor_input_info.items() if not k.startswith('_')}
+    #insert metadata fields into each flavor
+    for k in flavor_input_info:
+        flavor_input_info[k]['metadata']=flavordb_metadata['_metadata']
     
     if conntype_list is not None:
         flavor_input_info={k:flavor_input_info[k] for k in conntype_list}

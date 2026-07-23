@@ -1,4 +1,8 @@
 {
+    "_metadata":{
+        "krakencoder_modelset_version":"kraken_hcpya20240413ep002000",
+        "krakencoder_modelset_date_modified": "2025-08-28"
+    },
     "FCcorr_fs86_hpf":{
         "group":"FC",
         "atlas":"fs86",

@@ -8,7 +8,7 @@ import os
 import sys
 import argparse
 
-from krakencoder.fetch import model_data_folder, get_fetchable_data_list, fetch_model_data, load_flavor_database
+from krakencoder.fetch import model_data_folder, get_fetchable_data_list, fetch_model_data, load_flavor_database, flavor_database_metadata_string
 
 def argument_parse_fetchscript(argv):
     parser=argparse.ArgumentParser(description=f"""Fetch or clear model data files. 
@@ -28,6 +28,7 @@ def argument_parse_fetchscript(argv):
     parser.add_argument('--fetch',action='store',dest='fetchfile', help='Fetch model data file by filename', nargs='*')
     parser.add_argument('--fetchflavor','--fetchflavors',action='store',dest='fetchflavor', help='Fetch model data file by flavor name', nargs='*')
     parser.add_argument('--fetchtypes',action='store',dest='fetchtypes', help='Which file types to download (eg: "checkpoint","xform")', nargs='*')
+    parser.add_argument('--metadatajson','--printmetadatajson',action='store_true',dest='print_metadata', help='Print metadata from flavor database file')
     
     return parser.parse_args(argv)
 
@@ -43,6 +44,10 @@ def run_fetchdata(argv=None):
     data_folder = model_data_folder()
     data_files_downloaded = os.listdir(data_folder) if os.path.exists(data_folder) else []
     
+    if args.print_metadata:
+        print(flavor_database_metadata_string())
+        sys.exit(0)
+        
     if args.fetchtypes is None or len(args.fetchtypes)==0:
         args.fetchtypes=['checkpoint','xform']
     for i,t in enumerate(args.fetchtypes):
