@@ -603,7 +603,14 @@ def display_kraken_heatmap(trainrecord,
         metricfield='corrlossRank_bidir'
         metrictitle='avgrank %ile (bi-dir)' 
     
-
+    elif metrictype.lower() == 'avgcorr_doubleresid':
+        metricfield='avgcorr_doubleresid'
+        metrictitle='avgcorr (2xresid)'
+    
+    elif metrictype.lower() == 'avgrank_resid':
+        metricfield='corrlossRank_resid'
+        metrictitle='avgrank (resid)'
+    
     metricfield_origscale=""
     if origscale:
         metricfield_origscale="_OrigScale"
@@ -651,7 +658,7 @@ def display_kraken_heatmap(trainrecord,
             tp1,tp2=tp.split("->")
             for x in exclude_flavors:
                 if '*' in x:
-                    x=x.replace(".","\.").replace("*",".*")
+                    x=x.replace(".",r"\.").replace("*",".*")
                     if re.match(x,tp1) or re.match(x,tp2):
                         #v[itp]=np.nan
                         v_exclude[itp]=True

@@ -74,7 +74,8 @@ def explained_variance_ratio(x_true,x_predicted,axis=0, var_true=None):
     compute R2 the same way we would for PCA recon:
     sum(variance of the residual of each FEATURE) / sum(variance of the each feature in TRUE)
     """
-    
+    if x_predicted.shape[axis]<=1:
+        return 1
     if torch.is_tensor(x_true):
         if var_true is None:
             var_true=torch.sum(torch.var(x_true,axis=axis))

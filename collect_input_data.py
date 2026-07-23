@@ -29,6 +29,7 @@ def argument_parse_collectdata(argv):
     parser.add_argument('--bidsifysubjects','--bidsify_subjects',action='store_true',dest='bidsify_subjects', help='If set, will convert subject names to BIDS-friendly ("sub-"+remove all non-alphanumeric characters)')
     parser.add_argument('--canonical',action='store_true',dest='canonical', help='Transform input flavors to canonical format (only works for known flavors)')
     parser.add_argument('--ziptype',action='store',dest='ziptype', default='tsv', choices=['tsv','mat'], help='Type of files to save in .zip (default: tsv, can be mat)')
+    parser.add_argument('--zeronan',action='store_true',dest='zeronan', help='replace nans in input data with zeros')
     
     return parser.parse_args(argv)
 
@@ -108,7 +109,8 @@ def run_collectdata(argv=None):
     do_bidsify_subjects=args.bidsify_subjects
     inputdatafield=args.inputdatafield
     ziptype=args.ziptype
-    
+    do_zeronan=args.zeronan
+
     if do_canonical:
         #this import requires torch, so only import if needed
         from krakencoder.data import canonical_data_flavor
@@ -120,7 +122,6 @@ def run_collectdata(argv=None):
     else:
         datafields=['C','SC','FC','data']
     
-    subjects=[]
     if args.subjectfile:
         if not os.path.exists(args.subjectfile):
             sys.exit('Error: subject file does not exist')
@@ -179,7 +180,7 @@ def run_collectdata(argv=None):
             M,Msubj=load_single_connectome_from_file(filepat,datafields=datafields, return_subjectname=True)
             if Msubj is not None:
                 subjects+=[x for x in Msubj]
-            conndata=M
+            conndata=[M]
         if conntype in conndata_alltypes:
             conndata_alltypes[conntype]+=[x for x in conndata]
         else:
@@ -199,6 +200,10 @@ def run_collectdata(argv=None):
                 Cnew[:C.shape[0],:C.shape[1]]=C
                 conndata.append(Cnew)
             conndata_alltypes[conntype]=conndata
+    
+    if do_zeronan:
+        for conntype in conndata_alltypes:
+            conndata_alltypes[conntype]=[np.nan_to_num(x,nan=0) for x in conndata_alltypes[conntype]]
     
     for conntype in conndata_alltypes:
         print("%s: %s" % (conntype,data_shape_string(conndata_alltypes[conntype])))
