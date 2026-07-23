@@ -16,7 +16,7 @@ import re
 import pandas as pd
 from copy import deepcopy
 
-def load_hcp_subject_list(numsubj=993):
+def load_hcp_subject_list(numsubj=993, studyfolder=None,datafolder=None):
     """
     Returns a list of subjects and familyids for the HCP dataset, as read from a hardcoded file.
     
@@ -27,19 +27,19 @@ def load_hcp_subject_list(numsubj=993):
     subjects: np.array([subject ids] as str)
     familyid: np.array([family id] as int)
     """
-    if os.path.isdir('/Users/kwj5'):
-        #datafolder='/Users/kwj5/Box/HCP_SC_FC_new997'
-        datafolder='/Users/kwj5/Research/HCP'
-        studyfolder='/Users/kwj5/Research/HCP'
-    elif os.path.isdir('/home/kwj2001/colossus_shared/HCP'):
-        studyfolder='/home/kwj2001/colossus_shared/HCP'
-        datafolder='/home/kwj2001/colossus_shared/HCP'
-    elif os.path.isdir('/midtier/sablab/scratch/kwj2001'):
-        studyfolder='/midtier/sablab/scratch/kwj2001/HCP'
-        datafolder='/midtier/sablab/scratch/kwj2001/HCP'
-    elif os.path.isdir('/home/ubuntu'):
-        studyfolder='/home/ubuntu'
-        datafolder='/home/ubuntu'
+    if datafolder is None or studyfolder is None:
+        if os.path.isdir('/Users/kjamison'):
+            datafolder='/Users/kjamison/Research/HCP'
+            studyfolder='/Users/kjamison/Research/HCP'
+        elif os.path.isdir('/home/kwj2001/colossus_shared/HCP'):
+            studyfolder='/home/kwj2001/colossus_shared/HCP'
+            datafolder='/home/kwj2001/colossus_shared/HCP'
+        elif os.path.isdir('/midtier/sablab/scratch/kwj2001'):
+            studyfolder='/midtier/sablab/scratch/kwj2001/HCP'
+            datafolder='/midtier/sablab/scratch/kwj2001/HCP'
+        elif os.path.isdir('/home/ubuntu'):
+            studyfolder='/home/ubuntu'
+            datafolder='/home/ubuntu'
 
     familyidx=np.loadtxt('%s/subjects_famidx_rfMRI_dMRI_complete_997.txt' % (studyfolder))
     subj997=np.loadtxt('%s/subjects_rfMRI_dMRI_complete_997.txt' % (studyfolder))
@@ -426,7 +426,7 @@ def get_hcp_data_flavors(roi_list=["fs86","shen268","coco439"],
     conntype_list=[canonical_data_flavor(c) for c in conntype_list]
     return conntype_list
 
-def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False, keep_diagonal=False):
+def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False, keep_diagonal=False, datafolder=None):
     """
     Load HCP data from a set of subjects and a list of data types, using hardcoded input paths
     
@@ -443,20 +443,19 @@ def load_hcp_data(subjects=[], conn_name_list=[], load_retest=False, quiet=False
     """
 
     #conn_name_list = explicit and complete list of datatypes to load (ignore all other flavor info)
-
-    if os.path.isdir('/Users/kwj5'):
-        #datafolder='/Users/kwj5/Box/HCP_SC_FC_new997'
-        datafolder='/Users/kwj5/Research/HCP'
-        studyfolder='/Users/kwj5/Research/HCP'
-    elif os.path.isdir('/home/kwj2001/colossus_shared/HCP'):
-        studyfolder='/home/kwj2001/colossus_shared/HCP'
-        datafolder='/home/kwj2001/colossus_shared/HCP'
-    elif os.path.isdir('/midtier/sablab/scratch/kwj2001'):
-        studyfolder='/midtier/sablab/scratch/kwj2001/HCP'
-        datafolder='/midtier/sablab/scratch/kwj2001/HCP'        
-    elif os.path.isdir('/home/ubuntu'):
-        studyfolder='/home/ubuntu'
-        datafolder='/home/ubuntu'
+    if datafolder is None:
+        if os.path.isdir('/Users/kjamison'):
+            datafolder='/Users/kjamison/Research/HCP'
+            studyfolder='/Users/kjamison/Research/HCP'
+        elif os.path.isdir('/home/kwj2001/colossus_shared/HCP'):
+            studyfolder='/home/kwj2001/colossus_shared/HCP'
+            datafolder='/home/kwj2001/colossus_shared/HCP'
+        elif os.path.isdir('/midtier/sablab/scratch/kwj2001'):
+            studyfolder='/midtier/sablab/scratch/kwj2001/HCP'
+            datafolder='/midtier/sablab/scratch/kwj2001/HCP'        
+        elif os.path.isdir('/home/ubuntu'):
+            studyfolder='/home/ubuntu'
+            datafolder='/home/ubuntu'
 
     subjects_orig_input=subjects
     if subjects is None or len(subjects)==0:
