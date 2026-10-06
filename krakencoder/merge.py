@@ -60,25 +60,27 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False, i
     
     net=net_and_checkpoint_dict_list[0]['net']
     checkpoint_info=net_and_checkpoint_dict_list[0]['checkpoint'].copy()
-    
+
+    #snapshot net0's per-input lists, then clear them so they can be rebuilt
+    #in input_name_list order (net0 inputs may have been filtered or deduplicated)
+    per_input_attrs=['encoder_list','decoder_list','inputsize_list',
+                    'adversarial_boolean_list','decoder_gradientreversal_list']
+    net0_orig={a: list(getattr(net,a)) for a in per_input_attrs if hasattr(net,a)}
+    for a in net0_orig:
+        del getattr(net,a)[:]
+
     for iconn, conn_name in enumerate(input_name_list):
         inet=input_name_list_source_net_idx[iconn]
         iinput=input_name_list_source_input_idx[iconn]
         net_tmp=net_and_checkpoint_dict_list[inet]['net']
-        chk_tmp=net_and_checkpoint_dict_list[inet]['checkpoint']
-        if inet==0:
-            #we already have the first network's encoders/decoders
-            continue
-        #add the encoders and decoders from the other networks
-        net.encoder_list.append(net_tmp.encoder_list[iinput])
-        net.decoder_list.append(net_tmp.decoder_list[iinput])
-        net.inputsize_list.append(net_tmp.inputsize_list[iinput])
-        if hasattr(net, 'adversarial_boolean_list'):
-            net.adversarial_boolean_list.append(net_tmp.adversarial_boolean_list[iinput])
+        for a in net0_orig:
+            src=net0_orig[a] if inet==0 else getattr(net_tmp,a)
+            getattr(net,a).append(src[iinput])
+    
     num_inputs_orig0=len(net_and_checkpoint_dict_list[0]['checkpoint']['input_name_list'])
     num_trainpaths_orig0=len(net_and_checkpoint_dict_list[0]['checkpoint']['trainpath_decoder_index_list'])
     
-    for k,v in checkpoint_info.items():
+    for k,v in list(checkpoint_info.items()):
         if k in ['input_name_list','trainpath_encoder_index_list','trainpath_decoder_index_list']:
             #skip these fields. we will update them later
             continue
@@ -106,6 +108,8 @@ def merge_models(net_and_checkpoint_dict_list, canonicalize_input_names=False, i
     
     if hasattr(net, 'adversarial_boolean_list'):
         checkpoint_info['adversarial_boolean_list']=net.adversarial_boolean_list
+    if hasattr(net, 'decoder_gradientreversal_list'):
+        checkpoint_info['decoder_gradientreversal_list']=net.decoder_gradientreversal_list
     
     checkpoint_info['input_name_list']=input_name_list
     checkpoint_info['merged_training_params_list']=[chk['checkpoint']['training_params'].copy() for chk in net_and_checkpoint_dict_list]
